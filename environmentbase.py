@@ -413,6 +413,7 @@ class EnvironmentBase():
             ebs_data_volumes=None, #[{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
             custom_tags=None, 
             load_balancer=None,
+            instance_monitoring=False,
             subnet_type='private'):
         '''
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
@@ -477,13 +478,13 @@ class EnvironmentBase():
         if ebs_data_volumes != None and len(ebs_data_volumes) > 0: 
             for ebs_volume in ebs_data_volumes:
                 device_name = device_names.pop()
-                ebs_block_device = ec2.EbsBlockDevice(
+                ebs_block_device = ec2.EBSBlockDevice(
                                 DeleteOnTermination=ebs_volume.get('delete_on_termination', True), 
                                 VolumeSize=ebs_volume.get('size', '100'), 
                                 VolumeType=ebs_volume.get('type', 'gp2'))
                 
                 if 'iops' in ebs_volume: 
-                    ebs_block_device.Iops = ebs_volume.get('iops')
+                    ebs_block_device.Iops = int(ebs_volume.get('iops'))
                 if 'snapshot_id' in ebs_volume:
                     ebs_block_device.SnapshotId = ebs_volume.get('snapshot_id')
 

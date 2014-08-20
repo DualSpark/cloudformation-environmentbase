@@ -410,7 +410,7 @@ class EnvironmentBase():
             root_volume_size=24,
             include_ephemerals=True, 
             number_ephemeral_vols=2,
-            instance_monitoring=False,
+            ebs_data_volumes=None, #[{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
             custom_tags=None, 
             load_balancer=None,
             subnet_type='private'):
@@ -429,6 +429,7 @@ class EnvironmentBase():
         @param root_volume_size [int] size (in GiB) to assign to the root volume of the launched instance
         @param include_ephemerals [Boolean] indicates that ephemeral volumes should be included in the block device mapping of the Launch Configuration
         @param number_ephemeral_vols [int] number of ephemeral volumes to attach within the block device mapping Launch Configuration
+        @param ebs_data_volumes [list] dictionary pair of size and type data properties in a list used to create ebs volume attachments
         @param instance_monitoring [Boolean] indicates that detailed monitoring should be turned on for all instnaces launched within this Auto Scaling group
         @param custom_tags [Troposphere.autoscaling.Tag[]] Collection of Auto Scaling tags to be assigned to the Auto Scaling Group
         @param load_balancer [Troposphere.elasticloadbalancing.LoadBalancer] Object reference to an ELB to be assigned to this auto scaling group
@@ -469,10 +470,28 @@ class EnvironmentBase():
         block_devices = [ec2.BlockDeviceMapping(
                 DeviceName='/dev/sda1', 
                 Ebs=ec2.EBSBlockDevice(
-                    VolumeSize=root_volume_size))]
+                VolumeSize=root_volume_size))]
+        
+        device_names = ['/dev/sdb', '/dev/sdc', '/dev/sdd', '/dev/sde', '/dev/sdf', '/dev/sdg', '/dev/sdh', '/dev/sdi', '/dev/sdj', '/dev/sdk', '/dev/sdl', '/dev/sdm', '/dev/sdn', '/dev/sdo', '/dev/sdp']
+
+        if ebs_data_volumes != None and len(ebs_data_volumes) > 0: 
+            for ebs_volume in ebs_data_volumes:
+                device_name = device_names.pop()
+                ebs_block_device = ec2.EbsBlockDevice(
+                                DeleteOnTermination=ebs_volume.get('delete_on_termination', True), 
+                                VolumeSize=ebs_volume.get('size', '100'), 
+                                VolumeType=ebs_volume.get('type', 'gp2'))
+                
+                if 'iops' in ebs_volume: 
+                    ebs_block_device.Iops = ebs_volume.get('iops')
+                if 'snapshot_id' in ebs_volume:
+                    ebs_block_device.SnapshotId = ebs_volume.get('snapshot_id')
+
+                block_devices.append(ec2.BlockDeviceMapping(
+                        DeviceName = device_name, 
+                        Ebs = ebs_block_device))
 
         if include_ephemerals and number_ephemeral_vols > 0:
-            device_names = ['/dev/sdb', '/dev/sdc', '/dev/sdd', '/dev/sde', '/dev/sdf', '/dev/sdg', '/dev/sdh', '/dev/sdi']
             device_names.reverse()
             for x in range(0, number_ephemeral_vols):
                 device_name = device_names.pop()
@@ -480,8 +499,8 @@ class EnvironmentBase():
                             DeviceName= device_name, 
                             VirtualName= 'ephemeral' + str(x)))
 
-            if len(block_devices) > 0:
-                launch_config_obj.BlockDeviceMappings = block_devices
+        if len(block_devices) > 0:
+            launch_config_obj.BlockDeviceMappings = block_devices
 
         launch_config = self.template.add_resource(launch_config_obj)
 

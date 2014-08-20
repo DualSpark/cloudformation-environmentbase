@@ -68,6 +68,13 @@ class EnvironmentBase():
         self.vpc = None
         self.subnets = {}
         self.template = Template()
+        
+        self.elb_access_logging_policy = elb.AccessLoggingPolicy(
+            EmitInterval=5, 
+            Enabled=True, 
+            S3BucketName=Ref(self.utility_bucket), 
+            S3BucketPrefix=self.globals.get('elb_key_prefix', 'elb_logs'))
+
         self.template.description = template.get('description', 'No Description Specified')
         self.add_common_parameters(template)
         self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', 'ami_cache.json'))
@@ -686,9 +693,15 @@ class EnvironmentBase():
         if to_port == None:
             to_port = from_port
         if from_port == to_port:
-            label_suffix = ip_protocol.capitalize() + from_port
+            if isinstance(from_port, str):
+                label_suffix = ip_protocol.capitalize() + from_port
+            else: 
+                label_suffix = ip_protocol.capitalize() + 'Mapped'
         else:
-            label_suffix = ip_protocol.capitalize() + from_port + 'To' + to_port
+            if isinstance(from_port, str) and isinstance(to_port, str):
+                label_suffix = ip_protocol.capitalize() + from_port + 'To' + to_port
+            else:
+                label_suffix = ip_protocol.capitalize() + 'MappedPorts'
 
         self.template.add_resource(ec2.SecurityGroupIngress(destination_group_name + 'Ingress' + source_group_name + label_suffix,
             SourceSecurityGroupId=Ref(source_group), 

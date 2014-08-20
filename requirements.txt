@@ -1,0 +1,4 @@
+troposphere==0.5.0
+boto==2.28.0
+ipcalc==1.1.2
+docopt==0.6.1

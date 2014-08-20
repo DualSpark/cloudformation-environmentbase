@@ -69,12 +69,6 @@ class EnvironmentBase():
         self.subnets = {}
         self.template = Template()
         
-        self.elb_access_logging_policy = elb.AccessLoggingPolicy(
-            EmitInterval=5, 
-            Enabled=True, 
-            S3BucketName=Ref(self.utility_bucket), 
-            S3BucketPrefix=self.globals.get('elb_key_prefix', 'elb_logs'))
-
         self.template.description = template.get('description', 'No Description Specified')
         self.add_common_parameters(template)
         self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', 'ami_cache.json'))

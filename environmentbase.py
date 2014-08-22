@@ -252,9 +252,7 @@ class EnvironmentBase():
                 Ebs=ec2.EBSBlockDevice(
                 VolumeSize=root_volume_size))]
         
-        device_names = []
-        for i, c in enumerate('bcdefghijklmnopqrstuvwxyz'): 
-            device_names.append('/dev/sd' + c)
+        device_names = ['/dev/sd%s' % c for c in 'bcdefghijklmnopqrstuvwxyz']
 
         if ebs_data_volumes != None and len(ebs_data_volumes) > 0: 
             for ebs_volume in ebs_data_volumes:

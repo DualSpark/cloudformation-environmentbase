@@ -503,7 +503,8 @@ class EnvironmentBase():
                 template, 
                 template_args, 
                 s3_bucket=None, 
-                s3_key_prefix=None):
+                s3_key_prefix=None, 
+                s3_canned_acl=None):
 
         key_serial = str(int(time.time()))
         if s3_bucket == None:
@@ -513,9 +514,11 @@ class EnvironmentBase():
         if s3_key_prefix == None:
             s3_key_prefix = template_args.get('s3_key_prefix', '')
         if s3_key_prefix == None:
-            s3_key_name = '/' + '.' + key_serial + name + '.template'
+            s3_key_name = '/' +  name + '.' + key_serial + '.template'
         else: 
             s3_key_name = s3_key_prefix + '/' + name + '.' + key_serial + '.template'
+        if s3_canned_acl == None:
+            s3_canned_acl = template_args.get('s3_canned_acl', 'private')
 
         if template_args.get('mock_upload',False):
             stack_url = 'http://www.dualspark.com'
@@ -526,7 +529,7 @@ class EnvironmentBase():
 
             key.key = s3_key_name
             key.set_contents_from_string(template.to_json())
-            key.set_acl('public-read')
+            key.set_acl(s3_canned_acl)
 
             stack_url = key.generate_url(expires_in=0, query_auth=False)
 

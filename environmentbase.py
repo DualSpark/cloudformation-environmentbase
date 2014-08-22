@@ -36,7 +36,6 @@ class EnvironmentBase():
         '''
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
-        @configvalue ec2_key_default [string] name of the EC2 key to use when deploying instances via this template
         '''
         if 'ec2Key' not in self.template.parameters:
             self.template.add_parameter(Parameter('ec2Key', 
@@ -207,9 +206,9 @@ class EnvironmentBase():
         @param include_ephemerals [Boolean] indicates that ephemeral volumes should be included in the block device mapping of the Launch Configuration
         @param number_ephemeral_vols [int] number of ephemeral volumes to attach within the block device mapping Launch Configuration
         @param ebs_data_volumes [list] dictionary pair of size and type data properties in a list used to create ebs volume attachments
-        @param instance_monitoring [Boolean] indicates that detailed monitoring should be turned on for all instnaces launched within this Auto Scaling group
         @param custom_tags [Troposphere.autoscaling.Tag[]] Collection of Auto Scaling tags to be assigned to the Auto Scaling Group
         @param load_balancer [Troposphere.elasticloadbalancing.LoadBalancer] Object reference to an ELB to be assigned to this auto scaling group
+        @param instance_monitoring [Boolean] indicates that detailed monitoring should be turned on for all instnaces launched within this Auto Scaling group
         @param subnet_type [string {'public', 'private'}] string indicating which type of subnet (public or private) instances should be launched into
         '''
         if subnet_type not in ['public', 'private']:
@@ -249,7 +248,9 @@ class EnvironmentBase():
                 Ebs=ec2.EBSBlockDevice(
                 VolumeSize=root_volume_size))]
         
-        device_names = ['/dev/sdb', '/dev/sdc', '/dev/sdd', '/dev/sde', '/dev/sdf', '/dev/sdg', '/dev/sdh', '/dev/sdi', '/dev/sdj', '/dev/sdk', '/dev/sdl', '/dev/sdm', '/dev/sdn', '/dev/sdo', '/dev/sdp']
+        device_names = []
+        for i, c in enumerate('bcdefghijklmnopqrstuvwxyz'): 
+            device_names.append('/dev/sd' + c)
 
         if ebs_data_volumes != None and len(ebs_data_volumes) > 0: 
             for ebs_volume in ebs_data_volumes:
@@ -310,7 +311,7 @@ class EnvironmentBase():
             region_list):
         '''
         Internal helper method used to check to ensure mapping dictionaries are present 
-        @param region_list [string[]]] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
+        @param region_list [list(str)] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
         '''
         if 'RegionMap' not in self.template.mappings:
             self.template.mappings['RegionMap'] = {}
@@ -478,7 +479,6 @@ class EnvironmentBase():
         Helper method creates an IAM Role and Instance Profile for the optoinally specified IAM policies
         @param layer_name [string] friendly name for the Role and Instance Profile used for naming and path organization
         @param iam_policies [Troposphere.iam.Policy[]] array of IAM Policies to be associated with the Role and Instance Profile created
-        @classarg environment_name [string] friendly name for the environment at large
         '''
         iam_role_obj = iam.Role(layer_name + 'IAMRole', 
                 AssumeRolePolicyDocument={
@@ -505,6 +505,15 @@ class EnvironmentBase():
                 s3_bucket=None, 
                 s3_key_prefix=None, 
                 s3_canned_acl=None):
+        '''
+        Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
+        @param name [str] name of this template for key naming in s3
+        @param template [Troposphere.Template] Troposphere Template object to add as a child to this object's template
+        @param template_args [dict] key-value pair of configuration values for templates to apply to this operation
+        @param s3_bucket [str] name of the bucket to upload keys to - will default to value in template_args if not present
+        @param s3_key_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
+        @param s3_canned_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
+        '''
 
         key_serial = str(int(time.time()))
         if s3_bucket == None:

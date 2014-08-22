@@ -4,8 +4,6 @@ import troposphere.ec2 as ec2
 import troposphere.s3 as s3
 import boto.vpc
 import boto
-import boto.s3
-from boto.s3.key import Key
 import hashlib
 import json
 from environmentbase import EnvironmentBase
@@ -13,8 +11,16 @@ from datetime import datetime
 from ipcalc import IP, Network
 
 class NetworkBase(EnvironmentBase):
+    '''
+    Class creates all of the base networking infrastructure for a common deployment within AWS
+    This is intended to be the 'base' template for deploying child templates 
+    '''
 
     def __init__(self, arg_dict):
+        '''
+        Init method wires up all the required networking resources to deploy this set of infrastructure 
+        @param arg_dict [dict] collection of keyword arguments for this class implementation
+        '''
         EnvironmentBase.__init__(self, arg_dict)
         self.vpc = None
         self.local_subnets = {}
@@ -52,14 +58,17 @@ class NetworkBase(EnvironmentBase):
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
 
     def add_utility_bucket(self, name='demo'): 
-
-        self.utility_bucket = self.template.add_resource(s3.Bucket(name + 'UtilityBucket'))
+        '''
+        Method adds a bucket to be used for infrastructure utility purposes such as backups
+        @param name [str] friendly name to prepend to the CloudFormation asset name 
+        '''
+        self.utility_bucket = self.template.add_resource(s3.Bucket(name.lower() + 'UtilityBucket'))
         
-        self.template.add_resource(s3.BucketPolicy( name + 'UtilityBucketELBLoggingPolicy', 
+        self.template.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketELBLoggingPolicy', 
                 Bucket=Ref(self.utility_bucket), 
                 PolicyDocument=self.get_elb_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=self.strings.get('elb_log_prefix',''))))
         
-        self.template.add_resource(s3.BucketPolicy(name + 'UtilityBucketCloudTrailLoggingPolicy', 
+        self.template.add_resource(s3.BucketPolicy(name.lower() + 'UtilityBucketCloudTrailLoggingPolicy', 
                 DependsOn=['demoUtilityBucketELBLoggingPolicy'], 
                 Bucket=Ref(self.utility_bucket), 
                 PolicyDocument=self.get_cloudtrail_logging_bucket_policy_document(self.utility_bucket, cloudtrail_log_prefix=self.strings.get('cloudtrail_log_prefix', ''))))
@@ -72,9 +81,8 @@ class NetworkBase(EnvironmentBase):
         Method gets the AZs within the given account where subnets can be created/deployed
         This is necessary due to some accounts having 4 subnets available within ec2 classic and only 3 within vpc
         which causes the Select by index method of picking azs unpredictable for all accounts
-        @param default_aws_region [string] region to use to make the initial connection to the AWS VPC API via boto
-        @param aws_access_key [string] AWS Access Key to use when accessing the AWS VPC API
-        @param aws_secret_key [string] AWS Secret Key to use when accessing the AWS VPC API
+        @param boto_config [dict] collection of boto configuration values as set by the configuration file 
+        @param az_count [int] number of AWS availability zones to include in the VPC mapping
         '''
         az_dict = {}
         region_list = []
@@ -102,8 +110,6 @@ class NetworkBase(EnvironmentBase):
         '''
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
         @param network_config [dict] collection of network parameters for creating the VPC network
-        @classarg public_subnet_count [int] number of public subnets to create
-        @classarg private_subnet_count [int] number of private subnets to create
         '''
         self.vpc = self.template.add_resource(ec2.VPC('vpc', 
                 CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'), 
@@ -209,13 +215,6 @@ class NetworkBase(EnvironmentBase):
         '''
         Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.  Calculated based on CIDR block sizes and additionally checks to ensure all network segments fit inside of the specified overall VPC CIDR
         @param network_config [dict] dictionary of values containing data for creating 
-        @configvalue network_cidr_base [string] base IP address to use for the overall VPC network deployment
-        @configvalue network_cidr_size [string] routing prefix size of the overall VPC network to be deployed
-        @configvalue first_network_address_block [string | None] optional parameter identifying the first network to use when calculating subnet addresses.  Useful for setting subnet sizes that don't start at the first address within the VPC
-        @configvalue public_subnet_size [string] routing prefix size to be used when creating public subnets
-        @configvalue private_subnet_size [string] routing prefix size to be used when creating private subnets
-        @configvalue public_subnet_count [int] number of public subnets to create in sequential order starting from the first_network_address_block address if present or the vpc_cidr_base address as a default_instance_type
-        @configvalue private_subnet_count [int] number of private subnets to create in sequential order starting from the last public subnet created
         '''
         public_subnet_count = int(network_config.get('public_subnet_count', 2))
         private_subnet_count = int(network_config.get('private_subnet_count', 2))
@@ -257,8 +256,6 @@ class NetworkBase(EnvironmentBase):
         '''
         Method adds a bastion host to the environment and outputs the address of the bastion when deployed
         @param bastion_conf [dict] dictionary of configuration values used for populating the bastion host creation process
-        @configvalue bastion_instance_type_default [string] default to for the instance type parameter for the bastion host
-        @configvalue remote_access_cidr [string | cidr format] default for the parameter gathering the cidr to allow remote access from for the bastion host
         '''
         instance_type = self.template.add_parameter(Parameter('bastionInstanceType', 
                 Default=bastion_conf.get('instance_type_default', 't1.micro'), 

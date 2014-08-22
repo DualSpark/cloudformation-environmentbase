@@ -2,8 +2,15 @@ from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Bas
 from environmentbase import EnvironmentBase
 
 class TemplateBase(EnvironmentBase):
+    '''
+    Base class to manage common input parameters for non-network templates.  
+    '''
 
     def __init__(self, arg_dict):
+        '''
+        Init method manages creation of common parameters for derived classes
+        @param arg_dict [dict] collection of keyword arguments for this class implementation
+        '''
         EnvironmentBase.__init__(self, arg_dict)
 
         self.vpc_cidr = self.template.add_parameter(Parameter('vpcCidr', 

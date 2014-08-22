@@ -44,11 +44,14 @@ import troposphere.ec2 as ec2
 import troposphere.elasticloadbalancing as elb
 import troposphere.autoscaling as autoscaling
 import troposphere.s3 as s3
-import boto.vpc
+import troposphere.cloudformation as cf
 import hashlib
 import json
+import boto
+import time
+import boto.s3
+from boto.s3.key import Key
 from datetime import datetime
-from ipcalc import IP, Network
 from docopt import docopt
 
 class EnvironmentBase():
@@ -65,75 +68,38 @@ class EnvironmentBase():
         with open(self.globals.get('strings_path', 'strings.json'), 'r') as f:
             json_data = f.read()
         self.strings = json.loads(json_data)
-        self.vpc = None
-        self.subnets = {}
         self.template = Template()
-        
         self.template.description = template.get('description', 'No Description Specified')
+        self.subnets = {}
+        
         self.add_common_parameters(template)
         self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', 'ami_cache.json'))
-        self.add_vpc_az_mapping(boto_config=arg_dict.get('boto', {}))
-        self.add_network_cidr_mapping(network_config=arg_dict.get('network', {}))
-        self.create_network(network_config=arg_dict.get('network',{}))
-        self.add_bastion_instance(bastion_conf=arg_dict.get('bastion', {}))
         
-        self.utility_bucket = self.template.add_resource(s3.Bucket('demoUtilityBucket'))
-        self.template.add_resource(s3.BucketPolicy('demoUtilityBucketELBLoggingPolicy', 
-                Bucket=Ref(self.utility_bucket), 
-                PolicyDocument=self.get_elb_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=self.strings.get('elb_log_prefix',''))))
-        self.template.add_resource(s3.BucketPolicy('demoUtilityBucketCloudTrailLoggingPolicy', 
-                DependsOn=['demoUtilityBucketELBLoggingPolicy'], 
-                Bucket=Ref(self.utility_bucket), 
-                PolicyDocument=self.get_cloudtrail_logging_bucket_policy_document(self.utility_bucket, cloudtrail_log_prefix=self.strings.get('cloudtrail_log_prefix', ''))))
-
     def add_common_parameters(self, template_config):
         '''
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
         @configvalue ec2_key_default [string] name of the EC2 key to use when deploying instances via this template
         '''
-        self.template.add_parameter(Parameter('ec2Key', 
-                Type='String', 
-                Default=template_config.get('ec2_key_default','default-key'), 
-                Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
-                AllowedPattern="[\\x20-\\x7E]*",
-                MinLength=1, 
-                MaxLength=255, 
-                ConstraintDescription='can only contain ASCII chacacters.'))
+        if 'ec2Key' not in self.template.parameters:
+            self.template.add_parameter(Parameter('ec2Key', 
+                    Type='String', 
+                    Default=template_config.get('ec2_key_default','default-key'), 
+                    Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
+                    AllowedPattern="[\\x20-\\x7E]*",
+                    MinLength=1, 
+                    MaxLength=255, 
+                    ConstraintDescription='can only contain ASCII chacacters.'))
 
-        self.template.add_parameter(Parameter('remoteAccessLocation', 
-                Description='CIDR block identifying the network address space that will be allowed to ingress into public access points within this solution',
-                Type='String', 
-                Default='0.0.0.0/0', 
-                MinLength=9, 
-                MaxLength=18, 
-                AllowedPattern='(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})', 
-                ConstraintDescription='must be a valid CIDR range of the form x.x.x.x/x'))
-
-    def add_vpc_az_mapping(self, 
-            boto_config):
-        '''
-        Method gets the AZs within the given account where subnets can be created/deployed
-        This is necessary due to some accounts having 4 subnets available within ec2 classic and only 3 within vpc
-        which causes the Select by index method of picking azs unpredictable for all accounts
-        @param default_aws_region [string] region to use to make the initial connection to the AWS VPC API via boto
-        @param aws_access_key [string] AWS Access Key to use when accessing the AWS VPC API
-        @param aws_secret_key [string] AWS Secret Key to use when accessing the AWS VPC API
-        '''
-        az_dict = {}
-        region_list = []
-        aws_auth_info = {}
-        if 'aws_access_key_id' in boto_config and 'aws_secret_access_key' in boto_config:
-            aws_auth_info['aws_access_key_id'] = boto_config.get('aws_access_key_id')
-            aws_auth_info['aws_secret_access_key'] = boto_config.get('aws_secret_access_key')
-        conn = boto.vpc.connect_to_region(region_name=boto_config.get('default_aws_region', 'us-east-1'), **aws_auth_info)
-        for region in conn.get_all_regions():
-            region_list.append(region.name)
-            az_list = boto.vpc.connect_to_region(region.name, **aws_auth_info).get_all_zones()
-            if len(az_list) > 1:
-                az_dict[region.name] = {}
-                for x in range(0, 2):
-                    self.add_region_map_value(region.name, 'az' + str(x) + 'Name', az_list[x].name)
+        if 'remoteAccessLocation' not in self.template.parameters:
+            self.remote_access_cidr = self.template.add_parameter(Parameter('remoteAccessLocation', 
+                    Description='CIDR block identifying the network address space that will be allowed to ingress into public access points within this solution',
+                    Type='String', 
+                    Default='0.0.0.0/0', 
+                    MinLength=9, 
+                    MaxLength=18, 
+                    AllowedPattern='(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})', 
+                    ConstraintDescription='must be a valid CIDR range of the form x.x.x.x/x'))
 
     def add_region_map_value(self, 
             region, 
@@ -249,154 +215,6 @@ class EnvironmentBase():
             for key in json_data[region]:
                 self.add_region_map_value(region, key, json_data[region][key])
 
-    def create_network(self, 
-            network_config=None):
-        '''
-        Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
-        @param network_config [dict] collection of network parameters for creating the VPC network
-        @classarg public_subnet_count [int] number of public subnets to create
-        @classarg private_subnet_count [int] number of private subnets to create
-        '''
-        self.vpc = self.template.add_resource(ec2.VPC('vpc', 
-                CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'), 
-                EnableDnsSupport=True, 
-                EnableDnsHostnames=True))
-
-        igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
-
-        self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
-                InternetGatewayId=Ref(igw), 
-                VpcId=Ref(self.vpc)))
-
-        nat_instance_type = self.template.add_parameter(Parameter('natInstanceType', 
-                Type='String',
-                Default=str(network_config.get('nat_instance_type', 'm1.small')), 
-                AllowedValues=self.strings['valid_instance_types'], 
-                ConstraintDescription=self.strings['valid_instance_type_message'], 
-                Description='Instance type to use when launching NAT instances.'))
-
-        for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
-            for y in ['public', 'private']:
-                if y in self.template.mappings['networkAddresses']['subnet' + str(x)]:
-                    if y not in self.subnets:
-                        self.subnets[y] = {}
-                    self.subnets[y][str(x)] = self.template.add_resource(ec2.Subnet(y + 'Subnet' + str(x), 
-                        AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'), 
-                        VpcId=Ref(self.vpc), 
-                        CidrBlock=FindInMap('networkAddresses', 'subnet' + str(x), y)))
-                    route_table = self.template.add_resource(ec2.RouteTable(y + 'Subnet' + str(x) + 'RouteTable', 
-                            VpcId=Ref(self.vpc)))
-                    if y == 'public':
-                        self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute', 
-                                DestinationCidrBlock='0.0.0.0/0', 
-                                GatewayId=Ref(igw), 
-                                RouteTableId=Ref(route_table)))
-                    elif y == 'private':
-                        nat_instance = self.create_nat_instance(x, nat_instance_type, 'public')
-                        self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute', 
-                                DestinationCidrBlock='0.0.0.0/0', 
-                                InstanceId=Ref(nat_instance), 
-                                RouteTableId=Ref(route_table)))
-                    self.template.add_resource(ec2.SubnetRouteTableAssociation(y + 'Subnet' + str(x) + 'EgressRouteTableAssociation', 
-                            RouteTableId=Ref(route_table), 
-                            SubnetId=Ref(self.subnets[y][str(x)])))
-
-    def create_nat_instance(self, 
-            nat_subnet_number,
-            nat_instance_type=None,
-            nat_subnet_type='public'):
-        '''
-        Method creates a NAT instance for the private subnet within the specified corresponding subnet
-        @param nat_subnet_number [int] ID of the subnet that the NAT instance will be deployed to
-        @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
-        @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
-        '''
-        if nat_subnet_type == 'public':
-            source_name = 'private'
-        else:
-            source_name = 'public'
-
-        if nat_instance_type == None:
-            nat_instance_type = 'm1.small'
-        elif type(nat_instance_type) == Parameter:
-            nat_instance_type = Ref(nat_instance_type)
-
-        nat_sg = self.template.add_resource(ec2.SecurityGroup(nat_subnet_type + 'Subnet' + str(nat_subnet_number) + 'SecurityGroup', 
-                VpcId=Ref(self.vpc), 
-                GroupDescription='Security Group for the ' + nat_subnet_type + ' subnet for az ' + str(nat_subnet_number), 
-                SecurityGroupIngress=[
-                    ec2.SecurityGroupRule(
-                            IpProtocol='-1', 
-                            FromPort='-1', 
-                            ToPort='-1', 
-                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), source_name))],
-                SecurityGroupEgress=[
-                    ec2.SecurityGroupRule(
-                            IpProtocol='-1', 
-                            FromPort='-1', 
-                            ToPort='-1', 
-                            CidrIp='0.0.0.0/0')]))
-
-        return self.template.add_resource(ec2.Instance(nat_subnet_type + str(nat_subnet_number) + 'NATInstance', 
-                AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(nat_subnet_number) + 'Name'), 
-                ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'), 
-                KeyName=Ref(self.template.parameters['ec2Key']), 
-                InstanceType=nat_instance_type,
-                NetworkInterfaces=[ec2.NetworkInterfaceProperty(
-                        AssociatePublicIpAddress=True, 
-                        DeleteOnTermination=True, 
-                        DeviceIndex='0', 
-                        GroupSet=[Ref(nat_sg)], 
-                        SubnetId=Ref(self.subnets[nat_subnet_type][str(nat_subnet_number)]))],
-                SourceDestCheck=False))
-
-    def add_network_cidr_mapping(self, 
-        network_config):
-        '''
-        Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.  Calculated based on CIDR block sizes and additionally checks to ensure all network segments fit inside of the specified overall VPC CIDR
-        @param network_config [dict] dictionary of values containing data for creating 
-        @configvalue network_cidr_base [string] base IP address to use for the overall VPC network deployment
-        @configvalue network_cidr_size [string] routing prefix size of the overall VPC network to be deployed
-        @configvalue first_network_address_block [string | None] optional parameter identifying the first network to use when calculating subnet addresses.  Useful for setting subnet sizes that don't start at the first address within the VPC
-        @configvalue public_subnet_size [string] routing prefix size to be used when creating public subnets
-        @configvalue private_subnet_size [string] routing prefix size to be used when creating private subnets
-        @configvalue public_subnet_count [int] number of public subnets to create in sequential order starting from the first_network_address_block address if present or the vpc_cidr_base address as a default_instance_type
-        @configvalue private_subnet_count [int] number of private subnets to create in sequential order starting from the last public subnet created
-        '''
-        public_subnet_count = int(network_config.get('public_subnet_count', 2))
-        private_subnet_count = int(network_config.get('private_subnet_count', 2))
-        public_subnet_size = str(network_config.get('public_subnet_size', '24'))
-        private_subnet_size = str(network_config.get('private_subnet_size', '22'))
-        network_cidr_base = str(network_config.get('network_cidr_base', '172.16.0.0'))
-        network_cidr_size = str(network_config.get('network_cidr_size', '20'))
-        first_network_address_block = str(network_config.get('first_network_address_block', network_cidr_base))
-
-        ret_val = {}
-        cidr_info = Network(network_cidr_base + '/' + network_cidr_size)
-        ret_val['vpcBase'] = {'cidr': cidr_info.network().to_tuple()[0] + '/' + str(cidr_info.to_tuple()[1])}
-        current_base_address = first_network_address_block
-        for public_subnet_id in range(0, public_subnet_count):
-            if not cidr_info.check_collision(current_base_address):
-                raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(public_subnet_id + 1) + ' when creating public subnet cidrs')
-            ip_info = Network(current_base_address + '/' + str(public_subnet_size))
-            range_info = ip_info.network().to_tuple()
-            if 'subnet' + str(public_subnet_id) not in ret_val:
-                ret_val['subnet' + str(public_subnet_id)] = dict()
-            ret_val['subnet' + str(public_subnet_id)]['public'] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
-            current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
-        range_reset = Network(current_base_address + '/' + str(private_subnet_size))
-        current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
-        for private_subnet_id in range(0, private_subnet_count):
-            if not cidr_info.check_collision(current_base_address):
-                raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(private_subnet_id + 1) + ' when creating private subnet cidrs')
-            ip_info = Network(current_base_address + '/' + str(private_subnet_size))
-            range_info = ip_info.network().to_tuple()
-            if 'subnet' + str(private_subnet_id) not in ret_val:
-                ret_val['subnet' + str(private_subnet_id)] = dict()
-            ret_val['subnet' + str(private_subnet_id)]['private'] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
-            current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
-        return self.template.add_mapping('networkAddresses', ret_val)
-
     def create_asg(self, 
             layer_name, 
             instance_profile, 
@@ -506,13 +324,17 @@ class EnvironmentBase():
 
         launch_config = self.template.add_resource(launch_config_obj)
 
+        azs = []
+        for x in range(0, len(self.subnets[subnet_type.lower()])):
+            azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
+
         auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup', 
-                AvailabilityZones=[FindInMap('RegionMap', Ref('AWS::Region'), 'az0Name'), FindInMap('RegionMap', Ref('AWS::Region'), 'az1Name')],
+                AvailabilityZones=azs,
                 LaunchConfigurationName=Ref(launch_config), 
                 MaxSize=max_size, 
                 MinSize=min_size, 
                 DesiredCapacity=min(min_size, max_size), 
-                VPCZoneIdentifier=[Ref(self.subnets[subnet_type][str(0)]), Ref(self.subnets[subnet_type][str(1)])])
+                VPCZoneIdentifier=self.subnets[subnet_type.lower()])
 
         if load_balancer != None:
             auto_scaling_obj.LoadBalancerNames = [Ref(load_balancer)]
@@ -538,133 +360,6 @@ class EnvironmentBase():
         for region_name in region_list:
             if region_name not in self.template.mappings['RegionMap']:
                 self.template.mappings['RegionMap'][region_name] = {}
-
-    def to_json(self):
-        '''
-        Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
-        '''
-        if 'dateGenerated' not in self.template.outputs:
-            self.template.add_output(Output('dateGenerated', 
-                Value=str(datetime.utcnow()), 
-                Description='UTC datetime representation of when this template was generated'))
-        if 'templateValidationHash' not in self.template.outputs:
-            m = hashlib.sha256()
-            m.update(EnvironmentBase.__validation_formatter(self.template))
-            self.template.add_output(Output('templateValidationHash', 
-                Value=m.hexdigest(), 
-                Description='Hash of this template that can be used as a simple means of validating whether a template has been changed since it was generated.'))
-        return self.template.to_json()
-
-    @staticmethod
-    def validate_template_file(cloudformation_template_path, 
-            validation_output_name='templateValidationHash'):
-        '''
-        Method takes a file path, reads it and validates the template via the SHA256 checksum that is to be located within the Outputs collection of the cloudFormation template
-        @param cloudformation_template_path [string] path from which to read the cloudformation template
-        @param validation_output_name [string] name of the output to use to gather the SHA256 hash to validate
-        '''
-        with open(cloudformation_template_path, 'r') as f:
-            cf_template_contents = f.read()
-        return EnvironmentBase.validate_template_contents(cf_template_contents, validation_output_name)
-
-    @staticmethod
-    def __validation_formatter(cf_template):
-        '''
-        Validation formatter helps to ensure consistent formatting for hash validation workflow
-        @param json_string [string | Troposphere.Template | dict] JSON-able data to be formatted for validation
-        '''
-        if type(cf_template) == Template:
-            json_string = json.dumps(json.loads(cf_template.to_json()))
-        elif type(cf_template) == dict:
-            json_string = json.dumps(cf_template)
-        return json.dumps(json.loads(json_string), separators=(',',':'))
-
-    @staticmethod
-    def validate_template_contents(cloudformation_template_string, 
-            validation_output_name='templateValidationHash'):
-        '''
-        Method takes the contents of a CloudFormation template and validates the SHA256 hash  
-        @param cloudformation_template_string [string] string contents of the CloudFormation template to validate
-        @param validation_output_name [string] name of the CloudFormation output containing the SHA256 hash to be validated
-        '''
-        template_object = json.loads(cloudformation_template_string)
-        if 'Outputs' in template_object:
-            if validation_output_name in template_object['Outputs']:
-                if 'Value' in template_object['Outputs'][validation_output_name]:
-                    hash_to_validate = template_object['Outputs'][validation_output_name]['Value']
-                    del template_object['Outputs'][validation_output_name]
-                    m = hashlib.sha256()
-                    m.update(EnvironmentBase.__validation_formatter(template_object))
-                    template_hash = m.hexdigest()
-                    print '* hash to validate: ' + hash_to_validate
-                    print '*  calculated hash: ' + template_hash
-                    if hash_to_validate == template_hash:
-                        print 'Template is valid'
-                    else:
-                        raise RuntimeError('Template hash is not valid')
-                else:
-                    print 'Cannot validate this template as it appears it is corrupt.  The [' + validation_output_name + '] output does not contain a value property.'
-            else: 
-                print 'Cannot validate this template as it does not contain the specified output [' + validation_output_name + '] - check to make sure this is the right name and try again.'
-        else:
-            print 'This template does not contain a collection of outputs. Please check the input template and try again.'
-
-    def add_bastion_instance(self, 
-            bastion_conf):
-        '''
-        Method adds a bastion host to the environment and outputs the address of the bastion when deployed
-        @param bastion_conf [dict] dictionary of configuration values used for populating the bastion host creation process
-        @configvalue bastion_instance_type_default [string] default to for the instance type parameter for the bastion host
-        @configvalue remote_access_cidr [string | cidr format] default for the parameter gathering the cidr to allow remote access from for the bastion host
-        '''
-        instance_type = self.template.add_parameter(Parameter('bastionInstanceType', 
-                Default=bastion_conf.get('instance_type_default', 't1.micro'), 
-                AllowedValues=self.strings['valid_instance_types'], 
-                Type='String',
-                Description='Instance type to use when launching the Bastion host for access to resources that are not publicly exposed', 
-                ConstraintDescription=self.strings['valid_instance_type_message']))
-
-        bastion_security_group = self.template.add_resource(ec2.SecurityGroup('bastionSecurityGroup', 
-                VpcId=Ref(self.vpc), 
-                GroupDescription='Security group allowing ingress via SSH to this instance along with other standard accessbility port rules', 
-                SecurityGroupIngress=[ec2.SecurityGroupRule(
-                        FromPort='22', 
-                        ToPort='22', 
-                        IpProtocol='tcp', 
-                        CidrIp=Ref(self.template.parameters['remoteAccessLocation']))],
-                SecurityGroupEgress=[ec2.SecurityGroupRule(
-                        FromPort='22', 
-                        ToPort='22', 
-                        IpProtocol='tcp', 
-                        CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr')), 
-                    ec2.SecurityGroupRule(
-                        FromPort='80', 
-                        ToPort='80', 
-                        IpProtocol='tcp', 
-                        CidrIp='0.0.0.0/0'), 
-                    ec2.SecurityGroupRule(
-                        FromPort='443', 
-                        ToPort='443', 
-                        IpProtocol='tcp',
-                        CidrIp='0.0.0.0/0')]))
-
-        bastion_instance = self.template.add_resource(ec2.Instance('bastionInstance', 
-               ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'ubuntu1404LtsAmiId'),
-               InstanceType=Ref(instance_type),
-               KeyName=Ref(self.template.parameters['ec2Key']),
-               NetworkInterfaces=[ec2.NetworkInterfaceProperty(
-                    AssociatePublicIpAddress=True, 
-                    DeleteOnTermination=True, 
-                    Description='ENI for the bastion host', 
-                    DeviceIndex='0', 
-                    GroupSet=[Ref(bastion_security_group)], 
-                    SubnetId=Ref(self.subnets['public'][str('0')]))],
-               Tags=[ec2.Tag('Name', 'bastionHost')],
-               Monitoring=True))
-
-        self.template.add_output(Output('bastionHostAddress', 
-            Value=GetAtt(bastion_instance, 'PublicDnsName'), 
-            Description='Address to use when accessing the bastion host.'))
 
     def create_reciprocal_sg(self, 
             source_group, 
@@ -711,6 +406,34 @@ class EnvironmentBase():
             ToPort=to_port, 
             IpProtocol=ip_protocol))
 
+    def to_json(self):
+        '''
+        Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
+        '''
+        if 'dateGenerated' not in self.template.outputs:
+            self.template.add_output(Output('dateGenerated', 
+                Value=str(datetime.utcnow()), 
+                Description='UTC datetime representation of when this template was generated'))
+        if 'templateValidationHash' not in self.template.outputs:
+            m = hashlib.sha256()
+            m.update(EnvironmentBase.__validation_formatter(self.template))
+            self.template.add_output(Output('templateValidationHash', 
+                Value=m.hexdigest(), 
+                Description='Hash of this template that can be used as a simple means of validating whether a template has been changed since it was generated.'))
+        return self.template.to_json()
+
+    @staticmethod
+    def validate_template_file(cloudformation_template_path, 
+            validation_output_name='templateValidationHash'):
+        '''
+        Method takes a file path, reads it and validates the template via the SHA256 checksum that is to be located within the Outputs collection of the cloudFormation template
+        @param cloudformation_template_path [string] path from which to read the cloudformation template
+        @param validation_output_name [string] name of the output to use to gather the SHA256 hash to validate
+        '''
+        with open(cloudformation_template_path, 'r') as f:
+            cf_template_contents = f.read()
+        return EnvironmentBase.validate_template_contents(cf_template_contents, validation_output_name)
+
     @staticmethod
     def build_bootstrap(bootstrap_files, 
             variable_declarations=None, 
@@ -747,6 +470,50 @@ class EnvironmentBase():
             if not line.startswith('#~'):
                 ret_val.append(line.replace("\n", ""))
         return ret_val
+
+    @staticmethod
+    def __validation_formatter(cf_template):
+        '''
+        Validation formatter helps to ensure consistent formatting for hash validation workflow
+        @param json_string [string | Troposphere.Template | dict] JSON-able data to be formatted for validation
+        '''
+        if type(cf_template) == Template:
+            json_string = json.dumps(json.loads(cf_template.to_json()))
+        elif type(cf_template) == dict:
+            json_string = json.dumps(cf_template)
+        return json.dumps(json.loads(json_string), separators=(',',':'))
+
+    @staticmethod
+    def validate_template_contents(cloudformation_template_string, 
+            validation_output_name='templateValidationHash'):
+        '''
+        Method takes the contents of a CloudFormation template and validates the SHA256 hash  
+        @param cloudformation_template_string [string] string contents of the CloudFormation template to validate
+        @param validation_output_name [string] name of the CloudFormation output containing the SHA256 hash to be validated
+        '''
+        template_object = json.loads(cloudformation_template_string)
+        if 'Outputs' in template_object:
+            if validation_output_name in template_object['Outputs']:
+                if 'Value' in template_object['Outputs'][validation_output_name]:
+                    hash_to_validate = template_object['Outputs'][validation_output_name]['Value']
+                    del template_object['Outputs'][validation_output_name]
+                    m = hashlib.sha256()
+                    m.update(EnvironmentBase.__validation_formatter(template_object))
+                    template_hash = m.hexdigest()
+                    print '* hash to validate: ' + hash_to_validate
+                    print '*  calculated hash: ' + template_hash
+                    if hash_to_validate == template_hash:
+                        print 'Template is valid'
+                    else:
+                        raise RuntimeError('Template hash is not valid')
+                else:
+                    print 'Cannot validate this template as it appears it is corrupt.  The [' + validation_output_name + '] output does not contain a value property.'
+            else: 
+                print 'Cannot validate this template as it does not contain the specified output [' + validation_output_name + '] - check to make sure this is the right name and try again.'
+        else:
+            print 'This template does not contain a collection of outputs. Please check the input template and try again.'
+
+
     def create_instance_profile(self, 
             layer_name, 
             iam_policies=None):
@@ -773,6 +540,71 @@ class EnvironmentBase():
         return self.template.add_resource(iam.InstanceProfile(layer_name + 'InstancePolicy', 
                 Path='/' + self.globals.get('environment_name', 'environmentbase') + '/', 
                 Roles=[Ref(iam_role)]))
+
+    def add_child_template(self, 
+                name, 
+                template, 
+                template_args, 
+                s3_bucket=None, 
+                s3_key_prefix=None, 
+                mock_upload=False):
+
+        key_serial = str(int(time.time()))
+        if s3_bucket == None:
+            s3_bucket = template_args.get('s3_bucket')
+        if s3_bucket == None:
+            raise RuntimeError('Cannot upload template to s3 as a s3 bucket was not specified nor set as a default')
+        if s3_key_prefix == None:
+            s3_key_prefix = template_args.get('s3_key_prefix', '')
+        if s3_key_prefix == None:
+            s3_key_name = '/' + '.' + key_serial + name + '.template'
+        else: 
+            s3_key_name = s3_key_prefix + '/' + name + '.' + key_serial + '.template'
+
+        if mock_upload:
+            stack_url = 'http://www.dualspark.com'
+        else:    
+            conn = boto.connect_s3()
+            bucket = conn.get_bucket(s3_bucket)
+            key = Key(bucket)
+
+            key.key = s3_key_name
+            key.set_acl('public-read')
+
+            key.set_contents_from_string(template.to_json())
+            stack_url = key.generate_url(expires_in=0, query_auth=False)
+
+        if name not in self.stack_outputs:
+            self.stack_outputs[name] = []
+
+        stack_params = {}
+        for parameter in template.parameters.keys():
+            print 'param: ' + parameter
+            if parameter == 'vpcCidr':
+                stack_params[parameter] = FindInMap('networkAddresses', 'vpcBase', 'cidr')
+            elif parameter == 'vpcId': 
+                stack_params[parameter] = Ref(self.vpc)
+            elif parameter == 'utilityBucket':
+                stack_params[parameter] = Ref(self.utility_bucket)
+            elif parameter in self.template.parameters.keys(): 
+                stack_params[parameter] = Ref(self.template.parameters.get(parameter))
+            elif parameter in self.template.resources.keys():
+                stack_params[parameter] = Ref(self.template.resources.get(parameter))
+            elif parameter in self.stack_outputs:
+                stack_params[parameter] = GetAtt(self.stack_outputs[parameter], 'Outputs.' + parameter)
+            else:
+                stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
+        stack_name = name + 'Stack'
+        for output in template.outputs:
+            if output not in self.stack_outputs:
+                self.stack_outputs[output] = stack_name
+            else: 
+                raise RuntimeError('Cannot add child stack with output named ' + output + ' as it was already added by stack named ' + self.stack_outputs[output])
+
+        self.template.add_resource(cf.Stack(stack_name,
+                TemplateURL=stack_url, 
+                Parameters=stack_params,
+                TimeoutInMinutes=template_args.get('timeout_in_minutes', '60')))
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='EnvironmentBase 1.0')

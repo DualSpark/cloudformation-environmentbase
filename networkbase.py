@@ -1,0 +1,362 @@
+'''Base Network Generator 
+
+This class and command line tool is intended to simplify creating consistent networks from region to region with a good ability to configure a number of pertinent configuration-level options.  
+
+Usage:
+    networkbase.py (-h | --help)
+    networkbase.py --version
+    networkbase.py create --config <CONFIG> [--output <OUTPUT>] [--aws_access_key <AWS_ACCESS_KEY>] [--aws_secret_key <AWS_SECRET_KEY>]
+    networkbase.py create [--output <OUTPUT>] [--default_aws_region <DEFAULT_AWS_REGION>] [--aws_access_key_id <AWS_ACCESS_KEY_ID>] [--strings_patn <STRINGS_PATH>]
+                          [--aws_secret_access_key <AWS_SECRET_ACCESS_KEY>] [--ami_map_file <AMI_MAP_FILE>] [--public_subnet_count <PUBLIC_SUBNET_COUNT>] 
+                          [--private_subnet_count <PRIVATE_SUBNET_COUNT>] [--public_subnet_size <PUBLIC_SUBNET_SIZE>] [--private_subnet_size <PRIVATE_SUBNET_SIZE>] 
+                          [--network_cidr_base <NETWORK_CIDR_BASE>] [--network_cidr_size <NETWORK_CIDR_SIZE>] 
+                          [--first_network_address_block <FIRST_NETWORK_ADDRESS_BLOCK>] [--environment_name <ENVIRONMENT_NAME>] [--print_debug]
+    networkbase.py validate (--file <FILE> | --contents <CONTENTS>) [--validation_output_name <VALIDATION_OUTPUT_NAME>]
+
+Options:
+    -h --help                                       Show this screen
+    --version                                       Show version
+    --config <CONFIG>                               path of the configuration file to pull in representing the argument set to pass to the environment build process
+    --output <OUTPUT>                               File name to write output of template generation to [Default: environmentbase.template]
+    --strings_path <STRINGS_PATH>                   Path to the strings.json file to populate string constants for use within the template [Default: strings.json]
+    --default_aws_region <DEFAULT_AWS_REGION>       Default region to use when querying boto for VPC data
+    --aws_access_key_id <AWS_ACCESS_KEY_ID>         AWS Access Key Id to use when authenticating to the AWS API
+    --aws_secret_access_key <AWS_SECRET_ACCESS_KEY> AWS Secret Access Key to use when authenticating to the AWS API
+    --print_debug                                   Optionally prints the CloudFormation output to the console as well as the file specified [Default: False]
+    --ami_map_file <AMI_MAP_FILE>                   path of the AMI Map file [Default: ami_cache.json]
+    --public_subnet_count <PUBLIC_SUBNET_COUNT>     Number of public subnets to create in this network [Default: 2]
+    --private_subnet_count <PRIVATE_SUBNET_COUNT>   Number of private subnets to create in this network [Default: 2]
+    --public_subnet_size <PUBLIC_SUBNET_SIZE>       CIDR routing prefix indicating how large the public subnets that are created should be [Default: 24]
+    --private_subnet_size <PRIVATE_SUBNET_SIZE>     CIDR routing prefix indicating how large the private subnets that are created should be [Default: 22]
+    --network_cidr_base <NETWORK_CIDR_BASE>         Base network address of the network to be created [Default: 172.16.0.0]
+    --network_cidr_size <NETWORK_CIDR_SIZE>         CIDR routing prefix indicating how large the entire network to be created should be [Default: 20]
+    --first_network_address_block <FIRST_NETWORK_ADDRESS_BLOCK>     Override indicating where within the NETWORK_CIDR_BASE network to start creating subnets
+    --validation_output_name <VALIDATION_OUTPUT_NAME>               Name of the CloudFormation Output to place the validation hash [Default: templateValidationHash]
+    --cloudtrail_log_prefix <CLOUDTRAIL_LOG_PREFIX> S3 key name prefix to prepend to the bucket created indicating where CloudTrail should ship logs to [Default: cloudtrail_logs]
+    --elb_log_prefix <ELB_LOG_PREFIX>               S3 key name prefix to prepend to the bucket created indicating where ELB should ship logs to [Default: elb_logs]
+    --environment_name <ENVIRONMENT_NAME>           friendly name to use for describing the environment itself [Default: environmentbase]
+    --file <FILE>                                   Path of an existing CloudFormation template to validate
+    --contents <CONTENTS>                           String contents of an existing CloudFormation template to validate 
+'''
+from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
+import troposphere.iam as iam
+import troposphere.ec2 as ec2
+import troposphere.elasticloadbalancing as elb
+import troposphere.autoscaling as autoscaling
+import troposphere.s3 as s3
+import troposphere.cloudformation as cf
+import boto.vpc
+import boto
+import boto.s3
+from boto.s3.key import Key
+import hashlib
+import json
+from environmentbase import EnvironmentBase
+from datetime import datetime
+from ipcalc import IP, Network
+from docopt import docopt
+
+class NetworkBase(EnvironmentBase):
+
+    def __init__(self, arg_dict):
+        EnvironmentBase.__init__(self, arg_dict)
+        self.vpc = None
+        self.local_subnets = {}
+        self.stack_outputs = {}
+        self.add_vpc_az_mapping(boto_config=arg_dict.get('boto', {}), 
+                az_count=max(arg_dict.get('network', {}).get('public_subnet_count', 2), arg_dict.get('network', {}).get('private_subnet_count',2)))
+        self.add_network_cidr_mapping(network_config=arg_dict.get('network', {}))
+        self.create_network(network_config=arg_dict.get('network',{}))
+        self.add_bastion_instance(bastion_conf=arg_dict.get('bastion', {}))
+        self.add_utility_bucket()
+
+        self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup', 
+            GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
+            VpcId=Ref(self.vpc), 
+            SecurityGroupEgress=[ec2.SecurityGroupRule(
+                        FromPort='80', 
+                        ToPort='80', 
+                        IpProtocol='tcp', 
+                        CidrIp='0.0.0.0/0'), 
+                    ec2.SecurityGroupRule(
+                        FromPort='443', 
+                        ToPort='443', 
+                        IpProtocol='tcp', 
+                        CidrIp='0.0.0.0/0'), 
+                    ec2.SecurityGroupRule(
+                        FromPort='123', 
+                        ToPort='123', 
+                        IpProtocol='udp', 
+                        CidrIp='0.0.0.0/0')], 
+            SecurityGroupIngress= [
+                    ec2.SecurityGroupRule(
+                        FromPort='22', 
+                        ToPort='22', 
+                        IpProtocol='tcp', 
+                        CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
+
+    def add_utility_bucket(self, name='demo'): 
+
+        self.utility_bucket = self.template.add_resource(s3.Bucket(name + 'UtilityBucket'))
+        
+        self.template.add_resource(s3.BucketPolicy( name + 'UtilityBucketELBLoggingPolicy', 
+                Bucket=Ref(self.utility_bucket), 
+                PolicyDocument=self.get_elb_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=self.strings.get('elb_log_prefix',''))))
+        
+        self.template.add_resource(s3.BucketPolicy(name + 'UtilityBucketCloudTrailLoggingPolicy', 
+                DependsOn=['demoUtilityBucketELBLoggingPolicy'], 
+                Bucket=Ref(self.utility_bucket), 
+                PolicyDocument=self.get_cloudtrail_logging_bucket_policy_document(self.utility_bucket, cloudtrail_log_prefix=self.strings.get('cloudtrail_log_prefix', ''))))
+
+
+    def add_vpc_az_mapping(self, 
+            boto_config, 
+            az_count=2):
+        '''
+        Method gets the AZs within the given account where subnets can be created/deployed
+        This is necessary due to some accounts having 4 subnets available within ec2 classic and only 3 within vpc
+        which causes the Select by index method of picking azs unpredictable for all accounts
+        @param default_aws_region [string] region to use to make the initial connection to the AWS VPC API via boto
+        @param aws_access_key [string] AWS Access Key to use when accessing the AWS VPC API
+        @param aws_secret_key [string] AWS Secret Key to use when accessing the AWS VPC API
+        '''
+        az_dict = {}
+        region_list = []
+        aws_auth_info = {}
+        if 'aws_access_key_id' in boto_config and 'aws_secret_access_key' in boto_config:
+            aws_auth_info['aws_access_key_id'] = boto_config.get('aws_access_key_id')
+            aws_auth_info['aws_secret_access_key'] = boto_config.get('aws_secret_access_key')
+        conn = boto.vpc.connect_to_region(region_name=boto_config.get('default_aws_region', 'us-east-1'), **aws_auth_info)
+        for region in conn.get_all_regions():
+            region_list.append(region.name)
+            az_list = boto.vpc.connect_to_region(region.name, **aws_auth_info).get_all_zones()
+            if len(az_list) > 1:
+                temp_dict = {}
+                x = 0
+                for availability_zone in az_list:
+                    temp_dict['az' + str(x) + 'Name'] = availability_zone.name
+                    x += 1
+                if len(temp_dict) >= az_count:
+                    az_dict[region.name] = {}
+                    for item in temp_dict:
+                        self.add_region_map_value(region.name, item, temp_dict[item])
+
+    def create_network(self, 
+            network_config=None):
+        '''
+        Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
+        @param network_config [dict] collection of network parameters for creating the VPC network
+        @classarg public_subnet_count [int] number of public subnets to create
+        @classarg private_subnet_count [int] number of private subnets to create
+        '''
+        self.vpc = self.template.add_resource(ec2.VPC('vpc', 
+                CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'), 
+                EnableDnsSupport=True, 
+                EnableDnsHostnames=True))
+
+        igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
+
+        self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
+                InternetGatewayId=Ref(igw), 
+                VpcId=Ref(self.vpc)))
+
+        nat_instance_type = self.template.add_parameter(Parameter('natInstanceType', 
+                Type='String',
+                Default=str(network_config.get('nat_instance_type', 'm1.small')), 
+                AllowedValues=self.strings['valid_instance_types'], 
+                ConstraintDescription=self.strings['valid_instance_type_message'], 
+                Description='Instance type to use when launching NAT instances.'))
+        
+        for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
+            for y in ['public', 'private']:
+                if y in self.template.mappings['networkAddresses']['subnet' + str(x)]:
+                    if y not in self.local_subnets:
+                        self.local_subnets[y] = {}
+                    self.local_subnets[y][str(x)] = self.template.add_resource(ec2.Subnet(y + 'Subnet' + str(x), 
+                        AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'), 
+                        VpcId=Ref(self.vpc), 
+                        CidrBlock=FindInMap('networkAddresses', 'subnet' + str(x), y)))
+                    route_table = self.template.add_resource(ec2.RouteTable(y + 'Subnet' + str(x) + 'RouteTable', 
+                            VpcId=Ref(self.vpc)))
+                    if y == 'public':
+                        self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute', 
+                                DestinationCidrBlock='0.0.0.0/0', 
+                                GatewayId=Ref(igw), 
+                                RouteTableId=Ref(route_table)))
+                    elif y == 'private':
+                        nat_instance = self.create_nat_instance(x, nat_instance_type, 'public')
+                        self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute', 
+                                DestinationCidrBlock='0.0.0.0/0', 
+                                InstanceId=Ref(nat_instance), 
+                                RouteTableId=Ref(route_table)))
+                    self.template.add_resource(ec2.SubnetRouteTableAssociation(y + 'Subnet' + str(x) + 'EgressRouteTableAssociation', 
+                            RouteTableId=Ref(route_table), 
+                            SubnetId=Ref(self.local_subnets[y][str(x)])))
+
+        for x in self.local_subnets: 
+            if x not in self.subnets:
+                self.subnets[x] = []
+            for y in self.local_subnets[x]:
+                self.subnets[x].append(Ref(self.local_subnets[x][y]))
+
+    def create_nat_instance(self, 
+            nat_subnet_number,
+            nat_instance_type=None,
+            nat_subnet_type='public'):
+        '''
+        Method creates a NAT instance for the private subnet within the specified corresponding subnet
+        @param nat_subnet_number [int] ID of the subnet that the NAT instance will be deployed to
+        @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
+        @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
+        '''
+        if nat_subnet_type == 'public':
+            source_name = 'private'
+        else:
+            source_name = 'public'
+
+        if nat_instance_type == None:
+            nat_instance_type = 'm1.small'
+        elif type(nat_instance_type) == Parameter:
+            nat_instance_type = Ref(nat_instance_type)
+
+        nat_sg = self.template.add_resource(ec2.SecurityGroup(nat_subnet_type + 'Subnet' + str(nat_subnet_number) + 'SecurityGroup', 
+                VpcId=Ref(self.vpc), 
+                GroupDescription='Security Group for the ' + nat_subnet_type + ' subnet for az ' + str(nat_subnet_number), 
+                SecurityGroupIngress=[
+                    ec2.SecurityGroupRule(
+                            IpProtocol='-1', 
+                            FromPort='-1', 
+                            ToPort='-1', 
+                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), source_name))],
+                SecurityGroupEgress=[
+                    ec2.SecurityGroupRule(
+                            IpProtocol='-1', 
+                            FromPort='-1', 
+                            ToPort='-1', 
+                            CidrIp='0.0.0.0/0')]))
+
+        return self.template.add_resource(ec2.Instance(nat_subnet_type + str(nat_subnet_number) + 'NATInstance', 
+                AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(nat_subnet_number) + 'Name'), 
+                ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'), 
+                KeyName=Ref(self.template.parameters['ec2Key']), 
+                InstanceType=nat_instance_type,
+                NetworkInterfaces=[ec2.NetworkInterfaceProperty(
+                        AssociatePublicIpAddress=True, 
+                        DeleteOnTermination=True, 
+                        DeviceIndex='0', 
+                        GroupSet=[Ref(nat_sg)], 
+                        SubnetId=Ref(self.local_subnets[nat_subnet_type][str(nat_subnet_number)]))],
+                SourceDestCheck=False))
+
+    def add_network_cidr_mapping(self, 
+        network_config):
+        '''
+        Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.  Calculated based on CIDR block sizes and additionally checks to ensure all network segments fit inside of the specified overall VPC CIDR
+        @param network_config [dict] dictionary of values containing data for creating 
+        @configvalue network_cidr_base [string] base IP address to use for the overall VPC network deployment
+        @configvalue network_cidr_size [string] routing prefix size of the overall VPC network to be deployed
+        @configvalue first_network_address_block [string | None] optional parameter identifying the first network to use when calculating subnet addresses.  Useful for setting subnet sizes that don't start at the first address within the VPC
+        @configvalue public_subnet_size [string] routing prefix size to be used when creating public subnets
+        @configvalue private_subnet_size [string] routing prefix size to be used when creating private subnets
+        @configvalue public_subnet_count [int] number of public subnets to create in sequential order starting from the first_network_address_block address if present or the vpc_cidr_base address as a default_instance_type
+        @configvalue private_subnet_count [int] number of private subnets to create in sequential order starting from the last public subnet created
+        '''
+        public_subnet_count = int(network_config.get('public_subnet_count', 2))
+        private_subnet_count = int(network_config.get('private_subnet_count', 2))
+        public_subnet_size = str(network_config.get('public_subnet_size', '24'))
+        private_subnet_size = str(network_config.get('private_subnet_size', '22'))
+        network_cidr_base = str(network_config.get('network_cidr_base', '172.16.0.0'))
+        network_cidr_size = str(network_config.get('network_cidr_size', '20'))
+        first_network_address_block = str(network_config.get('first_network_address_block', network_cidr_base))
+
+        ret_val = {}
+        cidr_info = Network(network_cidr_base + '/' + network_cidr_size)
+        base_cidr = cidr_info.network().to_tuple()[0] + '/' + str(cidr_info.to_tuple()[1])
+        ret_val['vpcBase'] = {'cidr': base_cidr}
+        current_base_address = first_network_address_block
+        for public_subnet_id in range(0, public_subnet_count):
+            if not cidr_info.check_collision(current_base_address):
+                raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(public_subnet_id + 1) + ' when creating public subnet cidrs')
+            ip_info = Network(current_base_address + '/' + str(public_subnet_size))
+            range_info = ip_info.network().to_tuple()
+            if 'subnet' + str(public_subnet_id) not in ret_val:
+                ret_val['subnet' + str(public_subnet_id)] = dict()
+            ret_val['subnet' + str(public_subnet_id)]['public'] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
+            current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
+        range_reset = Network(current_base_address + '/' + str(private_subnet_size))
+        current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
+        for private_subnet_id in range(0, private_subnet_count):
+            if not cidr_info.check_collision(current_base_address):
+                raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(private_subnet_id + 1) + ' when creating private subnet cidrs')
+            ip_info = Network(current_base_address + '/' + str(private_subnet_size))
+            range_info = ip_info.network().to_tuple()
+            if 'subnet' + str(private_subnet_id) not in ret_val:
+                ret_val['subnet' + str(private_subnet_id)] = dict()
+            ret_val['subnet' + str(private_subnet_id)]['private'] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
+            current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
+        return self.template.add_mapping('networkAddresses', ret_val)
+
+    def add_bastion_instance(self, 
+            bastion_conf):
+        '''
+        Method adds a bastion host to the environment and outputs the address of the bastion when deployed
+        @param bastion_conf [dict] dictionary of configuration values used for populating the bastion host creation process
+        @configvalue bastion_instance_type_default [string] default to for the instance type parameter for the bastion host
+        @configvalue remote_access_cidr [string | cidr format] default for the parameter gathering the cidr to allow remote access from for the bastion host
+        '''
+        instance_type = self.template.add_parameter(Parameter('bastionInstanceType', 
+                Default=bastion_conf.get('instance_type_default', 't1.micro'), 
+                AllowedValues=self.strings['valid_instance_types'], 
+                Type='String',
+                Description='Instance type to use when launching the Bastion host for access to resources that are not publicly exposed', 
+                ConstraintDescription=self.strings['valid_instance_type_message']))
+
+        bastion_security_group = self.template.add_resource(ec2.SecurityGroup('bastionSecurityGroup', 
+                VpcId=Ref(self.vpc), 
+                GroupDescription='Security group allowing ingress via SSH to this instance along with other standard accessbility port rules', 
+                SecurityGroupIngress=[ec2.SecurityGroupRule(
+                        FromPort='22', 
+                        ToPort='22', 
+                        IpProtocol='tcp', 
+                        CidrIp=Ref(self.template.parameters['remoteAccessLocation']))],
+                SecurityGroupEgress=[ec2.SecurityGroupRule(
+                        FromPort='22', 
+                        ToPort='22', 
+                        IpProtocol='tcp', 
+                        CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr')), 
+                    ec2.SecurityGroupRule(
+                        FromPort='80', 
+                        ToPort='80', 
+                        IpProtocol='tcp', 
+                        CidrIp='0.0.0.0/0'), 
+                    ec2.SecurityGroupRule(
+                        FromPort='443', 
+                        ToPort='443', 
+                        IpProtocol='tcp',
+                        CidrIp='0.0.0.0/0')]))
+
+        bastion_instance = self.template.add_resource(ec2.Instance('bastionInstance', 
+               ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'ubuntu1404LtsAmiId'),
+               InstanceType=Ref(instance_type),
+               KeyName=Ref(self.template.parameters['ec2Key']),
+               NetworkInterfaces=[ec2.NetworkInterfaceProperty(
+                    AssociatePublicIpAddress=True, 
+                    DeleteOnTermination=True, 
+                    Description='ENI for the bastion host', 
+                    DeviceIndex='0', 
+                    GroupSet=[Ref(bastion_security_group)], 
+                    SubnetId=Ref(self.subnets['public'][0]))],
+               Tags=[ec2.Tag('Name', 'bastionHost')],
+               Monitoring=True))
+
+        self.template.add_output(Output('bastionHostAddress', 
+            Value=GetAtt(bastion_instance, 'PublicDnsName'), 
+            Description='Address to use when accessing the bastion host.'))
+
+
+if __name__ == '__main__':
+    import json
+    with open('config_args.json', 'r') as f:
+        cmd_args = json.loads(f.read())
+    test = NetworkBase(cmd_args)
+    print test.to_json()

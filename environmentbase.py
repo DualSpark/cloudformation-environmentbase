@@ -232,7 +232,10 @@ class EnvironmentBase():
 
         sg_list = []
         for sg in security_groups:
-            sg_list.append(Ref(sg))
+            if isinstance(sg, Ref):
+                sg_list.append(sg)
+            else:
+                sg_list.append(Ref(sg))
 
         launch_config_obj = autoscaling.LaunchConfiguration(layer_name + 'LaunchConfiguration', 
                 IamInstanceProfile=Ref(instance_profile), 
@@ -521,7 +524,7 @@ class EnvironmentBase():
         if s3_bucket == None:
             raise RuntimeError('Cannot upload template to s3 as a s3 bucket was not specified nor set as a default')
         if s3_key_prefix == None:
-            s3_key_prefix = template_args.get('s3_key_prefix', '')
+            s3_key_prefix = template_args.get('s3_key_name_prefix', '')
         if s3_key_prefix == None:
             s3_key_name = '/' +  name + '.' + key_serial + '.template'
         else: 

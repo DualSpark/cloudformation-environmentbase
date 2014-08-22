@@ -111,10 +111,16 @@ class NetworkBase(EnvironmentBase):
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
         @param network_config [dict] collection of network parameters for creating the VPC network
         '''
+        if 'network_name' in network_config: 
+            network_name = network_config.get('network_name')
+        else:
+            network_name = self.__class__.__name__
+
         self.vpc = self.template.add_resource(ec2.VPC('vpc', 
                 CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'), 
                 EnableDnsSupport=True, 
-                EnableDnsHostnames=True))
+                EnableDnsHostnames=True,
+                Tags=[ec2.Tag(key='Name', value=network_name)]))
 
         igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
 

@@ -343,8 +343,6 @@ class EnvironmentBase():
         if isinstance(to_port, unicode):
             to_port = to_port.encode('ascii', 'ignore')
         if from_port == to_port:
-            print 'ports equal'
-            print type(from_port)
             if isinstance(from_port, str):
                 label_suffix = ip_protocol.capitalize() + from_port
             else: 

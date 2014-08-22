@@ -288,6 +288,11 @@ class NetworkBase(EnvironmentBase):
                         IpProtocol='tcp',
                         CidrIp='0.0.0.0/0')]))
 
+        if isinstance(bastion_security_group, ec2.SecurityGroup):
+            groupset_sg = Ref(bastion_security_group)
+        else:
+            groupset_sg = bastion_security_group
+
         bastion_instance = self.template.add_resource(ec2.Instance('bastionInstance', 
                ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'ubuntu1404LtsAmiId'),
                InstanceType=Ref(instance_type),
@@ -297,8 +302,8 @@ class NetworkBase(EnvironmentBase):
                     DeleteOnTermination=True, 
                     Description='ENI for the bastion host', 
                     DeviceIndex='0', 
-                    GroupSet=[Ref(bastion_security_group)], 
-                    SubnetId=Ref(self.subnets['public'][0]))],
+                    GroupSet=[groupset_sg], 
+                    SubnetId=self.subnets['public'][0])],
                Tags=[ec2.Tag('Name', 'bastionHost')],
                Monitoring=True))
 

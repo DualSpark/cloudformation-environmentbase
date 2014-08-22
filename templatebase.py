@@ -1,12 +1,5 @@
 from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
-import troposphere.iam as iam
-import troposphere.ec2 as ec2
-import troposphere.s3 as s3
-import hashlib
-import json
-from datetime import datetime
 from environmentbase import EnvironmentBase
-from docopt import docopt
 
 class TemplateBase(EnvironmentBase):
 

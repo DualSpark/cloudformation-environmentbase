@@ -1,49 +1,7 @@
-'''Base Environment Generator 
-
-This class and command line tool is intended to simplify creating consistent networks from region to region with a good ability to configure a number of pertinent configuration-level options.  
-
-Usage:
-    environmentbase.py (-h | --help)
-    environmentbase.py --version
-    environmentbase.py create --config <CONFIG> [--output <OUTPUT>] [--aws_access_key <AWS_ACCESS_KEY>] [--aws_secret_key <AWS_SECRET_KEY>]
-    environmentbase.py create [--output <OUTPUT>] [--default_aws_region <DEFAULT_AWS_REGION>] [--aws_access_key_id <AWS_ACCESS_KEY_ID>] [--strings_patn <STRINGS_PATH>]
-                              [--aws_secret_access_key <AWS_SECRET_ACCESS_KEY>] [--ami_map_file <AMI_MAP_FILE>] [--public_subnet_count <PUBLIC_SUBNET_COUNT>] 
-                              [--private_subnet_count <PRIVATE_SUBNET_COUNT>] [--public_subnet_size <PUBLIC_SUBNET_SIZE>] [--private_subnet_size <PRIVATE_SUBNET_SIZE>] 
-                              [--network_cidr_base <NETWORK_CIDR_BASE>] [--network_cidr_size <NETWORK_CIDR_SIZE>] 
-                              [--first_network_address_block <FIRST_NETWORK_ADDRESS_BLOCK>] [--environment_name <ENVIRONMENT_NAME>] [--print_debug]
-    environmentbase.py validate (--file <FILE> | --contents <CONTENTS>) [--validation_output_name <VALIDATION_OUTPUT_NAME>]
-
-Options:
-    -h --help                                       Show this screen
-    --version                                       Show version
-    --config <CONFIG>                               path of the configuration file to pull in representing the argument set to pass to the environment build process
-    --output <OUTPUT>                               File name to write output of template generation to [Default: environmentbase.template]
-    --strings_path <STRINGS_PATH>                   Path to the strings.json file to populate string constants for use within the template [Default: strings.json]
-    --default_aws_region <DEFAULT_AWS_REGION>       Default region to use when querying boto for VPC data
-    --aws_access_key_id <AWS_ACCESS_KEY_ID>         AWS Access Key Id to use when authenticating to the AWS API
-    --aws_secret_access_key <AWS_SECRET_ACCESS_KEY> AWS Secret Access Key to use when authenticating to the AWS API
-    --print_debug                                   Optionally prints the CloudFormation output to the console as well as the file specified [Default: False]
-    --ami_map_file <AMI_MAP_FILE>                   path of the AMI Map file [Default: ami_cache.json]
-    --public_subnet_count <PUBLIC_SUBNET_COUNT>     Number of public subnets to create in this network [Default: 2]
-    --private_subnet_count <PRIVATE_SUBNET_COUNT>   Number of private subnets to create in this network [Default: 2]
-    --public_subnet_size <PUBLIC_SUBNET_SIZE>       CIDR routing prefix indicating how large the public subnets that are created should be [Default: 24]
-    --private_subnet_size <PRIVATE_SUBNET_SIZE>     CIDR routing prefix indicating how large the private subnets that are created should be [Default: 22]
-    --network_cidr_base <NETWORK_CIDR_BASE>         Base network address of the network to be created [Default: 172.16.0.0]
-    --network_cidr_size <NETWORK_CIDR_SIZE>         CIDR routing prefix indicating how large the entire network to be created should be [Default: 20]
-    --first_network_address_block <FIRST_NETWORK_ADDRESS_BLOCK>     Override indicating where within the NETWORK_CIDR_BASE network to start creating subnets
-    --validation_output_name <VALIDATION_OUTPUT_NAME>               Name of the CloudFormation Output to place the validation hash [Default: templateValidationHash]
-    --cloudtrail_log_prefix <CLOUDTRAIL_LOG_PREFIX> S3 key name prefix to prepend to the bucket created indicating where CloudTrail should ship logs to [Default: cloudtrail_logs]
-    --elb_log_prefix <ELB_LOG_PREFIX>               S3 key name prefix to prepend to the bucket created indicating where ELB should ship logs to [Default: elb_logs]
-    --environment_name <ENVIRONMENT_NAME>           friendly name to use for describing the environment itself [Default: environmentbase]
-    --file <FILE>                                   Path of an existing CloudFormation template to validate
-    --contents <CONTENTS>                           String contents of an existing CloudFormation template to validate 
-'''
 from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
-import troposphere.elasticloadbalancing as elb
 import troposphere.autoscaling as autoscaling
-import troposphere.s3 as s3
 import troposphere.cloudformation as cf
 import hashlib
 import json
@@ -52,7 +10,6 @@ import time
 import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
-from docopt import docopt
 
 class EnvironmentBase():
     '''

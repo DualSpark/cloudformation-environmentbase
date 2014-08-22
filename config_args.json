@@ -1,32 +1,36 @@
 {
-    "global" : {
-        "print_debug" : false,
-        "environment_name" : "environmentbase", 
-        "output" : "environmentbase.template"
-        },
-    "template":{
-        "ami_map_file" : "ami_cache.json",
-        "description" : "Environment", 
-        "ec2_key_default" : "default-key", 
-        "remote_access_cidr":"0.0.0.0/0"
-        },
+    "global": {
+        "print_debug": false,
+        "environment_name": "environmentbase",
+        "output": "environmentbase.template"
+    },
+    "template": {
+        "ami_map_file": "ami_cache.json",
+        "description": "Dev Tools environment deployment.",
+        "ec2_key_default": "pmdev",
+        "remote_access_cidr": "0.0.0.0/0", 
+        "s3_bucket": "cfdev-dualspark", 
+        "s3_key_name_prefix": "/devtools/cloudformation"
+    },
     "logging": {
-        "cloudtrail_log_prefix" : "cloudtrail_logs", 
-        "elb_log_prefix" : "elb_logs"
-        },
+        "cloudtrail_log_prefix": "cloudtrail_logs",
+        "elb_log_prefix": "elb_logs"
+    },
     "boto": {
-        "default_aws_region" : "us-east-1"
-        },
+        "default_aws_region": "us-west-2",
+        "aws_access_key_id": null,
+        "aws_secret_access_key": null
+    },
     "network": {
-        "public_subnet_count" : 2, 
-        "private_subnet_count" : 2, 
-        "public_subnet_size" : "24", 
-        "private_subnet_size" : "22", 
-        "network_cidr_base" : "172.16.0.0", 
-        "network_cidr_size" : "20", 
-        "nat_instance_type" : "m1.small"
-        },
+        "public_subnet_count": 2,
+        "private_subnet_count": 2,
+        "public_subnet_size": "24",
+        "private_subnet_size": "22",
+        "network_cidr_base": "172.16.0.0",
+        "network_cidr_size": "20",
+        "nat_instance_type": "m1.small"
+    },
     "bastion": {
-        "instance_type_default":"t1.micro"
+        "instance_type_default": "t1.micro"
     }
 }

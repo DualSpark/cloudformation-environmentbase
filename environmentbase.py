@@ -546,8 +546,7 @@ class EnvironmentBase():
                 template, 
                 template_args, 
                 s3_bucket=None, 
-                s3_key_prefix=None, 
-                mock_upload=False):
+                s3_key_prefix=None):
 
         key_serial = str(int(time.time()))
         if s3_bucket == None:
@@ -561,7 +560,7 @@ class EnvironmentBase():
         else: 
             s3_key_name = s3_key_prefix + '/' + name + '.' + key_serial + '.template'
 
-        if mock_upload:
+        if template_args.get('mock_upload',False):
             stack_url = 'http://www.dualspark.com'
         else:    
             conn = boto.connect_s3()
@@ -569,9 +568,9 @@ class EnvironmentBase():
             key = Key(bucket)
 
             key.key = s3_key_name
+            key.set_contents_from_string(template.to_json())
             key.set_acl('public-read')
 
-            key.set_contents_from_string(template.to_json())
             stack_url = key.generate_url(expires_in=0, query_auth=False)
 
         if name not in self.stack_outputs:
@@ -579,7 +578,6 @@ class EnvironmentBase():
 
         stack_params = {}
         for parameter in template.parameters.keys():
-            print 'param: ' + parameter
             if parameter == 'vpcCidr':
                 stack_params[parameter] = FindInMap('networkAddresses', 'vpcBase', 'cidr')
             elif parameter == 'vpcId': 

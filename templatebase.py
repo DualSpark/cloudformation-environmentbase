@@ -32,6 +32,7 @@ class TemplateBase(EnvironmentBase):
             Type='String'))
 
         network_config = arg_dict.get('network', {})
+
         for y in ['public', 'private']:
             if y not in self.subnets:
                 self.subnets[y] = []
@@ -39,3 +40,10 @@ class TemplateBase(EnvironmentBase):
                 self.subnets[y].append(Ref(self.template.add_parameter(Parameter(y.lower() + 'Subnet' + str(x), 
                     Description='Private subnet ' + str(x), 
                     Type='String'))))
+
+        self.azs = []
+
+        for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
+            self.azs.append(Ref(self.template.add_parameter(Parameter('availabilityZone' + str(x), 
+                Description='Availability Zone ' + str(x), 
+                Type='String'))))

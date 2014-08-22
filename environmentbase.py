@@ -285,12 +285,8 @@ class EnvironmentBase():
 
         launch_config = self.template.add_resource(launch_config_obj)
 
-        azs = []
-        for x in range(0, len(self.subnets[subnet_type.lower()])):
-            azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
-
         auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup', 
-                AvailabilityZones=azs,
+                AvailabilityZones=self.azs,
                 LaunchConfigurationName=Ref(launch_config), 
                 MaxSize=max_size, 
                 MinSize=min_size, 
@@ -556,6 +552,8 @@ class EnvironmentBase():
                 stack_params[parameter] = Ref(self.vpc)
             elif parameter == 'utilityBucket':
                 stack_params[parameter] = Ref(self.utility_bucket)
+            elif parameter.startswith('availabilityZone'):
+                stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone',''), 'AvailabilityZone')
             elif parameter in self.template.parameters.keys(): 
                 stack_params[parameter] = Ref(self.template.parameters.get(parameter))
             elif parameter in self.template.resources.keys():
@@ -577,28 +575,8 @@ class EnvironmentBase():
                 TimeoutInMinutes=template_args.get('timeout_in_minutes', '60')))
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='EnvironmentBase 1.0')
-    if '--print_debug' in args and args['--print_debug']:
-        print args
-    if args['validate']:
-        if args['--file']:
-            EnvironmentBase.validate_template_file(args['--file'], args['--validation_output_name'])
-        elif args['--contents']:
-            EnvironmentBase.validate_template_contents(args['--contents'], args['--validation_output_name'])            
-        else:
-            raise RuntimeError('Cannot validate a template as neither the --file or the --contents arguments are set.')
-    elif args['create']:
-        cmd_args = {}
-        if args['--config']:
-            with open(args['--config'], 'r') as f:
-                cmd_args = json.loads(f.read())
-        else:
-            for arg in args.keys():
-                if args[arg] and arg.startswith('--'):
-                    cmd_args[arg.replace('--', '')] = args[arg]
-        env_base = EnvironmentBase(cmd_args)
-        if 'print_debug' in cmd_args and cmd_args['print_debug']:
-            print env_base.to_json()
-        if 'output' in cmd_args:
-            with open(cmd_args['output'], 'w') as output_file:
-                output_file.write(env_base.to_json())
+    import json
+    with open('config_args.json', 'r') as f:
+        cmd_args = json.loads(f.read())
+    test = EnvironmentBase(cmd_args)
+    print test.to_json()

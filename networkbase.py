@@ -311,7 +311,6 @@ class NetworkBase(EnvironmentBase):
             Value=GetAtt(bastion_instance, 'PublicDnsName'), 
             Description='Address to use when accessing the bastion host.'))
 
-
 if __name__ == '__main__':
     import json
     with open('config_args.json', 'r') as f:

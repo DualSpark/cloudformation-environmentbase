@@ -122,7 +122,7 @@ class NetworkBase(EnvironmentBase):
                 EnableDnsHostnames=True,
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
 
-        igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
+        self.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
 
         self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
                 InternetGatewayId=Ref(igw), 
@@ -256,6 +256,21 @@ class NetworkBase(EnvironmentBase):
             ret_val['subnet' + str(private_subnet_id)]['private'] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
             current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
         return self.template.add_mapping('networkAddresses', ret_val)
+
+    def add_vpn_gateway(self, vpn_conf):
+        if 'vpn_name' in vpn_conf: 
+            vpn_name = vpn_conf.get('vpn_name')
+        else:
+            vpn_name = self.__class__.__name__ + 'Gateway'
+
+        gateway = self.template.add_resource(ec2.VPNGateway('vpnGateway', 
+            Type=vpn_conf.get('vpn_type', 'ipsec.1'), 
+            Tags=[ec2.Tag(key='Name', value=vpn_name)]))
+
+        gateway_connection = self.template.add_resource(ec2.VPNGatewayAttachment('vpnGatewayAttachment', 
+            VpcId=Ref(self.vpc), 
+            InternetGatewayId=Ref(self.igw),
+            VpnGatewayId=Ref(gateway)))
 
     def add_bastion_instance(self, 
             bastion_conf):

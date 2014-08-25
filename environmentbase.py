@@ -21,6 +21,7 @@ class EnvironmentBase():
         @param arg_dict [dict] keyword arguments to handle setting config-level parameters and arguments within this class
         '''
         self.globals=arg_dict.get('global', {})
+        self.manual_parameter_bindings = {}
         template=arg_dict.get('template', {})
         with open(self.globals.get('strings_path', 'strings.json'), 'r') as f:
             json_data = f.read()
@@ -550,12 +551,8 @@ class EnvironmentBase():
 
         stack_params = {}
         for parameter in template.parameters.keys():
-            if parameter == 'vpcCidr':
-                stack_params[parameter] = FindInMap('networkAddresses', 'vpcBase', 'cidr')
-            elif parameter == 'vpcId': 
-                stack_params[parameter] = Ref(self.vpc)
-            elif parameter == 'utilityBucket':
-                stack_params[parameter] = Ref(self.utility_bucket)
+            if parameter in self.manual_parameter_bindings:
+                stack_params[parameter] = self.manual_parameter_bindings[parameter]
             elif parameter.startswith('availabilityZone'):
                 stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone',''), 'AvailabilityZone')
             elif parameter in self.template.parameters.keys(): 

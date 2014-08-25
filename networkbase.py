@@ -73,6 +73,8 @@ class NetworkBase(EnvironmentBase):
                 Bucket=Ref(self.utility_bucket), 
                 PolicyDocument=self.get_cloudtrail_logging_bucket_policy_document(self.utility_bucket, cloudtrail_log_prefix=self.strings.get('cloudtrail_log_prefix', ''))))
 
+        self.manual_parameter_bindings['utilityBucket'] = Ref(self.utility_bucket)
+
 
     def add_vpc_az_mapping(self, 
             boto_config, 
@@ -105,6 +107,13 @@ class NetworkBase(EnvironmentBase):
                     for item in temp_dict:
                         self.add_region_map_value(region.name, item, temp_dict[item])
 
+    def add_vpc_gateway(self, igw, vpc):
+
+        self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
+                InternetGatewayId=Ref(igw), 
+                VpcId=Ref(vpc)))
+
+
     def create_network(self, 
             network_config=None):
         '''
@@ -123,10 +132,6 @@ class NetworkBase(EnvironmentBase):
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
 
         self.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
-
-        self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
-                InternetGatewayId=Ref(igw), 
-                VpcId=Ref(self.vpc)))
 
         nat_instance_type = self.template.add_parameter(Parameter('natInstanceType', 
                 Type='String',
@@ -149,7 +154,7 @@ class NetworkBase(EnvironmentBase):
                     if y == 'public':
                         self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute', 
                                 DestinationCidrBlock='0.0.0.0/0', 
-                                GatewayId=Ref(igw), 
+                                GatewayId=Ref(self.igw), 
                                 RouteTableId=Ref(route_table)))
                     elif y == 'private':
                         nat_instance = self.create_nat_instance(x, nat_instance_type, 'public')
@@ -160,6 +165,9 @@ class NetworkBase(EnvironmentBase):
                     self.template.add_resource(ec2.SubnetRouteTableAssociation(y + 'Subnet' + str(x) + 'EgressRouteTableAssociation', 
                             RouteTableId=Ref(route_table), 
                             SubnetId=Ref(self.local_subnets[y][str(x)])))
+
+        self.manual_parameter_bindings['vpcCidr'] = FindInMap('networkAddresses', 'vpcBase', 'cidr')
+        self.manual_parameter_bindings['vpcId'] = Ref(self.vpc)
 
         for x in self.local_subnets: 
             if x not in self.subnets:

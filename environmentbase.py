@@ -27,9 +27,9 @@ class EnvironmentBase():
             json_data = f.read()
         self.strings = json.loads(json_data)
         self.template = Template()
+        self.template_args = arg_dict.get('template', {})
         self.template.description = template.get('description', 'No Description Specified')
         self.subnets = {}
-        
         self.add_common_parameters(template)
         self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', 'ami_cache.json'))
         
@@ -505,7 +505,6 @@ class EnvironmentBase():
     def add_child_template(self, 
                 name, 
                 template, 
-                template_args, 
                 s3_bucket=None, 
                 s3_key_prefix=None, 
                 s3_canned_acl=None):
@@ -518,22 +517,21 @@ class EnvironmentBase():
         @param s3_key_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
         @param s3_canned_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
         '''
-
         key_serial = str(int(time.time()))
         if s3_bucket == None:
-            s3_bucket = template_args.get('s3_bucket')
+            s3_bucket = self.template_args.get('s3_bucket')
         if s3_bucket == None:
             raise RuntimeError('Cannot upload template to s3 as a s3 bucket was not specified nor set as a default')
         if s3_key_prefix == None:
-            s3_key_prefix = template_args.get('s3_key_name_prefix', '')
+            s3_key_prefix = self.template_args.get('s3_key_name_prefix', '')
         if s3_key_prefix == None:
             s3_key_name = '/' +  name + '.' + key_serial + '.template'
         else: 
             s3_key_name = s3_key_prefix + '/' + name + '.' + key_serial + '.template'
         if s3_canned_acl == None:
-            s3_canned_acl = template_args.get('s3_canned_acl', 'private')
+            s3_canned_acl = self.template_args.get('s3_canned_acl', 'private')
 
-        if template_args.get('mock_upload',False):
+        if self.template_args.get('mock_upload',False):
             stack_url = 'http://www.dualspark.com'
         else:    
             conn = boto.connect_s3()
@@ -573,7 +571,7 @@ class EnvironmentBase():
         self.template.add_resource(cf.Stack(stack_name,
                 TemplateURL=stack_url, 
                 Parameters=stack_params,
-                TimeoutInMinutes=template_args.get('timeout_in_minutes', '60')))
+                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60')))
 
 if __name__ == '__main__':
     import json

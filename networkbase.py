@@ -108,11 +108,7 @@ class NetworkBase(EnvironmentBase):
                         self.add_region_map_value(region.name, item, temp_dict[item])
 
     def add_vpc_gateway(self, igw, vpc):
-
-        self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
-                InternetGatewayId=Ref(igw), 
-                VpcId=Ref(vpc)))
-
+        pass
 
     def create_network(self, 
             network_config=None):
@@ -132,6 +128,9 @@ class NetworkBase(EnvironmentBase):
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
 
         self.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
+        self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
+                InternetGatewayId=Ref(self.igw), 
+                VpcId=Ref(self.vpc)))
 
         nat_instance_type = self.template.add_parameter(Parameter('natInstanceType', 
                 Type='String',

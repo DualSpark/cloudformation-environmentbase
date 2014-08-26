@@ -128,7 +128,9 @@ class NetworkBase(EnvironmentBase):
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
 
         self.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
-        self.template.add_resource(ec2.VPCGatewayAttachment('igwVpcAttachment', 
+
+        igw_title = 'igwVpcAttachment'
+        self.igw_attachment = self.template.add_resource(ec2.VPCGatewayAttachment(igw_title, 
                 InternetGatewayId=Ref(self.igw), 
                 VpcId=Ref(self.vpc)))
 
@@ -145,13 +147,14 @@ class NetworkBase(EnvironmentBase):
                     if y not in self.local_subnets:
                         self.local_subnets[y] = {}
                     self.local_subnets[y][str(x)] = self.template.add_resource(ec2.Subnet(y + 'Subnet' + str(x), 
-                        AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'), 
-                        VpcId=Ref(self.vpc), 
-                        CidrBlock=FindInMap('networkAddresses', 'subnet' + str(x), y)))
+                            AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'), 
+                            VpcId=Ref(self.vpc), 
+                            CidrBlock=FindInMap('networkAddresses', 'subnet' + str(x), y)))
                     route_table = self.template.add_resource(ec2.RouteTable(y + 'Subnet' + str(x) + 'RouteTable', 
                             VpcId=Ref(self.vpc)))
                     if y == 'public':
                         self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute', 
+                                DependsOn=[igw_title],
                                 DestinationCidrBlock='0.0.0.0/0', 
                                 GatewayId=Ref(self.igw), 
                                 RouteTableId=Ref(route_table)))

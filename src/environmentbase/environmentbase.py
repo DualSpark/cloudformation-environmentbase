@@ -1,3 +1,4 @@
+import os
 from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
@@ -23,7 +24,7 @@ class EnvironmentBase():
         self.globals=arg_dict.get('global', {})
         self.manual_parameter_bindings = {}
         template=arg_dict.get('template', {})
-        with open(self.globals.get('strings_path', 'strings.json'), 'r') as f:
+        with open(self.globals.get('strings_path', os.path.join(os.path.dirname(__file__), 'strings.json')), 'r') as f:
             json_data = f.read()
         self.strings = json.loads(json_data)
         self.template = Template()
@@ -31,7 +32,7 @@ class EnvironmentBase():
         self.template.description = template.get('description', 'No Description Specified')
         self.subnets = {}
         self.add_common_parameters(template)
-        self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', 'ami_cache.json'))
+        self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', os.path.join(os.path.dirname(__file__), 'ami_cache.json')))
         
     def add_common_parameters(self, template_config):
         '''
@@ -159,8 +160,10 @@ class EnvironmentBase():
 
         return {"Statement":statements}
 
-    def add_ami_mapping(self, 
-            ami_map_file_path='ami_cache.json'):
+    def add_ami_mapping(self, ami_map_file_path='ami_cache.json'):
+        # TODO the referencing of the config and other json files needs to be cleaned up
+        # this is an example of where this relative path hack is at its worst
+        ami_map_file_path=os.path.join(os.path.dirname(__file__), ami_map_file_path)
         '''
         Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
         This depdns on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
@@ -571,9 +574,13 @@ class EnvironmentBase():
                 Parameters=stack_params,
                 TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60')))
 
-if __name__ == '__main__':
+def main():
     import json
-    with open('config_args.json', 'r') as f:
+    config_file = os.path.join(os.path.dirname(__file__), 'config_args.json')
+    with open(config_file, 'r') as f:
         cmd_args = json.loads(f.read())
     test = EnvironmentBase(cmd_args)
     print test.to_json()
+
+if __name__ == '__main__':
+    main()

@@ -62,7 +62,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "cfnbase = cfnbase.__main__:main"
+            "environmentbase = environmentbase.environmentbase:main"
         ]
     }
 

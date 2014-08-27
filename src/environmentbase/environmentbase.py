@@ -24,15 +24,25 @@ class EnvironmentBase():
         self.globals=arg_dict.get('global', {})
         self.manual_parameter_bindings = {}
         template=arg_dict.get('template', {})
-        with open(self.globals.get('strings_path', os.path.join(os.path.dirname(__file__), 'strings.json')), 'r') as f:
-            json_data = f.read()
-        self.strings = json.loads(json_data)
+        self.strings = self.__build_common_strings()
         self.template = Template()
         self.template_args = arg_dict.get('template', {})
         self.template.description = template.get('description', 'No Description Specified')
         self.subnets = {}
         self.add_common_parameters(template)
         self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', os.path.join(os.path.dirname(__file__), 'ami_cache.json')))
+
+    @staticmethod
+    def __build_common_strings():
+        return {"valid_instance_types": ["t1.micro","m3.medium","m3.large","m3.xlarge","m3.2xlarge","m1.small","m1.medium","m1.large","m1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge","c1.medium","c1.xlarge","cc2.xlarge","g2.2xlarge","cg1.4xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","cr1.8xlarge","i2.xlarge","i2.2xlarge","i2.4xlarge","hs1.8xlarge","hs1.4xlarge"],
+                "valid_instance_type_message": "must be a valid EC2 instance type.",
+                "valid_db_instance_types" : ["db.t1.micro","db.m1.small","db.m1.medium","db.m1.large","db.m1.xlarge","db.m2.xlarge","db.m2.2xlarge","db.m2.4xlarge","db.cr1.8xlarge"], 
+                "valid_db_instance_type_message": "must be a valid RDS DB instance type.",
+                "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})", 
+                "cidr_regex_message": "must be a valid IP CIDR range of the form x.x.x.x/x.", 
+                "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})", 
+                "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
+                "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"}
         
     def add_common_parameters(self, template_config):
         '''

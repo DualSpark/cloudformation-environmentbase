@@ -1,0 +1,5 @@
+cfnbase
+=============================
+
+.. automodule:: cfnbase
+    :members:

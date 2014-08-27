@@ -18,14 +18,13 @@ def read(*names, **kwargs):
     ).read()
 
 setup(
-    name="cfn-base",
+    name="cfn-environment-base",
     version="0.1.0",
     license="BSD",
     description="Base environment for Troposphere based CFN project environments",
     long_description="%s" % read("README.md"),
     author="Patrick McClory",
     author_email="patrick@dualspark.com",
-    url="https://github.com/ptone/cfn-base",
     packages=find_packages("src"),
     package_dir={"": "src"},
     py_modules=[splitext(basename(i))[0] for i in glob.glob("src/*.py")],
@@ -53,7 +52,10 @@ setup(
         # eg: "keyword1", "keyword2", "keyword3",
     ],
     install_requires=[
-        # eg: "aspectlib==1.1.1", "six>=1.7",
+        "troposphere==0.5.0",
+        "boto==2.28.0",
+        "ipcalc==1.1.2",
+        "docopt==0.6.1",
     ],
     extras_require={
         # eg: 'rst': ["docutils>=0.11"],

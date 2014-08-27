@@ -38,10 +38,12 @@ class EnvironmentBase():
                 "valid_instance_type_message": "must be a valid EC2 instance type.",
                 "valid_db_instance_types" : ["db.t1.micro","db.m1.small","db.m1.medium","db.m1.large","db.m1.xlarge","db.m2.xlarge","db.m2.2xlarge","db.m2.4xlarge","db.cr1.8xlarge"], 
                 "valid_db_instance_type_message": "must be a valid RDS DB instance type.",
+                "boolean_options": ["True", "False"],
                 "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})", 
                 "cidr_regex_message": "must be a valid IP CIDR range of the form x.x.x.x/x.", 
                 "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})", 
                 "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
+                "valid_ebs_size_message" : "must be a valid EBS size between 1GB and 1024GB.",
                 "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"}
         
     def add_common_parameters(self, template_config):

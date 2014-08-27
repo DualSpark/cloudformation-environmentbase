@@ -42,7 +42,7 @@ project folder (this is not yet packaged in a deployable artifact). The import
 and class definition for your class will look similar to the following:
 
 ```python
-from EnvBase.environmentbase import EnvironmentBase
+from environmentbase .environmentbase import EnvironmentBase
 
 class ElkDemo(EnvironmentBase): def __init__(self, class_args):
 EnvironmentBase.__init__(self, class_args)
@@ -106,19 +106,6 @@ python environmentbase.py create --aws_access_key_id <ACCESS_KEY_ID> --aws_secre
 
 ## File Descriptions
 
-### __init__.py
-
-This file is in place to help references from projects that consume the
-environmentbase.py class. This allows for this entire folder to be placed
-within an existing python project so that it can be properly referenced by the
-consuming class. References to this class from other classes where this folder
-of files is present should be done as follows (where the name of the folder
-where this file package sits is __/EnvBase__:
-
-```python
-from EnvBase.environmentbase import EnvironmentBase
-```
-
 ### ami_cache.json
 
 This file is a simple JSON dictionary to use when assembling the 'RegionMap'
@@ -154,13 +141,3 @@ A Microsoft Word-formatted version of this documentation.
 
 This file--documentation for usage of this set of scripts and files.
 
-### requirements.txt
-
-Python pip-formatted requirements file to be used to install the prerequisites
-to run the environmentbase.py script either as a base class within another
-project or as a command line tool.  To install the required packages, run the
-following command in the command line referencing this file:
-
-```bash
-sudo pip install -r requirements.txt --upgrade
-```

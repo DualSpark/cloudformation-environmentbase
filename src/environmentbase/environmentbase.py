@@ -259,8 +259,10 @@ class EnvironmentBase():
                 InstanceType=Ref(instance_type), 
                 SecurityGroups=sg_list, 
                 KeyName=ec2_key, 
-                UserData=user_data, 
                 InstanceMonitoring=instance_monitoring)
+
+        if user_data != None: 
+            launch_config_obj.UserData=user_data 
 
         block_devices = [ec2.BlockDeviceMapping(
                 DeviceName='/dev/sda1', 

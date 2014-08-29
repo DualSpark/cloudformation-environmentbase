@@ -230,7 +230,7 @@ class EnvironmentBase():
         if subnet_type not in ['public', 'private']:
             raise RuntimeError('Unable to determine which type of subnet instances should be launched into. ' + str(subnet_type) + ' is not one of ["public", "private"].')
 
-        if ec2_key != None and type(ec2_key) == Ref:
+        if ec2_key != None and type(ec2_key) != Ref:
             ec2_key = Ref(ec2_key)
         elif ec2_key == None:
             ec2_key = Ref(self.template.parameters['ec2Key'])

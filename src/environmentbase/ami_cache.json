@@ -1,34 +1,42 @@
 {
 	"us-east-1": {
 		"natAmiId": "ami-4f9fee26", 
-		"ubuntu1404LtsAmiId": "ami-018c9568"
+		"ubuntu1404LtsAmiId": "ami-018c9568", 
+		"windows2012r2BaseAmiId": "ami-beca16d6"
 	}, 
 	"us-west-1": {
 		"natAmiId": "ami-7850793d", 
-		"ubuntu1404LtsAmiId": "ami-ee4f77ab"
+		"ubuntu1404LtsAmiId": "ami-ee4f77ab", 
+		"windows2012r2BaseAmiId": "ami-b57478f0"
 	}, 
 	"us-west-2": {
 		"natAmiId": "ami-6d29b85d", 
-		"ubuntu1404LtsAmiId": "ami-6ac2a85a"
+		"ubuntu1404LtsAmiId": "ami-6ac2a85a", 
+		"windows2012r2BaseAmiId": "ami-3bcd880b"
 	}, 
 	"eu-west-1": {
 		"natAmiId": "ami-ed352799", 
-		"ubuntu1404LtsAmiId": "ami-896c96fe"
+		"ubuntu1404LtsAmiId": "ami-896c96fe", 
+		"windows2012r2BaseAmiId": "ami-6abd621d"
 	}, 
 	"ap-southeast-1": {
 		"natAmiId": "ami-780a432a", 
-		"ubuntu1404LtsAmiId": "ami-9a7724c8"
+		"ubuntu1404LtsAmiId": "ami-9a7724c8", 
+		"windows2012r2BaseAmiId": "ami-c8f8a39a"
 	}, 
 	"ap-southeast-2": {
 		"natAmiId": "ami-0154c73b", 
-		"ubuntu1404LtsAmiId": "ami-43128a79"
+		"ubuntu1404LtsAmiId": "ami-43128a79", 
+		"windows2012r2BaseAmiId": "ami-5d620367"
 	}, 
 	"ap-northeast-1": {
 		"natAmiId": "ami-5f840e5e", 
-		"ubuntu1404LtsAmiId": "ami-bddaa2bc"
+		"ubuntu1404LtsAmiId": "ami-bddaa2bc", 
+		"windows2012r2BaseAmiId": "ami-6b603a6a"
 	}, 
 	"sa-east-1": {
 		"natAmiId": "ami-7660c56b", 
-		"ubuntu1404LtsAmiId": "ami-7315b76e"
+		"ubuntu1404LtsAmiId": "ami-7315b76e", 
+		"windows2012r2BaseAmiId": "ami-397fd724"
 	}
 }

@@ -4,6 +4,7 @@ import troposphere.iam as iam
 import troposphere.ec2 as ec2
 import troposphere.autoscaling as autoscaling
 import troposphere.cloudformation as cf
+import troposphere.route53 as r53
 import hashlib
 import json
 import boto
@@ -31,6 +32,35 @@ class EnvironmentBase():
         self.subnets = {}
         self.add_common_parameters(template)
         self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', os.path.join(os.path.dirname(__file__), 'ami_cache.json')))
+
+
+    def register_elb_to_dns(self, elb, tier_name, tier_args):
+        '''
+        Method handles the process of uniformly creating CNAME records for ELBs in a given tier
+        @param elb [Troposphere.elasticloadbalancing.LoadBalancer]
+        @param tier_name [str]
+        @param tier_args [dict]
+        '''
+
+        hostedzone = self.template.add_parameter(Parameter(
+            "environmentHostedZone",
+            Description="The DNS name of an existing Amazon Route 53 hosted zone",
+            Default=tier_args.get('base_hosted_zone_name', 'devopsdemo.com'),
+            Type="String"))
+
+        host_name = self.template.add_parameter(Parameter(
+            tier_name.lower() + 'HostName', 
+            Description="Friendly host name to append to the environmentHostedZone base DNS record", 
+            Type="String", 
+            Default=tier_args.get('tier_host_name', tier_name.lower())))
+
+        self.template.add_resource(r53.RecordSetType(tier_name.lower() + 'DnsRecord', 
+            HostedZoneName=Join('', [Ref(hostedzone), '.']), 
+            Comment='CNAME record for ' + tier_name.capitalize() + ' tier', 
+            Name=Join('', [Ref(host_name), '.', Ref(hostedzone)]), 
+            Type='CNAME', 
+            TTL='300', 
+            ResourceRecords=GetAtt(elb, 'DNSName')))
 
     @staticmethod
     def __build_common_strings():

@@ -60,7 +60,7 @@ class EnvironmentBase():
             Name=Join('', [Ref(host_name), '.', Ref(hostedzone)]), 
             Type='CNAME', 
             TTL='300', 
-            ResourceRecords=GetAtt(elb, 'DNSName')))
+            ResourceRecords=[GetAtt(elb, 'DNSName')]))
 
     @staticmethod
     def __build_common_strings():

@@ -238,7 +238,7 @@ class EnvironmentBase():
             min_size=1, 
             max_size=1, 
             root_volume_size=24,
-            root_volume_type='gp2',
+            root_volume_type=None,
             include_ephemerals=True, 
             number_ephemeral_vols=2,
             ebs_data_volumes=None, #[{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
@@ -305,11 +305,15 @@ class EnvironmentBase():
         if user_data != None: 
             launch_config_obj.UserData=user_data 
 
+        ebs_device = ec2.EBSBlockDevice(
+                VolumeSize=root_volume_size)
+
+        if root_volume_type != None:
+            ebs_device.VolumeType=root_volume_type
+
         block_devices = [ec2.BlockDeviceMapping(
                 DeviceName='/dev/sda1', 
-                Ebs=ec2.EBSBlockDevice(
-                VolumeSize=root_volume_size, 
-                VolumeType=root_volume_type))]
+                Ebs=ebs_device)]
         
         device_names = ['/dev/sd%s' % c for c in 'bcdefghijklmnopqrstuvwxyz']
 

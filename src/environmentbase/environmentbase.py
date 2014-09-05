@@ -41,18 +41,23 @@ class EnvironmentBase():
         @param tier_name [str]
         @param tier_args [dict]
         '''
+        if 'environmentHostedZone' not in self.template.parameters:
+            hostedzone = self.template.add_parameter(Parameter(
+                "environmentHostedZone",
+                Description="The DNS name of an existing Amazon Route 53 hosted zone",
+                Default=tier_args.get('base_hosted_zone_name', 'devopsdemo.com'),
+                Type="String"))
+        else: 
+            hostedzone = self.template.parameters.get('environmentHostedZone')
 
-        hostedzone = self.template.add_parameter(Parameter(
-            "environmentHostedZone",
-            Description="The DNS name of an existing Amazon Route 53 hosted zone",
-            Default=tier_args.get('base_hosted_zone_name', 'devopsdemo.com'),
-            Type="String"))
-
-        host_name = self.template.add_parameter(Parameter(
-            tier_name.lower() + 'HostName', 
-            Description="Friendly host name to append to the environmentHostedZone base DNS record", 
-            Type="String", 
-            Default=tier_args.get('tier_host_name', tier_name.lower())))
+        if tier_name.lower() + 'HostName' not in self.template.parameters:
+            host_name = self.template.add_parameter(Parameter(
+                tier_name.lower() + 'HostName', 
+                Description="Friendly host name to append to the environmentHostedZone base DNS record", 
+                Type="String", 
+                Default=tier_args.get('tier_host_name', tier_name.lower())))
+        else:
+            host_name = self.template.parameters.get(tier_name.lower() + 'HostName')
 
         self.template.add_resource(r53.RecordSetType(tier_name.lower() + 'DnsRecord', 
             HostedZoneName=Join('', [Ref(hostedzone), '.']), 

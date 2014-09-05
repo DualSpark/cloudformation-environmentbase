@@ -1,4 +1,5 @@
 import os
+import os.path
 from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
@@ -31,8 +32,11 @@ class EnvironmentBase():
         self.template.description = template.get('description', 'No Description Specified')
         self.subnets = {}
         self.add_common_parameters(template)
-        self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', os.path.join(os.path.dirname(__file__), 'ami_cache.json')))
-
+        if os.path.isfile('ami_cache.json'): 
+            file_path = 'ami_cache.json'
+        else:
+            file_path = os.path.join(os.path.dirname(__file__), 'ami_cache.json')
+        self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', file_path))
 
     def register_elb_to_dns(self, elb, tier_name, tier_args):
         '''

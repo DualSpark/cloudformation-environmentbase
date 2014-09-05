@@ -235,7 +235,8 @@ class EnvironmentBase():
             custom_tags=None, 
             load_balancer=None,
             instance_monitoring=False,
-            subnet_type='private'):
+            subnet_type='private', 
+            launch_config_metadata=None):
         '''
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
@@ -328,6 +329,9 @@ class EnvironmentBase():
 
         if len(block_devices) > 0:
             launch_config_obj.BlockDeviceMappings = block_devices
+
+        if launch_config_metadata != None: 
+            launch_config.Metadata = launch_config_metadata
 
         launch_config = self.template.add_resource(launch_config_obj)
 

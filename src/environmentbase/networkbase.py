@@ -142,7 +142,7 @@ class NetworkBase(EnvironmentBase):
                 Description='Instance type to use when launching NAT instances.'))
         
         for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
-            for y in ['public', 'private']:
+            for y in network_config.get('subnet_types', ['public', 'private']):
                 if y in self.template.mappings['networkAddresses']['subnet' + str(x)]:
                     if y not in self.local_subnets:
                         self.local_subnets[y] = {}
@@ -212,7 +212,7 @@ class NetworkBase(EnvironmentBase):
                             FromPort='-1', 
                             ToPort='-1', 
                             CidrIp='0.0.0.0/0')]))
-
+        
         return self.template.add_resource(ec2.Instance(nat_subnet_type + str(nat_subnet_number) + 'NATInstance', 
                 AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(nat_subnet_number) + 'Name'), 
                 ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'), 

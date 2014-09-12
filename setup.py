@@ -10,7 +10,6 @@ from os.path import splitext
 from setuptools import find_packages
 from setuptools import setup
 
-
 def read(*names, **kwargs):
     return io.open(
         join(dirname(__file__), *names),
@@ -19,7 +18,7 @@ def read(*names, **kwargs):
 
 setup(
     name="cfn-environment-base",
-    version="0.1.7",
+    version="0.1.8",
     license="BSD",
     description="Base environment for Troposphere based CFN project environments",
     long_description="%s" % read("README.md"),

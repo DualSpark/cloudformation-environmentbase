@@ -10,7 +10,8 @@
         "ec2_key_default": "pmdev",
         "remote_access_cidr": "0.0.0.0/0", 
         "s3_bucket": "cfdev-dualspark", 
-        "s3_key_name_prefix": "/devtools/cloudformation"
+        "s3_key_name_prefix": "/devtools/cloudformation",
+        "s3_canned_acl": "public-read"
     },
     "logging": {
         "cloudtrail_log_prefix": "cloudtrail_logs",

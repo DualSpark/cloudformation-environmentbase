@@ -19,7 +19,7 @@ def read(*names, **kwargs):
 setup(
     name="cfn-environment-base",
     version="0.1.10",
-    license="BSD",
+    license="ISC",
     description="Base environment for Troposphere based CFN project environments",
     long_description="%s" % read("README.md"),
     author="Patrick McClory",
@@ -33,7 +33,7 @@ setup(
         # complete classifier list: http://pypi.python.org/pypi?%3Aaction=list_classifiers
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: BSD License",
+        "License :: OSI Approved :: ISC License",
         "Operating System :: Unix",
         "Operating System :: POSIX",
         "Operating System :: Microsoft :: Windows",

@@ -32,10 +32,15 @@ class EnvironmentBase():
         self.template.description = template.get('description', 'No Description Specified')
         self.subnets = {}
         self.add_common_parameters(template)
-        if os.path.isfile('ami_cache.json'): 
+        local_amicache = os.path.join(os.getcwd(), 'ami_cache.json')
+
+        if os.path.isfile(local_amicache):
+            file_path = local_amicache
+        elif os.path.isfile('ami_cache.json'): 
             file_path = 'ami_cache.json'
         else:
             file_path = os.path.join(os.path.dirname(__file__), 'ami_cache.json')
+
         self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', file_path))
 
     def register_elb_to_dns(self, elb, tier_name, tier_args):
@@ -212,9 +217,6 @@ class EnvironmentBase():
         return {"Statement":statements}
 
     def add_ami_mapping(self, ami_map_file_path='ami_cache.json'):
-        # TODO the referencing of the config and other json files needs to be cleaned up
-        # this is an example of where this relative path hack is at its worst
-        ami_map_file_path=os.path.join(os.path.dirname(__file__), ami_map_file_path)
         '''
         Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
         This depdns on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
@@ -279,13 +281,8 @@ class EnvironmentBase():
         if default_instance_type == None:
             default_instance_type = 'm1.small'
 
-        if instance_type == None or type(instance_type) == str:
-            instance_type = self.template.add_parameter(Parameter(layer_name + 'InstanceType', 
-                    Type='String', 
-                    Default=default_instance_type, 
-                    Description='Instance type for instances launched within the ' + layer_name + ' auto scaling group', 
-                    AllowedValues=self.strings['valid_instance_types'], 
-                    ConstraintDescription=self.strings['valid_instance_type_message']))
+        if type(instance_type) != str:
+            instance_type = Ref(instance_type)
 
         sg_list = []
         for sg in security_groups:
@@ -297,7 +294,7 @@ class EnvironmentBase():
         launch_config_obj = autoscaling.LaunchConfiguration(layer_name + 'LaunchConfiguration', 
                 IamInstanceProfile=Ref(instance_profile), 
                 ImageId=FindInMap('RegionMap', Ref('AWS::Region'), ami_name), 
-                InstanceType=Ref(instance_type), 
+                InstanceType=instance_type, 
                 SecurityGroups=sg_list, 
                 KeyName=ec2_key, 
                 InstanceMonitoring=instance_monitoring)
@@ -465,7 +462,8 @@ class EnvironmentBase():
     @staticmethod
     def build_bootstrap(bootstrap_files, 
             variable_declarations=None, 
-            cleanup_commands=None):
+            cleanup_commands=None, 
+            prepend_line='#!/bin/bash'):
         '''
         Method encapsulates process of building out the bootstrap given a set of variables and a bootstrap file to source from
         Returns base 64-wrapped, joined bootstrap to be applied to an instnace
@@ -473,7 +471,11 @@ class EnvironmentBase():
         @param variable_declaration [ list ] list of lines to add to the head of the file - used to inject bash variables into the script
         @param cleanup_commnds [ string[] ] list of lines to add at the end of the file - used for layer-specific details
         '''
-        ret_val = ['#!/bin/bash']
+        if prepend_line != '':
+            ret_val = [prepend_line]
+        else:
+            ret_val = []
+            
         if variable_declarations != None:
             for line in variable_declarations:
                 ret_val.append(line)
@@ -594,8 +596,8 @@ class EnvironmentBase():
             s3_key_name = '/' +  name + '.' + key_serial + '.template'
         else: 
             s3_key_name = s3_key_prefix + '/' + name + '.' + key_serial + '.template'
-        if s3_canned_acl == None:
-            s3_canned_acl = self.template_args.get('s3_canned_acl', 'private')
+
+        s3_canned_acl = self.template_args.get('s3_canned_acl', 'public-read')
 
         if self.template_args.get('mock_upload',False):
             stack_url = 'http://www.dualspark.com'
@@ -609,6 +611,7 @@ class EnvironmentBase():
             key.set_acl(s3_canned_acl)
 
             stack_url = key.generate_url(expires_in=0, query_auth=False)
+            stack_url = stack_url.split('?')[0]
 
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []
@@ -630,6 +633,7 @@ class EnvironmentBase():
         stack_name = name + 'Stack'
         for output in template.outputs:
             if output not in self.stack_outputs:
+                print '  adding output ' + output + ' from stack ' + stack_name
                 self.stack_outputs[output] = stack_name
             else: 
                 raise RuntimeError('Cannot add child stack with output named ' + output + ' as it was already added by stack named ' + self.stack_outputs[output])

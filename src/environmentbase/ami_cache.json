@@ -18,7 +18,8 @@
 		"ubuntu1404LtsAmiId": "ami-6ac2a85a", 
 		"windows2012r2BaseAmiId": "ami-3bcd880b", 
 		"amazonLinuxAmiId": "ami-d13845e1", 
-		"centOS65AmiId": "ami-b6bdde86"
+		"centOS65AmiId": "ami-b6bdde86",
+		"windows2012r2SQLWeb" : "ami-758ccd45"
 	}, 
 	"eu-west-1": {
 		"natAmiId": "ami-ed352799", 

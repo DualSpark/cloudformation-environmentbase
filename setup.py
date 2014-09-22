@@ -18,7 +18,7 @@ def read(*names, **kwargs):
 
 setup(
     name="cfn-environment-base",
-    version="0.1.8",
+    version="0.1.10",
     license="BSD",
     description="Base environment for Troposphere based CFN project environments",
     long_description="%s" % read("README.md"),
@@ -51,8 +51,8 @@ setup(
         # eg: "keyword1", "keyword2", "keyword3",
     ],
     install_requires=[
-        "troposphere==0.6.0",
-        "boto==2.32.0",
+        "troposphere>=0.6.0",
+        "boto>=2.32.0",
         "ipcalc==1.1.2",
         "docopt==0.6.1",
     ],

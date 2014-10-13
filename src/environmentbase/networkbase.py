@@ -64,7 +64,7 @@ class NetworkBase(EnvironmentBase):
         '''
         self.utility_bucket = self.template.add_resource(s3.Bucket(name.lower() + 'UtilityBucket'))
 
-        bucket_policy_statements = self.get_elb_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=self.strings.get('elb_log_prefix','')))
+        bucket_policy_statements = self.get_elb_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=self.strings.get('elb_log_prefix',''))
         bucket_policy_statements.append(self.get_cloudtrail_logging_bucket_policy_document(self.utility_bucket, cloudtrail_log_prefix=self.strings.get('cloudtrail_log_prefix', '')))
         
         self.template.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketLoggingPolicy', 

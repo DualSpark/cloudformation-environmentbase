@@ -279,6 +279,62 @@ class NetworkBase(EnvironmentBase):
             InternetGatewayId=Ref(self.igw),
             VpnGatewayId=Ref(gateway)))
 
+    def add_ha_bastion_instance(self, 
+            bastion_conf):
+        '''
+
+        '''
+        instance_type = self.template.add_parameter(Parameter('bastionInstanceType', 
+                Default=bastion_conf.get('instance_type_default', 't1.micro'), 
+                AllowedValues=self.strings['valid_instance_types'], 
+                Type='String',
+                Description='Instance type to use when launching the Bastion host for access to resources that are not publicly exposed', 
+                ConstraintDescription=self.strings['valid_instance_type_message']))
+
+        bastion_elb_security_group = self.template.add_resource(ec2.SecurityGroup('bastionElbSecurityGroup', 
+                VpcId=Ref(self.vpc), 
+                GroupDescription='Security group allowing ingress via SSH to this instance along with other standard accessbility port rules', 
+                SecurityGroupIngress=[ec2.SecurityGroupRule(
+                        FromPort='22', 
+                        ToPort='22', 
+                        IpProtocol='tcp', 
+                        CidrIp=Ref(self.template.parameters['remoteAccessLocation']))]))
+
+        bastion_security_group = self.template.add_resource(ec2.SecurityGroup('bastionSecurityGroup', 
+                VpcId=Ref(self.vpc), 
+                GroupDescription='Security group allowing ingress via SSH to this instance along with other standard accessbility port rules', 
+                SecurityGroupIngress=[ec2.SecurityGroupRule(
+                        FromPort='22', 
+                        ToPort='22', 
+                        IpProtocol='tcp', 
+                        SourceSecurityGroupId=Ref(bastion_elb_security_group))],
+                SecurityGroupEgress=[ec2.SecurityGroupRule(
+                        FromPort='22', 
+                        ToPort='22', 
+                        IpProtocol='tcp', 
+                        CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr')), 
+                    ec2.SecurityGroupRule(
+                        FromPort='80', 
+                        ToPort='80', 
+                        IpProtocol='tcp', 
+                        CidrIp='0.0.0.0/0'), 
+                    ec2.SecurityGroupRule(
+                        FromPort='443', 
+                        ToPort='443', 
+                        IpProtocol='tcp',
+                        CidrIp='0.0.0.0/0')]))
+
+        self.template.add_resource(ec2.SecurityGroupEgress('bastionElbSecurityGroupEgressSSHToInstance', 
+                GroupId=Ref(bastion_elb_security_group), 
+                DestinationSecurityGroupId=Ref(bastion_security_group), 
+                FromPort='22', 
+                ToPort='22', 
+                IpProtocol='tcp'))
+
+
+
+
+
     def add_bastion_instance(self, 
             bastion_conf):
         '''

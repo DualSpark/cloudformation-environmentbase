@@ -623,14 +623,19 @@ class EnvironmentBase():
             else:
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
-        for output in template.outputs:
-            if output not in self.stack_outputs and output not in self.ignore_outputs:
+        print 'Processing outputs for stack: ' + stack_name
+        for output in template.outputs.keys():
+            if output in self.ignore_outputs:
+                print '  ignoring output ' + output + ' since it is in the ignore list'
+            elif output not in self.stack_outputs:
                 print '  adding output ' + output + ' from stack ' + stack_name
                 self.stack_outputs[output] = stack_name
             else: 
                 raise RuntimeError('Cannot add child stack with output named ' + output + ' as it was already added by stack named ' + self.stack_outputs[output])
+        print '  ** done processing outputs for stack: ' + stack_name
+        print ''
 
-        self.template.add_resource(cf.Stack(stack_name,
+        return self.template.add_resource(cf.Stack(stack_name,
                 TemplateURL=stack_url, 
                 Parameters=stack_params,
                 TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60')))

@@ -25,6 +25,7 @@ class EnvironmentBase():
         '''
         self.globals=arg_dict.get('global', {})
         self.manual_parameter_bindings = {}
+        self.ignore_outputs = []
         template=arg_dict.get('template', {})
         self.strings = self.__build_common_strings()
         self.template = Template()
@@ -632,7 +633,7 @@ class EnvironmentBase():
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
         for output in template.outputs:
-            if output not in self.stack_outputs:
+            if output not in self.stack_outputs and output not in self.ignore_outputs:
                 print '  adding output ' + output + ' from stack ' + stack_name
                 self.stack_outputs[output] = stack_name
             else: 

@@ -18,7 +18,7 @@ def read(*names, **kwargs):
 
 setup(
     name="cfn-environment-base",
-    version="0.1.10",
+    version="0.2.1",
     license="ISC",
     description="Base environment for Troposphere based CFN project environments",
     long_description="%s" % read("README.md"),

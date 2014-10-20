@@ -564,7 +564,7 @@ class EnvironmentBase():
 
     def add_child_template(self, 
                 name, 
-                template, 
+                template_wrapper, 
                 s3_bucket=None, 
                 s3_key_prefix=None, 
                 s3_canned_acl=None):
@@ -607,7 +607,8 @@ class EnvironmentBase():
 
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []
-
+            
+        template = template_wrapper.template
         stack_params = {}
         for parameter in template.parameters.keys():
             if parameter in self.manual_parameter_bindings:

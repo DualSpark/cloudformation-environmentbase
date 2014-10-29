@@ -39,5 +39,5 @@ html_sidebars = {
 }
 html_short_title = '%s-%s' % (project, version)
 html_theme_options = {
-    'githuburl': 'https://github.com/ptone/cfn-base/'
+    'githuburl': 'https://github.com/dualspark/cfn-base/'
 }

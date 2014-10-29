@@ -29,7 +29,6 @@ class NetworkBase(EnvironmentBase):
                 az_count=max(arg_dict.get('network', {}).get('public_subnet_count', 2), arg_dict.get('network', {}).get('private_subnet_count',2)))
         self.add_network_cidr_mapping(network_config=arg_dict.get('network', {}))
         self.create_network(network_config=arg_dict.get('network',{}))
-        self.add_bastion_instance(bastion_conf=arg_dict.get('bastion', {}))
         self.add_utility_bucket()
 
         self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup', 
@@ -295,8 +294,8 @@ class NetworkBase(EnvironmentBase):
                 VpcId=Ref(self.vpc), 
                 GroupDescription='Security group allowing ingress via SSH to this instance along with other standard accessbility port rules', 
                 SecurityGroupIngress=[ec2.SecurityGroupRule(
-                        FromPort='22', 
-                        ToPort='22', 
+                        FromPort=bastion_conf.get('ssh_port', '22'), 
+                        ToPort=bastion_conf.get('ssh_port', '22'), 
                         IpProtocol='tcp', 
                         CidrIp=Ref(self.template.parameters['remoteAccessLocation']))]))
 
@@ -331,6 +330,85 @@ class NetworkBase(EnvironmentBase):
                 ToPort='22', 
                 IpProtocol='tcp'))
 
+        bastion_elb = self.template.add_resource(elb.LoadBalancer('bastionElb', 
+            Subnets=self.subnets['public'], 
+            SecurityGroups=[Ref(bastion_elb_security_group)], 
+            CrossZone=True,
+            AccessLoggingPolicy=elb.AccessLoggingPolicy(
+                EmitInterval=5,
+                Enabled=True,
+                S3BucketName=Ref(self.utility_bucket)),
+            HealthCheck=elb.HealthCheck(
+                    HealthyThreshold=3, 
+                    UnhealthyThreshold=5,
+                    Interval=60, 
+                    Target=bastion_conf.get('healthcheck_protocol', 'tcp').upper() + ':' + bastion_conf.get('ssh_port', '22') , 
+                    Timeout=5), 
+            Listeners=[elb.Listener(
+                        LoadBalancerPort=bastion_conf.get('ssh_port', '22'), 
+                        InstancePort=bastion_conf.get('ssh_port', '22'), 
+                        Protocol=bastion_conf.get('elb_protocol', 'tcp').upper())]))
+        
+        if 'logShipperQueueName' in self.template.parameters:
+            log_queue = self.template.parameters['logShipperQueueName']
+        else:
+            log_queue = self.template.add_parameter(Parameter('logShipperQueueName', 
+                Type='String', 
+                Description='Name of the SQS queue used for logging'))
+
+        if 'logShipperQueueRegion' in self.template.parameters:
+            log_region = self.template.parameters['logShipperQueueRegion']
+        else:
+            log_region = self.template.add_parameter(Parameter('logShipperQueueRegion', 
+                Type='String', 
+                Description='Region of the SQS queue used for logging'))
+
+        log_queue_arn = Join('', ['arn:aws:sqs:', Ref(log_region) ,':', Ref('AWS::AccountId'),':', Ref(log_queue)])
+
+
+        iam_policies = [iam.Policy(
+                            PolicyName='logQueueWrite', 
+                            PolicyDocument={
+                                "Statement" : [{
+                                    "Effect" : "Allow", 
+                                    "Action" : ["sqs:SendMessage"], 
+                                    "Resource" : [log_queue_arn]}]}), 
+                      iam.Policy(
+                            PolicyName='logReadQueues', 
+                            PolicyDocument={
+                                "Statement" : [{
+                                    "Effect" : "Allow", 
+                                    "Action" : ["sqs:Get*", "sqs:List*"], 
+                                    "Resource" :"*"}]}),
+                      iam.Policy(
+                            PolicyName='cloudWatchPostData', 
+                            PolicyDocument={
+                                "Statement": [{
+                                    "Action": ["cloudwatch:PutMetricData"],
+                                    "Effect": "Allow",
+                                    "Resource": "*"}]})]
+
+        iam_profile = self.create_instance_profile('bastion', iam_policies)
+
+        bastion_args = []
+        bastion_args.append(Join('=', ['CLOUD_NODE_TYPE', 'bastion']))
+        bastion_args.append(Join('=', ['PUPPET_ENVIRONMENT', Ref(environment_name)]))
+        bastion_args.append(Join('=', ['PUPPET_DNS_NAME', puppet_dns_name]))
+
+        bastion_userdata = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'bastion.install.sh')
+
+        bastion_asg = self.create_asg('bastionASG',
+                instance_profile=iam_profile,
+                ami_name="ubuntuPuppet",
+                instance_type=instance_type,
+                user_data=self.build_bootstrap([bootstrap_file], bootstrap_args), 
+                security_groups=[bastion_security_group], 
+                min_size=1, 
+                max_size=1, 
+                load_balancer=bastion_elb,
+                include_ephemerals=False,
+                instance_monitoring=bastion_conf.get('master_instance_monitoring', False))
+
 
 
 
@@ -341,36 +419,7 @@ class NetworkBase(EnvironmentBase):
         Method adds a bastion host to the environment and outputs the address of the bastion when deployed
         @param bastion_conf [dict] dictionary of configuration values used for populating the bastion host creation process
         '''
-        instance_type = self.template.add_parameter(Parameter('bastionInstanceType', 
-                Default=bastion_conf.get('instance_type_default', 't1.micro'), 
-                AllowedValues=self.strings['valid_instance_types'], 
-                Type='String',
-                Description='Instance type to use when launching the Bastion host for access to resources that are not publicly exposed', 
-                ConstraintDescription=self.strings['valid_instance_type_message']))
 
-        bastion_security_group = self.template.add_resource(ec2.SecurityGroup('bastionSecurityGroup', 
-                VpcId=Ref(self.vpc), 
-                GroupDescription='Security group allowing ingress via SSH to this instance along with other standard accessbility port rules', 
-                SecurityGroupIngress=[ec2.SecurityGroupRule(
-                        FromPort='22', 
-                        ToPort='22', 
-                        IpProtocol='tcp', 
-                        CidrIp=Ref(self.template.parameters['remoteAccessLocation']))],
-                SecurityGroupEgress=[ec2.SecurityGroupRule(
-                        FromPort='22', 
-                        ToPort='22', 
-                        IpProtocol='tcp', 
-                        CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr')), 
-                    ec2.SecurityGroupRule(
-                        FromPort='80', 
-                        ToPort='80', 
-                        IpProtocol='tcp', 
-                        CidrIp='0.0.0.0/0'), 
-                    ec2.SecurityGroupRule(
-                        FromPort='443', 
-                        ToPort='443', 
-                        IpProtocol='tcp',
-                        CidrIp='0.0.0.0/0')]))
 
         if isinstance(bastion_security_group, ec2.SecurityGroup):
             groupset_sg = Ref(bastion_security_group)

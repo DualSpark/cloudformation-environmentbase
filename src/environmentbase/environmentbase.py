@@ -25,7 +25,7 @@ class EnvironmentBase():
         '''
         self.globals=arg_dict.get('global', {})
         self.manual_parameter_bindings = {}
-        self.ignore_outputs = []
+        self.ignore_outputs = ['templateValidationHash', 'dateGenerated']
         template=arg_dict.get('template', {})
         self.strings = self.__build_common_strings()
         self.template = Template()
@@ -599,7 +599,7 @@ class EnvironmentBase():
             key = Key(bucket)
 
             key.key = s3_key_name
-            key.set_contents_from_string(template.to_json())
+            key.set_contents_from_string(template_wrapper.to_json())
             key.set_acl(s3_canned_acl)
 
             stack_url = key.generate_url(expires_in=0, query_auth=False)
@@ -607,7 +607,7 @@ class EnvironmentBase():
 
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []
-            
+
         template = template_wrapper.template
         stack_params = {}
         for parameter in template.parameters.keys():

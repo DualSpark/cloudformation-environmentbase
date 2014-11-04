@@ -25,6 +25,7 @@ class NetworkBase(EnvironmentBase):
         EnvironmentBase.__init__(self, arg_dict)
         self.vpc = None
         self.azs = []
+
         self.local_subnets = {}
         self.stack_outputs = {}
         self.add_vpc_az_mapping(boto_config=arg_dict.get('boto', {}), 
@@ -57,6 +58,10 @@ class NetworkBase(EnvironmentBase):
                         ToPort='22', 
                         IpProtocol='tcp', 
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
+
+        for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
+            self.azs.append(Ref(self.template[FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name')]))
+
 
     def add_utility_bucket(self, name='demo'): 
         '''
@@ -99,7 +104,6 @@ class NetworkBase(EnvironmentBase):
                 x = 0
                 for availability_zone in az_list:
                     temp_dict['az' + str(x) + 'Name'] = availability_zone.name
-                    self.azs.append(availability_zone.name)
                     x += 1
                 if len(temp_dict) >= az_count:
                     az_dict[region.name] = {}

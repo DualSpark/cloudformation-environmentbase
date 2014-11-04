@@ -31,7 +31,8 @@ class NetworkBase(EnvironmentBase):
         self.add_vpc_az_mapping(boto_config=arg_dict.get('boto', {}), 
                 az_count=max(arg_dict.get('network', {}).get('public_subnet_count', 2), arg_dict.get('network', {}).get('private_subnet_count',2)))
         self.add_network_cidr_mapping(network_config=arg_dict.get('network', {}))
-        self.create_network(network_config=arg_dict.get('network',{}))
+        network_config = arg_dict.get('network',{})
+        self.create_network(network_config=network_config)
         self.add_utility_bucket()
 
         self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup', 

@@ -61,7 +61,7 @@ class NetworkBase(EnvironmentBase):
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
 
         for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
-            self.azs.append(Ref(self.template[FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name')]))
+            self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
 
     def add_utility_bucket(self, name='demo'): 

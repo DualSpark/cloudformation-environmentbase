@@ -567,7 +567,8 @@ class EnvironmentBase():
                 template_wrapper, 
                 s3_bucket=None, 
                 s3_key_prefix=None, 
-                s3_canned_acl=None):
+                s3_canned_acl=None, 
+                depends_on=None):
         '''
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
         @param name [str] name of this template for key naming in s3
@@ -636,10 +637,15 @@ class EnvironmentBase():
         print '  ** done processing outputs for stack: ' + stack_name
         print ''
 
-        return self.template.add_resource(cf.Stack(stack_name,
+        stack_obj = cf.Stack(stack_name,
                 TemplateURL=stack_url, 
                 Parameters=stack_params,
-                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60')))
+                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'))
+
+        if depends_on != None:
+            stack_obj.DependsOn = depends_on
+
+        return self.template.add_resource(stack_obj)
 
 def main():
     import json

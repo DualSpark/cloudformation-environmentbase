@@ -23,8 +23,8 @@
         "aws_secret_access_key": null
     },
     "network": {
-        "public_subnet_count": 2,
-        "private_subnet_count": 2,
+        "public_subnet_count": 3,
+        "private_subnet_count": 3,
         "public_subnet_size": "24",
         "private_subnet_size": "22",
         "network_cidr_base": "172.16.0.0",

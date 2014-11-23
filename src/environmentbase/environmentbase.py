@@ -350,7 +350,10 @@ class EnvironmentBase():
                 VPCZoneIdentifier=self.subnets[subnet_type.lower()])
 
         if load_balancer != None:
-            auto_scaling_obj.LoadBalancerNames = [Ref(load_balancer)]
+            lbs = []
+            for lb_obj in load_balancer:
+                lb_obj.append(Ref(lb_obj))
+            auto_scaling_obj.LoadBalancerNames = lbs
 
         if custom_tags != None and len(custom_tags) > 0:
             if type(custom_tags) != list:

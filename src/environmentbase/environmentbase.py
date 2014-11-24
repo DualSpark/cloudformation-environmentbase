@@ -362,7 +362,7 @@ class EnvironmentBase():
                 load_balancer = lbs
             else:
                 lb_tmp.append(lb_obj)
-            auto_scaling_obj.LoadBalancerNames = lbs
+            auto_scaling_obj.LoadBalancerNames = lb_tmp
         except TypeError:
             pass
 

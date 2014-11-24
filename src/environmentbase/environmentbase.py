@@ -355,12 +355,13 @@ class EnvironmentBase():
                 for lb in load_balancer: 
                     lb_tmp.append(load_balancer[lb])
                 load_balancer = lb_tmp
-
-            if type(load_balancer) != Ref:
+            elif type(load_balancer) != Ref:
                 lbs = []
                 for lb_obj in load_balancer:
                     lbs.append(Ref(lb_obj))
-                auto_scaling_obj.LoadBalancerNames = lbs
+            else:
+                lbs.append(lb_obj)
+            auto_scaling_obj.LoadBalancerNames = lbs
         except TypeError:
             pass
 

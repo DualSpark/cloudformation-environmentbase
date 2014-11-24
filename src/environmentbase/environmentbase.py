@@ -356,12 +356,12 @@ class EnvironmentBase():
                 for lb in load_balancer: 
                     lb_tmp.append(Ref(load_balancer[lb]))
             elif type(load_balancer) != Ref:
-                for lb_obj in load_balancer:
-                    lb_tmp.append(Ref(lb_obj))
+                for lb in load_balancer:
+                    lb_tmp.append(Ref(lb))
             else:
-                lb_tmp.append(lb_obj)
+                lb_tmp.append(load_balancer)
         except TypeError:
-            lb_tmp.append(Ref(lb_obj))
+            lb_tmp.append(Ref(load_balancer))
 
         if len(lb_tmp) > 0:
             auto_scaling_obj.LoadBalancerNames = lb_tmp

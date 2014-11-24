@@ -352,10 +352,10 @@ class EnvironmentBase():
         lb_tmp = []
 
         try:
-            if type(load_balancer) == dict:
+            if type(load_balancer) is dict:
                 for lb in load_balancer: 
                     lb_tmp.append(Ref(load_balancer[lb]))
-            elif type(load_balancer) != Ref:
+            elif type(load_balancer) is not Ref:
                 for lb in load_balancer:
                     lb_tmp.append(Ref(lb))
             else:

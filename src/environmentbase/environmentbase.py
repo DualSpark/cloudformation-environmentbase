@@ -349,17 +349,21 @@ class EnvironmentBase():
                 DesiredCapacity=min(min_size, max_size), 
                 VPCZoneIdentifier=self.subnets[subnet_type.lower()])
 
-        if type(load_balancer) == dict:
-            lb_tmp = []
-            for lb in load_balancer: 
-                lb_tmp.append(load_balancer[lb])
-            load_balancer = lb_tmp
+        try:
+            if type(load_balancer) == dict:
+                lb_tmp = []
+                for lb in load_balancer: 
+                    lb_tmp.append(load_balancer[lb])
+                load_balancer = lb_tmp
 
-        if load_balancer != None:
-            lbs = []
-            for lb_obj in load_balancer:
-                lbs.append(Ref(lb_obj))
-            auto_scaling_obj.LoadBalancerNames = lbs
+            if type(load_balancer) != Ref:
+                lbs = []
+                for lb_obj in load_balancer.keys:
+                    lbs.append(Ref(lb_obj))
+                auto_scaling_obj.LoadBalancerNames = lbs
+        except TypeError:
+            pass
+
 
         if custom_tags != None and len(custom_tags) > 0:
             if type(custom_tags) != list:

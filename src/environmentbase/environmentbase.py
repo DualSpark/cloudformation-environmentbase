@@ -349,18 +349,19 @@ class EnvironmentBase():
                 DesiredCapacity=min(min_size, max_size), 
                 VPCZoneIdentifier=self.subnets[subnet_type.lower()])
 
+        lb_tmp = []
+
         try:
             if type(load_balancer) == dict:
-                lb_tmp = []
                 for lb in load_balancer: 
                     lb_tmp.append(load_balancer[lb])
                 load_balancer = lb_tmp
             elif type(load_balancer) != Ref:
-                lbs = []
                 for lb_obj in load_balancer:
                     lbs.append(Ref(lb_obj))
+                load_balancer = lbs
             else:
-                lbs.append(lb_obj)
+                lb_tmp.append(lb_obj)
             auto_scaling_obj.LoadBalancerNames = lbs
         except TypeError:
             pass

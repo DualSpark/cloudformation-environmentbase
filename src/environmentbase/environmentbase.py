@@ -354,7 +354,7 @@ class EnvironmentBase():
         try:
             if type(load_balancer) == dict:
                 for lb in load_balancer: 
-                    lb_tmp.append(load_balancer[lb])
+                    lb_tmp.append(Ref(load_balancer[lb]))
                 load_balancer = lb_tmp
             elif type(load_balancer) != Ref:
                 for lb_obj in load_balancer:

@@ -358,7 +358,7 @@ class EnvironmentBase():
 
             if type(load_balancer) != Ref:
                 lbs = []
-                for lb_obj in load_balancer.keys:
+                for lb_obj in load_balancer:
                     lbs.append(Ref(lb_obj))
                 auto_scaling_obj.LoadBalancerNames = lbs
         except TypeError:

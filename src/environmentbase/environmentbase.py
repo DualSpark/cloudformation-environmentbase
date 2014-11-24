@@ -361,7 +361,7 @@ class EnvironmentBase():
             else:
                 lb_tmp.append(lb_obj)
         except TypeError:
-            pass
+            lb_tmp.append(Ref(lb_obj))
 
         if len(lb_tmp) > 0:
             auto_scaling_obj.LoadBalancerNames = lb_tmp

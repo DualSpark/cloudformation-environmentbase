@@ -347,7 +347,8 @@ class EnvironmentBase():
                 MaxSize=max_size, 
                 MinSize=min_size, 
                 DesiredCapacity=min(min_size, max_size), 
-                VPCZoneIdentifier=self.subnets[subnet_type.lower()])
+                VPCZoneIdentifier=self.subnets[subnet_type.lower()],
+                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour' ,'Default'])
 
         lb_tmp = []
 
@@ -639,17 +640,6 @@ class EnvironmentBase():
             else:
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
-        print 'Processing outputs for stack: ' + stack_name
-        for output in template.outputs.keys():
-            if output in self.ignore_outputs:
-                print '  ignoring output ' + output + ' since it is in the ignore list'
-            elif output not in self.stack_outputs:
-                print '  adding output ' + output + ' from stack ' + stack_name
-                self.stack_outputs[output] = stack_name
-            else: 
-                raise RuntimeError('Cannot add child stack with output named ' + output + ' as it was already added by stack named ' + self.stack_outputs[output])
-        print '  ** done processing outputs for stack: ' + stack_name
-        print ''
 
         stack_obj = cf.Stack(stack_name,
                 TemplateURL=stack_url, 

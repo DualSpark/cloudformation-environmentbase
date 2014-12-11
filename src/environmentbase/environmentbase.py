@@ -364,9 +364,15 @@ class EnvironmentBase():
         except TypeError:
             lb_tmp.append(Ref(load_balancer))
 
+        print lb_tmp
+
         if len(lb_tmp) > 0:
             auto_scaling_obj.LoadBalancerNames = lb_tmp
 
+        print ''
+        print json.dumps(auto_scaling_obj)
+        print ''
+        
         if custom_tags != None and len(custom_tags) > 0:
             if type(custom_tags) != list:
                 custom_tags = [custom_tags]

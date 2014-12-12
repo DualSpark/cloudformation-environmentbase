@@ -352,26 +352,23 @@ class EnvironmentBase():
 
         lb_tmp = []
 
-        try:
-            if type(load_balancer) is dict:
-                for lb in load_balancer: 
-                    lb_tmp.append(Ref(load_balancer[lb]))
-            elif type(load_balancer) is not Ref:
-                for lb in load_balancer:
-                    lb_tmp.append(Ref(lb))
-            elif load_balancer is not None:
-                lb_tmp.append(load_balancer)
-        except TypeError:
-            lb_tmp.append(Ref(load_balancer))
+        if load_balancer is not None: 
+            try:
+                if type(load_balancer) is dict:
+                    for lb in load_balancer:
+                        lb_tmp.append(Ref(load_balancer[lb]))
+                elif type(load_balancer) is not Ref:
+                    for lb in load_balancer:
+                        lb_tmp.append(Ref(lb))
+                elif load_balancer is None:
+                    lb_tmp.append(load_balancer)
+            except TypeError:
+                lb_tmp.append(Ref(load_balancer))
+        else:
+            lb_tmp = None
 
-        print lb_tmp
-
-        if len(lb_tmp) > 0:
+        if lb_tmp is not None and len(lb_tmp) > 0:
             auto_scaling_obj.LoadBalancerNames = lb_tmp
-
-        print ''
-        print json.dumps(auto_scaling_obj)
-        print ''
         
         if custom_tags != None and len(custom_tags) > 0:
             if type(custom_tags) != list:

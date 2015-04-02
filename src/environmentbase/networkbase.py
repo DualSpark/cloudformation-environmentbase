@@ -22,16 +22,18 @@ class NetworkBase(EnvironmentBase):
         Init method wires up all the required networking resources to deploy this set of infrastructure 
         @param arg_dict [dict] collection of keyword arguments for this class implementation
         '''
+        network_config = arg_dict.get('network', {})
+
         EnvironmentBase.__init__(self, arg_dict)
         self.vpc = None
         self.azs = []
 
         self.local_subnets = {}
         self.stack_outputs = {}
-        self.add_vpc_az_mapping(boto_config=arg_dict.get('boto', {}), 
-                az_count=max(arg_dict.get('network', {}).get('public_subnet_count', 2), arg_dict.get('network', {}).get('private_subnet_count',2)))
+        self.add_vpc_az_mapping(boto_config=arg_dict.get('boto', {}),
+                az_count=max(network_config.get('public_subnet_count', 2), network_config.get('private_subnet_count',2)))
         self.add_network_cidr_mapping(network_config=arg_dict.get('network', {}))
-        self.create_network(network_config=arg_dict.get('network',{}))
+        self.create_network(network_config=network_config)
         self.utility_bucket = self.add_utility_bucket()
 
         self.common_sg = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup', 

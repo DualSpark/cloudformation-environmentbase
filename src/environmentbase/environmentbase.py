@@ -23,26 +23,29 @@ class EnvironmentBase():
         Init method for environment base creates all common objects for a given environment within the CloudFormation template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and CloudTrail log storage
         @param arg_dict [dict] keyword arguments to handle setting config-level parameters and arguments within this class
         '''
-        self.globals=arg_dict.get('global', {})
-        self.manual_parameter_bindings = {}
-        self.ignore_outputs = ['templateValidationHash', 'dateGenerated']
-        template=arg_dict.get('template', {})
-        self.strings = self.__build_common_strings()
-        self.template = Template()
-        self.template_args = arg_dict.get('template', {})
-        self.template.description = template.get('description', 'No Description Specified')
-        self.subnets = {}
-        self.add_common_parameters(template)
-        local_amicache = os.path.join(os.getcwd(), 'ami_cache.json')
+        self.globals                    = arg_dict.get('global', {})
+        self.template_args              = arg_dict.get('template', {})
 
+        self.template                   = Template()
+        self.template.description       = self.template_args.get('description', 'No Description Specified')
+
+        self.manual_parameter_bindings  = {}
+        self.subnets                    = {}
+        self.ignore_outputs             = ['templateValidationHash', 'dateGenerated']
+        self.strings                    = self.__build_common_strings()
+
+        self.add_common_parameters(self.template_args)
+
+        local_amicache = os.path.join(os.getcwd(), 'ami_cache.json')
         if os.path.isfile(local_amicache):
             file_path = local_amicache
-        elif os.path.isfile('ami_cache.json'): 
+        elif os.path.isfile('ami_cache.json'):
             file_path = 'ami_cache.json'
         else:
             file_path = os.path.join(os.path.dirname(__file__), 'ami_cache.json')
 
-        self.add_ami_mapping(ami_map_file_path=template.get('ami_map_file', file_path))
+        ami_map_file = self.template_args.get('ami_map_file', file_path)
+        self.add_ami_mapping(ami_map_file_path=ami_map_file)
 
     def register_elb_to_dns(self, elb, tier_name, tier_args):
         '''
@@ -57,72 +60,72 @@ class EnvironmentBase():
                 Description="The DNS name of an existing Amazon Route 53 hosted zone",
                 Default=tier_args.get('base_hosted_zone_name', 'devopsdemo.com'),
                 Type="String"))
-        else: 
+        else:
             hostedzone = self.template.parameters.get('environmentHostedZone')
 
         if tier_name.lower() + 'HostName' not in self.template.parameters:
             host_name = self.template.add_parameter(Parameter(
-                tier_name.lower() + 'HostName', 
-                Description="Friendly host name to append to the environmentHostedZone base DNS record", 
-                Type="String", 
+                tier_name.lower() + 'HostName',
+                Description="Friendly host name to append to the environmentHostedZone base DNS record",
+                Type="String",
                 Default=tier_args.get('tier_host_name', tier_name.lower())))
         else:
             host_name = self.template.parameters.get(tier_name.lower() + 'HostName')
 
-        self.template.add_resource(r53.RecordSetType(tier_name.lower() + 'DnsRecord', 
-            HostedZoneName=Join('', [Ref(hostedzone), '.']), 
-            Comment='CNAME record for ' + tier_name.capitalize() + ' tier', 
-            Name=Join('', [Ref(host_name), '.', Ref(hostedzone)]), 
-            Type='CNAME', 
-            TTL='300', 
+        self.template.add_resource(r53.RecordSetType(tier_name.lower() + 'DnsRecord',
+            HostedZoneName=Join('', [Ref(hostedzone), '.']),
+            Comment='CNAME record for ' + tier_name.capitalize() + ' tier',
+            Name=Join('', [Ref(host_name), '.', Ref(hostedzone)]),
+            Type='CNAME',
+            TTL='300',
             ResourceRecords=[GetAtt(elb, 'DNSName')]))
 
     @staticmethod
     def __build_common_strings():
         return {"valid_instance_types": ["t1.micro","m3.medium","m3.large","m3.xlarge","m3.2xlarge","m1.small","m1.medium","m1.large","m1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge","c1.medium","c1.xlarge","cc2.xlarge","g2.2xlarge","cg1.4xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","cr1.8xlarge","i2.xlarge","i2.2xlarge","i2.4xlarge","hs1.8xlarge","hs1.4xlarge"],
                 "valid_instance_type_message": "must be a valid EC2 instance type.",
-                "valid_db_instance_types" : ["db.t1.micro","db.m1.small","db.m1.medium","db.m1.large","db.m1.xlarge","db.m2.xlarge","db.m2.2xlarge","db.m2.4xlarge","db.cr1.8xlarge"], 
+                "valid_db_instance_types" : ["db.t1.micro","db.m1.small","db.m1.medium","db.m1.large","db.m1.xlarge","db.m2.xlarge","db.m2.2xlarge","db.m2.4xlarge","db.cr1.8xlarge"],
                 "valid_db_instance_type_message": "must be a valid RDS DB instance type.",
                 "boolean_options": ["True", "False"],
-                "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})", 
-                "cidr_regex_message": "must be a valid IP CIDR range of the form x.x.x.x/x.", 
-                "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})", 
+                "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+                "cidr_regex_message": "must be a valid IP CIDR range of the form x.x.x.x/x.",
+                "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})",
                 "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
                 "valid_ebs_size_message" : "must be a valid EBS size between 1GB and 1024GB.",
                 "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"}
-        
+
     def add_common_parameters(self, template_config):
         '''
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
         '''
         if 'ec2Key' not in self.template.parameters:
-            self.template.add_parameter(Parameter('ec2Key', 
-                    Type='String', 
-                    Default=template_config.get('ec2_key_default','default-key'), 
+            self.template.add_parameter(Parameter('ec2Key',
+                    Type='String',
+                    Default=template_config.get('ec2_key_default','default-key'),
                     Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
                     AllowedPattern="[\\x20-\\x7E]*",
-                    MinLength=1, 
-                    MaxLength=255, 
+                    MinLength=1,
+                    MaxLength=255,
                     ConstraintDescription='can only contain ASCII chacacters.'))
 
         if 'remoteAccessLocation' not in self.template.parameters:
-            self.remote_access_cidr = self.template.add_parameter(Parameter('remoteAccessLocation', 
+            self.remote_access_cidr = self.template.add_parameter(Parameter('remoteAccessLocation',
                     Description='CIDR block identifying the network address space that will be allowed to ingress into public access points within this solution',
-                    Type='String', 
-                    Default='0.0.0.0/0', 
-                    MinLength=9, 
-                    MaxLength=18, 
-                    AllowedPattern='(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})', 
+                    Type='String',
+                    Default='0.0.0.0/0',
+                    MinLength=9,
+                    MaxLength=18,
+                    AllowedPattern='(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})',
                     ConstraintDescription='must be a valid CIDR range of the form x.x.x.x/x'))
 
-    def add_region_map_value(self, 
-            region, 
-            key, 
+    def add_region_map_value(self,
+            region,
+            key,
             value):
         '''
         Method adds a key value pair to the RegionMap mapping within this CloudFormation template
-        @param region [string] AWS region name that the key value pair is associated with 
+        @param region [string] AWS region name that the key value pair is associated with
         @param key [string] name of the key to store in the RegionMap mapping for the specified Region
         @param value [string] value portion of the key value pair related to the region specified
         '''
@@ -131,9 +134,9 @@ class EnvironmentBase():
             self.template.mappings['RegionMap'][region] = {}
         self.template.mappings['RegionMap'][region][key] = value
 
-    def get_logging_bucket_policy_document(self, 
-            utility_bucket, 
-            elb_log_prefix='elb_logs', 
+    def get_logging_bucket_policy_document(self,
+            utility_bucket,
+            elb_log_prefix='elb_logs',
             cloudtrail_log_prefix='cloudtrail_logs'):
         '''
         Method builds the S3 bucket policy statements which will allow the proper AWS account ids to write ELB Access Logs to the specified bucket and prefix.
@@ -165,13 +168,13 @@ class EnvironmentBase():
         for region in elb_accts:
             self.add_region_map_value(region, 'elbAccountId', elb_accts[region])
 
-        statements = [{"Action" : ["s3:PutObject"], 
-                       "Effect" : "Allow", 
-                       "Resource" : Join('', ['arn:aws:s3:::', Ref(utility_bucket), '/', elb_log_prefix + 'AWSLogs/', Ref('AWS::AccountId'), '/*']), 
+        statements = [{"Action" : ["s3:PutObject"],
+                       "Effect" : "Allow",
+                       "Resource" : Join('', ['arn:aws:s3:::', Ref(utility_bucket), '/', elb_log_prefix + 'AWSLogs/', Ref('AWS::AccountId'), '/*']),
                        "Principal" : {"AWS": [FindInMap('RegionMap', Ref('AWS::Region'), 'elbAccountId')]}},
-                       {"Action" : ["s3:GetBucketAcl"], 
-                        "Resource" : Join('', ["arn:aws:s3:::", Ref(utility_bucket)]), 
-                        "Effect" : "Allow", 
+                       {"Action" : ["s3:GetBucketAcl"],
+                        "Resource" : Join('', ["arn:aws:s3:::", Ref(utility_bucket)]),
+                        "Effect" : "Allow",
                             "Principal": {
                                 "AWS": [
                                   "arn:aws:iam::903692715234:root",
@@ -182,9 +185,9 @@ class EnvironmentBase():
                                   "arn:aws:iam::388731089494:root",
                                   "arn:aws:iam::284668455005:root",
                                   "arn:aws:iam::113285607260:root"]}},
-                      {"Action" : ["s3:PutObject"], 
-                        "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket), '/', cloudtrail_log_prefix + "AWSLogs/", Ref("AWS::AccountId"), '/*']), 
-                        "Effect" : "Allow", 
+                      {"Action" : ["s3:PutObject"],
+                        "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket), '/', cloudtrail_log_prefix + "AWSLogs/", Ref("AWS::AccountId"), '/*']),
+                        "Effect" : "Allow",
                         "Principal": {
                             "AWS": [
                               "arn:aws:iam::903692715234:root",
@@ -196,13 +199,13 @@ class EnvironmentBase():
                               "arn:aws:iam::284668455005:root",
                               "arn:aws:iam::113285607260:root"]},
                         "Condition": {"StringEquals" : {"s3:x-amz-acl": "bucket-owner-full-control"}}}]
-        
-        self.template.add_output(Output('elbAccessLoggingBucketAndPath', 
-                Value=Join('',['arn:aws:s3:::', Ref(utility_bucket), elb_log_prefix]), 
+
+        self.template.add_output(Output('elbAccessLoggingBucketAndPath',
+                Value=Join('',['arn:aws:s3:::', Ref(utility_bucket), elb_log_prefix]),
                 Description='S3 bucket and key name prefix to use when configuring elb access logs to aggregate to S3'))
 
-        self.template.add_output(Output('cloudTrailLoggingBucketAndPath', 
-                Value=Join('',['arn:aws:s3:::', Ref(utility_bucket), cloudtrail_log_prefix]), 
+        self.template.add_output(Output('cloudTrailLoggingBucketAndPath',
+                Value=Join('',['arn:aws:s3:::', Ref(utility_bucket), cloudtrail_log_prefix]),
                 Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
 
 
@@ -211,7 +214,7 @@ class EnvironmentBase():
     def add_ami_mapping(self, ami_map_file_path='ami_cache.json'):
         '''
         Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
-        This depdns on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
+        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
         @param ami_map_file [string] path representing where to find the AMI map to ingest into this template
         '''
         with open(ami_map_file_path, 'r') as json_file:
@@ -220,32 +223,32 @@ class EnvironmentBase():
             for key in json_data[region]:
                 self.add_region_map_value(region, key, json_data[region][key])
 
-    def create_asg(self, 
-            layer_name, 
-            instance_profile, 
+    def create_asg(self,
+            layer_name,
+            instance_profile,
             instance_type=None,
             ami_name='ubuntu1404LtsAmiId',
-            ec2_key=None, 
-            user_data=None, 
-            default_instance_type=None, 
-            security_groups=None, 
-            min_size=1, 
-            max_size=1, 
+            ec2_key=None,
+            user_data=None,
+            default_instance_type=None,
+            security_groups=None,
+            min_size=1,
+            max_size=1,
             root_volume_size=None,
             root_volume_type=None,
-            include_ephemerals=True, 
+            include_ephemerals=True,
             number_ephemeral_vols=2,
             ebs_data_volumes=None, #[{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
-            custom_tags=None, 
+            custom_tags=None,
             load_balancer=None,
             instance_monitoring=False,
-            subnet_type='private', 
+            subnet_type='private',
             launch_config_metadata=None):
         '''
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
         @param instance_profile [Troposphere.iam.InstanceProfile] IAM Instance Profile object to be applied to instances launched within this Auto Scaling group
-        @param instance_type [Troposphere.Parameter | string] Reference to the AWS EC2 Instance Type to deploy.  
+        @param instance_type [Troposphere.Parameter | string] Reference to the AWS EC2 Instance Type to deploy.
         @param ami_name [string] Name of the AMI to deploy as defined within the RegionMap lookup for the deployed region
         @param ec2_key [Troposphere.Parameter | Troposphere.Ref(Troposphere.Parameter)] Input parameter used to gather the name of the EC2 key to use to secure access to instances launched within this Auto Scaling group
         @param user_data [string[]] Array of strings (lines of bash script) to be set as the user data as a bootstrap script for instances launched within this Auto Scaling group
@@ -283,19 +286,19 @@ class EnvironmentBase():
             else:
                 sg_list.append(Ref(sg))
 
-        launch_config_obj = autoscaling.LaunchConfiguration(layer_name + 'LaunchConfiguration', 
-                IamInstanceProfile=Ref(instance_profile), 
-                ImageId=FindInMap('RegionMap', Ref('AWS::Region'), ami_name), 
-                InstanceType=instance_type, 
-                SecurityGroups=sg_list, 
-                KeyName=ec2_key, 
+        launch_config_obj = autoscaling.LaunchConfiguration(layer_name + 'LaunchConfiguration',
+                IamInstanceProfile=Ref(instance_profile),
+                ImageId=FindInMap('RegionMap', Ref('AWS::Region'), ami_name),
+                InstanceType=instance_type,
+                SecurityGroups=sg_list,
+                KeyName=ec2_key,
                 InstanceMonitoring=instance_monitoring)
 
-        if user_data != None: 
-            launch_config_obj.UserData=user_data 
+        if user_data != None:
+            launch_config_obj.UserData=user_data
 
         block_devices = []
-        if root_volume_type != None and root_volume_size != None: 
+        if root_volume_type != None and root_volume_size != None:
             ebs_device = ec2.EBSBlockDevice(
                 VolumeSize=root_volume_size)
 
@@ -303,26 +306,26 @@ class EnvironmentBase():
                 ebs_device.VolumeType=root_volume_type
 
             block_devices.append(ec2.BlockDeviceMapping(
-                    DeviceName='/dev/sda1', 
+                    DeviceName='/dev/sda1',
                     Ebs=ebs_device))
-        
+
         device_names = ['/dev/sd%s' % c for c in 'bcdefghijklmnopqrstuvwxyz']
 
-        if ebs_data_volumes != None and len(ebs_data_volumes) > 0: 
+        if ebs_data_volumes != None and len(ebs_data_volumes) > 0:
             for ebs_volume in ebs_data_volumes:
                 device_name = device_names.pop()
                 ebs_block_device = ec2.EBSBlockDevice(
-                                DeleteOnTermination=ebs_volume.get('delete_on_termination', True), 
-                                VolumeSize=ebs_volume.get('size', '100'), 
+                                DeleteOnTermination=ebs_volume.get('delete_on_termination', True),
+                                VolumeSize=ebs_volume.get('size', '100'),
                                 VolumeType=ebs_volume.get('type', 'gp2'))
-                
-                if 'iops' in ebs_volume: 
+
+                if 'iops' in ebs_volume:
                     ebs_block_device.Iops = int(ebs_volume.get('iops'))
                 if 'snapshot_id' in ebs_volume:
                     ebs_block_device.SnapshotId = ebs_volume.get('snapshot_id')
 
                 block_devices.append(ec2.BlockDeviceMapping(
-                        DeviceName = device_name, 
+                        DeviceName = device_name,
                         Ebs = ebs_block_device))
 
         if include_ephemerals and number_ephemeral_vols > 0:
@@ -330,29 +333,29 @@ class EnvironmentBase():
             for x in range(0, number_ephemeral_vols):
                 device_name = device_names.pop()
                 block_devices.append(ec2.BlockDeviceMapping(
-                            DeviceName= device_name, 
+                            DeviceName= device_name,
                             VirtualName= 'ephemeral' + str(x)))
 
         if len(block_devices) > 0:
             launch_config_obj.BlockDeviceMappings = block_devices
 
-        if launch_config_metadata != None: 
+        if launch_config_metadata != None:
             launch_config.Metadata = launch_config_metadata
 
         launch_config = self.template.add_resource(launch_config_obj)
 
-        auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup', 
+        auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
                 AvailabilityZones=self.azs,
-                LaunchConfigurationName=Ref(launch_config), 
-                MaxSize=max_size, 
-                MinSize=min_size, 
-                DesiredCapacity=min(min_size, max_size), 
+                LaunchConfigurationName=Ref(launch_config),
+                MaxSize=max_size,
+                MinSize=min_size,
+                DesiredCapacity=min(min_size, max_size),
                 VPCZoneIdentifier=self.subnets[subnet_type.lower()],
                 TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour' ,'Default'])
 
         lb_tmp = []
 
-        if load_balancer is not None: 
+        if load_balancer is not None:
             try:
                 if type(load_balancer) is dict:
                     for lb in load_balancer:
@@ -369,7 +372,7 @@ class EnvironmentBase():
 
         if lb_tmp is not None and len(lb_tmp) > 0:
             auto_scaling_obj.LoadBalancerNames = lb_tmp
-        
+
         if custom_tags != None and len(custom_tags) > 0:
             if type(custom_tags) != list:
                 custom_tags = [custom_tags]
@@ -380,10 +383,10 @@ class EnvironmentBase():
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.template.add_resource(auto_scaling_obj)
 
-    def __init_region_map(self, 
+    def __init_region_map(self,
             region_list):
         '''
-        Internal helper method used to check to ensure mapping dictionaries are present 
+        Internal helper method used to check to ensure mapping dictionaries are present
         @param region_list [list(str)] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
         '''
         if 'RegionMap' not in self.template.mappings:
@@ -392,13 +395,13 @@ class EnvironmentBase():
             if region_name not in self.template.mappings['RegionMap']:
                 self.template.mappings['RegionMap'][region_name] = {}
 
-    def create_reciprocal_sg(self, 
-            source_group, 
+    def create_reciprocal_sg(self,
+            source_group,
             source_group_name,
             destination_group,
-            destination_group_name, 
-            from_port, 
-            to_port=None, 
+            destination_group_name,
+            from_port,
+            to_port=None,
             ip_protocol='tcp'):
         '''
         Helper method creates reciprocal ingress and egress rules given two existing security groups and a set of ports
@@ -419,7 +422,7 @@ class EnvironmentBase():
         if from_port == to_port:
             if isinstance(from_port, str):
                 label_suffix = ip_protocol.capitalize() + from_port
-            else: 
+            else:
                 label_suffix = ip_protocol.capitalize() + 'Mapped'
         else:
             if isinstance(from_port, str) and isinstance(to_port, str):
@@ -428,17 +431,17 @@ class EnvironmentBase():
                 label_suffix = ip_protocol.capitalize() + 'MappedPorts'
 
         self.template.add_resource(ec2.SecurityGroupIngress(destination_group_name + 'Ingress' + source_group_name + label_suffix,
-            SourceSecurityGroupId=Ref(source_group), 
-            GroupId=Ref(destination_group), 
-            FromPort=from_port, 
-            ToPort=to_port, 
+            SourceSecurityGroupId=Ref(source_group),
+            GroupId=Ref(destination_group),
+            FromPort=from_port,
+            ToPort=to_port,
             IpProtocol=ip_protocol))
 
-        self.template.add_resource(ec2.SecurityGroupEgress(source_group_name + 'Egress' + destination_group_name + label_suffix, 
-            DestinationSecurityGroupId=Ref(destination_group), 
-            GroupId=Ref(source_group), 
-            FromPort=from_port, 
-            ToPort=to_port, 
+        self.template.add_resource(ec2.SecurityGroupEgress(source_group_name + 'Egress' + destination_group_name + label_suffix,
+            DestinationSecurityGroupId=Ref(destination_group),
+            GroupId=Ref(source_group),
+            FromPort=from_port,
+            ToPort=to_port,
             IpProtocol=ip_protocol))
 
     def to_json(self):
@@ -446,19 +449,19 @@ class EnvironmentBase():
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
         '''
         if 'dateGenerated' not in self.template.outputs:
-            self.template.add_output(Output('dateGenerated', 
-                Value=str(datetime.utcnow()), 
+            self.template.add_output(Output('dateGenerated',
+                Value=str(datetime.utcnow()),
                 Description='UTC datetime representation of when this template was generated'))
         if 'templateValidationHash' not in self.template.outputs:
             m = hashlib.sha256()
             m.update(EnvironmentBase.__validation_formatter(self.template))
-            self.template.add_output(Output('templateValidationHash', 
-                Value=m.hexdigest(), 
+            self.template.add_output(Output('templateValidationHash',
+                Value=m.hexdigest(),
                 Description='Hash of this template that can be used as a simple means of validating whether a template has been changed since it was generated.'))
         return self.template.to_json()
 
     @staticmethod
-    def validate_template_file(cloudformation_template_path, 
+    def validate_template_file(cloudformation_template_path,
             validation_output_name='templateValidationHash'):
         '''
         Method takes a file path, reads it and validates the template via the SHA256 checksum that is to be located within the Outputs collection of the cloudFormation template
@@ -470,9 +473,9 @@ class EnvironmentBase():
         return EnvironmentBase.validate_template_contents(cf_template_contents, validation_output_name)
 
     @staticmethod
-    def build_bootstrap(bootstrap_files, 
-            variable_declarations=None, 
-            cleanup_commands=None, 
+    def build_bootstrap(bootstrap_files,
+            variable_declarations=None,
+            cleanup_commands=None,
             prepend_line='#!/bin/bash'):
         '''
         Method encapsulates process of building out the bootstrap given a set of variables and a bootstrap file to source from
@@ -485,7 +488,7 @@ class EnvironmentBase():
             ret_val = [prepend_line]
         else:
             ret_val = []
-            
+
         if variable_declarations != None:
             for line in variable_declarations:
                 ret_val.append(line)
@@ -502,11 +505,11 @@ class EnvironmentBase():
         '''
         Method encpsulates reading a file into a list while removing newline characters
         @param file_name [string] path to file to read
-        ''' 
+        '''
         ret_val = []
         with open(file_name) as f:
             content = f.readlines()
-        for line in content: 
+        for line in content:
             if not line.startswith('#~'):
                 ret_val.append(line.replace("\n", ""))
         return ret_val
@@ -524,10 +527,10 @@ class EnvironmentBase():
         return json.dumps(json.loads(json_string), separators=(',',':'))
 
     @staticmethod
-    def validate_template_contents(cloudformation_template_string, 
+    def validate_template_contents(cloudformation_template_string,
             validation_output_name='templateValidationHash'):
         '''
-        Method takes the contents of a CloudFormation template and validates the SHA256 hash  
+        Method takes the contents of a CloudFormation template and validates the SHA256 hash
         @param cloudformation_template_string [string] string contents of the CloudFormation template to validate
         @param validation_output_name [string] name of the CloudFormation output containing the SHA256 hash to be validated
         '''
@@ -548,44 +551,44 @@ class EnvironmentBase():
                         raise RuntimeError('Template hash is not valid')
                 else:
                     print 'Cannot validate this template as it appears it is corrupt.  The [' + validation_output_name + '] output does not contain a value property.'
-            else: 
+            else:
                 print 'Cannot validate this template as it does not contain the specified output [' + validation_output_name + '] - check to make sure this is the right name and try again.'
         else:
             print 'This template does not contain a collection of outputs. Please check the input template and try again.'
 
 
-    def create_instance_profile(self, 
-            layer_name, 
+    def create_instance_profile(self,
+            layer_name,
             iam_policies=None):
         '''
         Helper method creates an IAM Role and Instance Profile for the optoinally specified IAM policies
         @param layer_name [string] friendly name for the Role and Instance Profile used for naming and path organization
         @param iam_policies [Troposphere.iam.Policy[]] array of IAM Policies to be associated with the Role and Instance Profile created
         '''
-        iam_role_obj = iam.Role(layer_name + 'IAMRole', 
+        iam_role_obj = iam.Role(layer_name + 'IAMRole',
                 AssumeRolePolicyDocument={
                     'Statement': [{
-                        'Effect': 'Allow', 
-                        'Principal': {'Service': ['ec2.amazonaws.com']}, 
+                        'Effect': 'Allow',
+                        'Principal': {'Service': ['ec2.amazonaws.com']},
                         'Action': ['sts:AssumeRole']
-                    }]}, 
+                    }]},
                     Path=Join('',['/' + self.globals.get('environment_name', 'environmentbase') + '/', layer_name , '/']))
 
-        if iam_policies != None: 
+        if iam_policies != None:
             iam_role_obj.Policies = iam_policies
 
         iam_role = self.template.add_resource(iam_role_obj)
 
-        return self.template.add_resource(iam.InstanceProfile(layer_name + 'InstancePolicy', 
-                Path='/' + self.globals.get('environment_name', 'environmentbase') + '/', 
+        return self.template.add_resource(iam.InstanceProfile(layer_name + 'InstancePolicy',
+                Path='/' + self.globals.get('environment_name', 'environmentbase') + '/',
                 Roles=[Ref(iam_role)]))
 
-    def add_child_template(self, 
-                name, 
-                template_wrapper, 
-                s3_bucket=None, 
-                s3_key_prefix=None, 
-                s3_canned_acl=None, 
+    def add_child_template(self,
+                name,
+                template_wrapper,
+                s3_bucket=None,
+                s3_key_prefix=None,
+                s3_canned_acl=None,
                 depends_on=None):
         '''
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
@@ -605,14 +608,14 @@ class EnvironmentBase():
             s3_key_prefix = self.template_args.get('s3_key_name_prefix', '')
         if s3_key_prefix == None:
             s3_key_name = '/' +  name + '.' + key_serial + '.template'
-        else: 
+        else:
             s3_key_name = s3_key_prefix + '/' + name + '.' + key_serial + '.template'
 
         s3_canned_acl = self.template_args.get('s3_canned_acl', 'public-read')
 
         if self.template_args.get('mock_upload',False):
             stack_url = 'http://www.dualspark.com'
-        else:    
+        else:
             conn = boto.connect_s3()
             bucket = conn.get_bucket(s3_bucket)
             key = Key(bucket)
@@ -634,7 +637,7 @@ class EnvironmentBase():
                 stack_params[parameter] = self.manual_parameter_bindings[parameter]
             elif parameter.startswith('availabilityZone'):
                 stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone',''), 'AvailabilityZone')
-            elif parameter in self.template.parameters.keys(): 
+            elif parameter in self.template.parameters.keys():
                 stack_params[parameter] = Ref(self.template.parameters.get(parameter))
             elif parameter in self.template.resources.keys():
                 stack_params[parameter] = Ref(self.template.resources.get(parameter))
@@ -645,7 +648,7 @@ class EnvironmentBase():
         stack_name = name + 'Stack'
 
         stack_obj = cf.Stack(stack_name,
-                TemplateURL=stack_url, 
+                TemplateURL=stack_url,
                 Parameters=stack_params,
                 TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'))
 

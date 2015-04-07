@@ -304,6 +304,7 @@ class EnvironmentBase():
                 InstanceType=instance_type,
                 SecurityGroups=sg_list,
                 KeyName=ec2_key,
+                Metadata=(launch_config_metadata or None),
                 InstanceMonitoring=instance_monitoring)
 
         if user_data != None:
@@ -350,9 +351,6 @@ class EnvironmentBase():
 
         if len(block_devices) > 0:
             launch_config_obj.BlockDeviceMappings = block_devices
-
-        if launch_config_metadata != None:
-            launch_config.Metadata = launch_config_metadata
 
         launch_config = self.template.add_resource(launch_config_obj)
 

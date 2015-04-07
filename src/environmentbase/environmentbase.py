@@ -82,9 +82,21 @@ class EnvironmentBase():
 
     @staticmethod
     def __build_common_strings():
-        return {"valid_instance_types": ["t1.micro","m3.medium","m3.large","m3.xlarge","m3.2xlarge","m1.small","m1.medium","m1.large","m1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge","c1.medium","c1.xlarge","cc2.xlarge","g2.2xlarge","cg1.4xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","cr1.8xlarge","i2.xlarge","i2.2xlarge","i2.4xlarge","hs1.8xlarge","hs1.4xlarge"],
+        return { #"valid_instance_types": ["t1.micro","m3.medium","m3.large","m3.xlarge","m3.2xlarge","m1.small","m1.medium","m1.large","m1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge","c1.medium","c1.xlarge","cc2.xlarge","g2.2xlarge","cg1.4xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","cr1.8xlarge","i2.xlarge","i2.2xlarge","i2.4xlarge","hs1.8xlarge","hs1.4xlarge"],
+                "valid_instance_types": ["t2.micro", "t2.small", "t2.medium",
+                                         "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
+                                         "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge",
+                                         "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
+                                         "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge",
+                                         "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
+                                         "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
+                                         "g2.2xlarge"],
                 "valid_instance_type_message": "must be a valid EC2 instance type.",
-                "valid_db_instance_types" : ["db.t1.micro","db.m1.small","db.m1.medium","db.m1.large","db.m1.xlarge","db.m2.xlarge","db.m2.2xlarge","db.m2.4xlarge","db.cr1.8xlarge"],
+                # "valid_db_instance_types" : ["db.t1.micro","db.m1.small","db.m1.medium","db.m1.large","db.m1.xlarge","db.m2.xlarge","db.m2.2xlarge","db.m2.4xlarge","db.cr1.8xlarge"],
+                "valid_db_instance_types": ["db.t1.micro", "db.m1.small",
+                                            "db.m3.medium", "db.m3.large", "db.m3.xlarge", "db.m3.2xlarge",
+                                            "db.r3.large", "db.r3.xlarge", "db.r3.2xlarge", "db.r3.4xlarge", "db.r3.8xlarge",
+                                            "db.t2.micro", "db.t2.small", "db.t2.medium"],
                 "valid_db_instance_type_message": "must be a valid RDS DB instance type.",
                 "boolean_options": ["True", "False"],
                 "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",

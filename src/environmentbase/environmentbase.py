@@ -255,7 +255,9 @@ class EnvironmentBase():
             load_balancer=None,
             instance_monitoring=False,
             subnet_type='private',
-            launch_config_metadata=None):
+            launch_config_metadata=None,
+            creation_policy=None,
+            update_policy=None):
         '''
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
@@ -361,7 +363,7 @@ class EnvironmentBase():
                 MinSize=min_size,
                 DesiredCapacity=min(min_size, max_size),
                 VPCZoneIdentifier=self.subnets[subnet_type.lower()],
-                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour' ,'Default'])
+                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'])
 
         lb_tmp = []
 
@@ -382,6 +384,12 @@ class EnvironmentBase():
 
         if lb_tmp is not None and len(lb_tmp) > 0:
             auto_scaling_obj.LoadBalancerNames = lb_tmp
+
+        if creation_policy is not None:
+            auto_scaling_obj.resource['CreationPolicy'] = creation_policy
+
+        if update_policy is not None:
+            auto_scaling_obj.resource['UpdatePolicy'] = update_policy
 
         if custom_tags != None and len(custom_tags) > 0:
             if type(custom_tags) != list:

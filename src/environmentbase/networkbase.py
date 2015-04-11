@@ -226,6 +226,7 @@ class NetworkBase(EnvironmentBase):
                 ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
                 KeyName=Ref(self.template.parameters['ec2Key']),
                 InstanceType=nat_instance_type,
+                Tags=[ec2.Tag('Name','NAT')],
                 NetworkInterfaces=[ec2.NetworkInterfaceProperty(
                         AssociatePublicIpAddress=True,
                         DeleteOnTermination=True,

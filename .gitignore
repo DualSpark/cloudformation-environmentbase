@@ -6,3 +6,5 @@
 /doc/generated/*
 /runpy
 /build
+.idea/
+src/cfn_environment_base.egg-info/

@@ -375,7 +375,7 @@ class EnvironmentBase():
                 elif type(load_balancer) is not Ref:
                     for lb in load_balancer:
                         lb_tmp.append(Ref(lb))
-                elif load_balancer is None:
+                else:
                     lb_tmp.append(load_balancer)
             except TypeError:
                 lb_tmp.append(Ref(load_balancer))

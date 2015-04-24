@@ -257,7 +257,8 @@ class EnvironmentBase():
             subnet_type='private',
             launch_config_metadata=None,
             creation_policy=None,
-            update_policy=None):
+            update_policy=None,
+            depends_on=None):
         '''
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
@@ -356,7 +357,18 @@ class EnvironmentBase():
 
         launch_config = self.template.add_resource(launch_config_obj)
 
-        auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
+        if depends_on:
+            auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
+                AvailabilityZones=self.azs,
+                LaunchConfigurationName=Ref(launch_config),
+                MaxSize=max_size,
+                MinSize=min_size,
+                DesiredCapacity=min(min_size, max_size),
+                VPCZoneIdentifier=self.subnets[subnet_type.lower()],
+                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
+                DependsOn=depends_on)
+        else:
+            auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
                 AvailabilityZones=self.azs,
                 LaunchConfigurationName=Ref(launch_config),
                 MaxSize=max_size,

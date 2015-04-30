@@ -677,13 +677,19 @@ class EnvironmentBase():
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
 
-        stack_obj = cf.Stack(stack_name,
+        # DependsOn needs to go in the constructor of the object
+        if depends_on:
+            stack_obj = cf.Stack(stack_name,
+                TemplateURL=stack_url,
+                Parameters=stack_params,
+                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'),
+                DependsOn=depends_on)
+
+        else:
+            stack_obj = cf.Stack(stack_name,
                 TemplateURL=stack_url,
                 Parameters=stack_params,
                 TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'))
-
-        if depends_on != None:
-            stack_obj.DependsOn = depends_on
 
         return self.template.add_resource(stack_obj)
 

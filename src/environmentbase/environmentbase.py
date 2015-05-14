@@ -14,7 +14,7 @@ import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
 
-class EnvironmentBase():
+class EnvironmentBase(object):
     '''
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
     '''

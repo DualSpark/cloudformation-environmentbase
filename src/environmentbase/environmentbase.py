@@ -1,6 +1,7 @@
 import os
 import os.path
-from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
+from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
+import Template
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
 import troposphere.autoscaling as autoscaling
@@ -82,7 +83,7 @@ class EnvironmentBase(object):
 
     @staticmethod
     def __build_common_strings():
-        return { #"valid_instance_types": ["t1.micro","m3.medium","m3.large","m3.xlarge","m3.2xlarge","m1.small","m1.medium","m1.large","m1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge","c1.medium","c1.xlarge","cc2.xlarge","g2.2xlarge","cg1.4xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","cr1.8xlarge","i2.xlarge","i2.2xlarge","i2.4xlarge","hs1.8xlarge","hs1.4xlarge"],
+        return {
                 "valid_instance_types": ["t2.micro", "t2.small", "t2.medium",
                                          "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
                                          "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge",
@@ -92,7 +93,6 @@ class EnvironmentBase(object):
                                          "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
                                          "g2.2xlarge"],
                 "valid_instance_type_message": "must be a valid EC2 instance type.",
-                # "valid_db_instance_types" : ["db.t1.micro","db.m1.small","db.m1.medium","db.m1.large","db.m1.xlarge","db.m2.xlarge","db.m2.2xlarge","db.m2.4xlarge","db.cr1.8xlarge"],
                 "valid_db_instance_types": ["db.t1.micro", "db.m1.small",
                                             "db.m3.medium", "db.m3.large", "db.m3.xlarge", "db.m3.2xlarge",
                                             "db.r3.large", "db.r3.xlarge", "db.r3.2xlarge", "db.r3.4xlarge", "db.r3.8xlarge",
@@ -104,32 +104,32 @@ class EnvironmentBase(object):
                 "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})",
                 "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
                 "valid_ebs_size_message" : "must be a valid EBS size between 1GB and 1024GB.",
-                "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"}
+                "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]",
+                "ec2_key": "[\\x20-\\x7E]*",
+                "ec2_key_message": "can only contain ASCII characters."}
 
     def add_common_parameters(self, template_config):
         '''
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
         '''
-        if 'ec2Key' not in self.template.parameters:
-            self.template.add_parameter(Parameter('ec2Key',
-                    Type='String',
-                    Default=template_config.get('ec2_key_default','default-key'),
-                    Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
-                    AllowedPattern="[\\x20-\\x7E]*",
-                    MinLength=1,
-                    MaxLength=255,
-                    ConstraintDescription='can only contain ASCII chacacters.'))
+        self.template.add_parameter_idempotent(Parameter('ec2Key',
+                Type='String',
+                Default=template_config.get('ec2_key_default','default-key'),
+                Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
+                AllowedPattern=self.strings.get('ec2_key'),
+                MinLength=1,
+                MaxLength=255,
+                ConstraintDescription=self.strings.get('ec2_key_message')))
 
-        if 'remoteAccessLocation' not in self.template.parameters:
-            self.remote_access_cidr = self.template.add_parameter(Parameter('remoteAccessLocation',
-                    Description='CIDR block identifying the network address space that will be allowed to ingress into public access points within this solution',
-                    Type='String',
-                    Default='0.0.0.0/0',
-                    MinLength=9,
-                    MaxLength=18,
-                    AllowedPattern='(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})',
-                    ConstraintDescription='must be a valid CIDR range of the form x.x.x.x/x'))
+        self.remote_access_cidr = self.template.add_parameter(Parameter('remoteAccessLocation',
+                Description='CIDR block identifying the network address space that will be allowed to ingress into public access points within this solution',
+                Type='String',
+                Default='0.0.0.0/0',
+                MinLength=9,
+                MaxLength=18,
+                AllowedPattern=self.strings.get('cidr_regex'),
+                ConstraintDescription=self.strings.get('cidr_regex_message')))
 
     def add_region_map_value(self,
             region,
@@ -165,7 +165,6 @@ class EnvironmentBase(object):
             cloudtrail_log_prefix = cloudtrail_log_prefix + '/'
         else:
             cloudtrail_log_prefix = ''
-
 
         elb_accts = {'us-west-1': '027434742980',
                      'us-west-2': '797873946194',
@@ -219,7 +218,6 @@ class EnvironmentBase(object):
         self.template.add_output(Output('cloudTrailLoggingBucketAndPath',
                 Value=Join('',['arn:aws:s3:::', Ref(utility_bucket), cloudtrail_log_prefix]),
                 Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
-
 
         return {"Statement":statements}
 
@@ -478,29 +476,7 @@ class EnvironmentBase(object):
         '''
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
         '''
-        if 'dateGenerated' not in self.template.outputs:
-            self.template.add_output(Output('dateGenerated',
-                Value=str(datetime.utcnow()),
-                Description='UTC datetime representation of when this template was generated'))
-        if 'templateValidationHash' not in self.template.outputs:
-            m = hashlib.sha256()
-            m.update(EnvironmentBase.__validation_formatter(self.template))
-            self.template.add_output(Output('templateValidationHash',
-                Value=m.hexdigest(),
-                Description='Hash of this template that can be used as a simple means of validating whether a template has been changed since it was generated.'))
-        return self.template.to_json()
-
-    @staticmethod
-    def validate_template_file(cloudformation_template_path,
-            validation_output_name='templateValidationHash'):
-        '''
-        Method takes a file path, reads it and validates the template via the SHA256 checksum that is to be located within the Outputs collection of the cloudFormation template
-        @param cloudformation_template_path [string] path from which to read the cloudformation template
-        @param validation_output_name [string] name of the output to use to gather the SHA256 hash to validate
-        '''
-        with open(cloudformation_template_path, 'r') as f:
-            cf_template_contents = f.read()
-        return EnvironmentBase.validate_template_contents(cf_template_contents, validation_output_name)
+        return self.template.to_json_template()
 
     @staticmethod
     def build_bootstrap(bootstrap_files,
@@ -544,49 +520,6 @@ class EnvironmentBase(object):
                 ret_val.append(line.replace("\n", ""))
         return ret_val
 
-    @staticmethod
-    def __validation_formatter(cf_template):
-        '''
-        Validation formatter helps to ensure consistent formatting for hash validation workflow
-        @param json_string [string | Troposphere.Template | dict] JSON-able data to be formatted for validation
-        '''
-        if type(cf_template) == Template:
-            json_string = json.dumps(json.loads(cf_template.to_json()))
-        elif type(cf_template) == dict:
-            json_string = json.dumps(cf_template)
-        return json.dumps(json.loads(json_string), separators=(',',':'))
-
-    @staticmethod
-    def validate_template_contents(cloudformation_template_string,
-            validation_output_name='templateValidationHash'):
-        '''
-        Method takes the contents of a CloudFormation template and validates the SHA256 hash
-        @param cloudformation_template_string [string] string contents of the CloudFormation template to validate
-        @param validation_output_name [string] name of the CloudFormation output containing the SHA256 hash to be validated
-        '''
-        template_object = json.loads(cloudformation_template_string)
-        if 'Outputs' in template_object:
-            if validation_output_name in template_object['Outputs']:
-                if 'Value' in template_object['Outputs'][validation_output_name]:
-                    hash_to_validate = template_object['Outputs'][validation_output_name]['Value']
-                    del template_object['Outputs'][validation_output_name]
-                    m = hashlib.sha256()
-                    m.update(EnvironmentBase.__validation_formatter(template_object))
-                    template_hash = m.hexdigest()
-                    print '* hash to validate: ' + hash_to_validate
-                    print '*  calculated hash: ' + template_hash
-                    if hash_to_validate == template_hash:
-                        print 'Template is valid'
-                    else:
-                        raise RuntimeError('Template hash is not valid')
-                else:
-                    print 'Cannot validate this template as it appears it is corrupt.  The [' + validation_output_name + '] output does not contain a value property.'
-            else:
-                print 'Cannot validate this template as it does not contain the specified output [' + validation_output_name + '] - check to make sure this is the right name and try again.'
-        else:
-            print 'This template does not contain a collection of outputs. Please check the input template and try again.'
-
-
     def create_instance_profile(self,
             layer_name,
             iam_policies=None):
@@ -629,38 +562,21 @@ class EnvironmentBase(object):
         @param s3_key_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
         @param s3_canned_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
         '''
-        key_serial = str(int(time.time()))
-        if s3_bucket == None:
-            s3_bucket = self.template_args.get('s3_bucket')
-        if s3_bucket == None:
-            raise RuntimeError('Cannot upload template to s3 as a s3 bucket was not specified nor set as a default')
+        template = template_wrapper.template
+
         if s3_key_prefix == None:
             s3_key_prefix = self.template_args.get('s3_key_name_prefix', '')
-        if s3_key_prefix == None:
-            s3_key_name = '/' +  name + '.' + key_serial + '.template'
-        else:
-            s3_key_name = s3_key_prefix + '/' + name + '.' + key_serial + '.template'
 
-        s3_canned_acl = self.template_args.get('s3_canned_acl', 'public-read')
-
-        if self.template_args.get('mock_upload',False):
-            stack_url = 'http://www.dualspark.com'
-        else:
-            conn = boto.connect_s3()
-            bucket = conn.get_bucket(s3_bucket)
-            key = Key(bucket)
-
-            key.key = s3_key_name
-            key.set_contents_from_string(template_wrapper.to_json())
-            key.set_acl(s3_canned_acl)
-
-            stack_url = key.generate_url(expires_in=0, query_auth=False)
-            stack_url = stack_url.split('?')[0]
+        stack_url = template.upload_template(
+                     name,
+                     s3_bucket,
+                     s3_key_prefix=s3_key_prefix,
+                     s3_canned_acl=self.template_args.get('s3_canned_acl', 'public-read'),
+                     mock_upload=self.template_args.get('mock_upload',False))
 
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []
 
-        template = template_wrapper.template
         stack_params = {}
         for parameter in template.parameters.keys():
             if parameter in self.manual_parameter_bindings:

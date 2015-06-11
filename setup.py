@@ -18,7 +18,7 @@ def read(*names, **kwargs):
 
 setup(
     name="cfn-environment-base",
-    version="0.3.4",
+    version="0.4.0",
     license="ISC",
     description="Base environment for Troposphere based CFN project environments",
     long_description="%s" % read("README.md"),
@@ -51,17 +51,18 @@ setup(
         # eg: "keyword1", "keyword2", "keyword3",
     ],
     install_requires=[
-        "troposphere>=0.6.0",
-        "boto>=2.32.0",
+        "troposphere>=1.0.0",
+        "boto>=2.38.0",
         "ipcalc==1.1.2",
-        "docopt==0.6.1",
+        "docopt==0.6.2"
     ],
     extras_require={
         # eg: 'rst': ["docutils>=0.11"],
     },
     entry_points={
         "console_scripts": [
-            "environmentbase = environmentbase.environmentbase:main"
+            "environment-util = environment_util.environment_util:main",
+            "awsbootstrap = environmentbase.accountbootstrap:main"
         ]
     }
 

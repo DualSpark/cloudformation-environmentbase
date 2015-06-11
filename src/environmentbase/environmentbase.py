@@ -306,6 +306,7 @@ class EnvironmentBase(object):
                 SecurityGroups=sg_list,
                 KeyName=ec2_key,
                 Metadata=(launch_config_metadata or None),
+                AssociatePublicIpAddress=True if subnet_type == 'public' else False,
                 InstanceMonitoring=instance_monitoring)
 
         if user_data != None:

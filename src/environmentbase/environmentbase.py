@@ -326,7 +326,7 @@ class EnvironmentBase(object):
                     DeviceName='/dev/sda1',
                     Ebs=ebs_device))
 
-        device_names = ['/dev/sd%s' % c for c in 'bcdefghijklmnopqrstuvwxyz']
+        device_names = ['/dev/sd%s' % c for c in 'cdefghijklmnopqrstuvwxyz']
 
         if ebs_data_volumes != None and len(ebs_data_volumes) > 0:
             for ebs_volume in ebs_data_volumes:

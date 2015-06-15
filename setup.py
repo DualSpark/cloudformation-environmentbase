@@ -46,6 +46,7 @@ setup(
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Utilities",
+        "Topic :: Software Development :: Code Generators"
     ],
     keywords=[
         # eg: "keyword1", "keyword2", "keyword3",

@@ -19,7 +19,8 @@ class EnvironmentBase(object):
     '''
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
     '''
-    def __init__(self, arg_dict):
+    def __init__(self,
+                 arg_dict):
         '''
         Init method for environment base creates all common objects for a given environment within the CloudFormation template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and CloudTrail log storage
         @param arg_dict [dict] keyword arguments to handle setting config-level parameters and arguments within this class
@@ -48,7 +49,10 @@ class EnvironmentBase(object):
         ami_map_file = self.template_args.get('ami_map_file', file_path)
         self.add_ami_mapping(ami_map_file_path=ami_map_file)
 
-    def register_elb_to_dns(self, elb, tier_name, tier_args):
+    def register_elb_to_dns(self,
+                            elb,
+                            tier_name,
+                            tier_args):
         '''
         Method handles the process of uniformly creating CNAME records for ELBs in a given tier
         @param elb [Troposphere.elasticloadbalancing.LoadBalancer]
@@ -108,7 +112,8 @@ class EnvironmentBase(object):
                 "ec2_key": "[\\x20-\\x7E]*",
                 "ec2_key_message": "can only contain ASCII characters."}
 
-    def add_common_parameters(self, template_config):
+    def add_common_parameters(self,
+                              template_config):
         '''
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
@@ -132,9 +137,9 @@ class EnvironmentBase(object):
                 ConstraintDescription=self.strings.get('cidr_regex_message')))
 
     def add_region_map_value(self,
-            region,
-            key,
-            value):
+                             region,
+                             key,
+                             value):
         '''
         Method adds a key value pair to the RegionMap mapping within this CloudFormation template
         @param region [string] AWS region name that the key value pair is associated with
@@ -147,9 +152,9 @@ class EnvironmentBase(object):
         self.template.mappings['RegionMap'][region][key] = value
 
     def get_logging_bucket_policy_document(self,
-            utility_bucket,
-            elb_log_prefix='elb_logs',
-            cloudtrail_log_prefix='cloudtrail_logs'):
+                                           utility_bucket,
+                                           elb_log_prefix='elb_logs',
+                                           cloudtrail_log_prefix='cloudtrail_logs'):
         '''
         Method builds the S3 bucket policy statements which will allow the proper AWS account ids to write ELB Access Logs to the specified bucket and prefix.
         Per documentation located at: http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/configure-s3-bucket.html
@@ -221,7 +226,8 @@ class EnvironmentBase(object):
 
         return {"Statement":statements}
 
-    def add_ami_mapping(self, ami_map_file_path='ami_cache.json'):
+    def add_ami_mapping(self,
+                        ami_map_file_path='ami_cache.json'):
         '''
         Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
         This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
@@ -234,29 +240,29 @@ class EnvironmentBase(object):
                 self.add_region_map_value(region, key, json_data[region][key])
 
     def create_asg(self,
-            layer_name,
-            instance_profile,
-            instance_type=None,
-            ami_name='ubuntu1404LtsAmiId',
-            ec2_key=None,
-            user_data=None,
-            default_instance_type=None,
-            security_groups=None,
-            min_size=1,
-            max_size=1,
-            root_volume_size=None,
-            root_volume_type=None,
-            include_ephemerals=True,
-            number_ephemeral_vols=2,
-            ebs_data_volumes=None, #[{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
-            custom_tags=None,
-            load_balancer=None,
-            instance_monitoring=False,
-            subnet_type='private',
-            launch_config_metadata=None,
-            creation_policy=None,
-            update_policy=None,
-            depends_on=None):
+                   layer_name,
+                   instance_profile,
+                   instance_type=None,
+                   ami_name='ubuntu1404LtsAmiId',
+                   ec2_key=None,
+                   user_data=None,
+                   default_instance_type=None,
+                   security_groups=None,
+                   min_size=1,
+                   max_size=1,
+                   root_volume_size=None,
+                   root_volume_type=None,
+                   include_ephemerals=True,
+                   number_ephemeral_vols=2,
+                   ebs_data_volumes=None, #[{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
+                   custom_tags=None,
+                   load_balancer=None,
+                   instance_monitoring=False,
+                   subnet_type='private',
+                   launch_config_metadata=None,
+                   creation_policy=None,
+                   update_policy=None,
+                   depends_on=None):
         '''
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
@@ -413,7 +419,7 @@ class EnvironmentBase(object):
         return self.template.add_resource(auto_scaling_obj)
 
     def __init_region_map(self,
-            region_list):
+                          region_list):
         '''
         Internal helper method used to check to ensure mapping dictionaries are present
         @param region_list [list(str)] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
@@ -425,13 +431,13 @@ class EnvironmentBase(object):
                 self.template.mappings['RegionMap'][region_name] = {}
 
     def create_reciprocal_sg(self,
-            source_group,
-            source_group_name,
-            destination_group,
-            destination_group_name,
-            from_port,
-            to_port=None,
-            ip_protocol='tcp'):
+                             source_group,
+                             source_group_name,
+                             destination_group,
+                             destination_group_name,
+                             from_port,
+                             to_port=None,
+                             ip_protocol='tcp'):
         '''
         Helper method creates reciprocal ingress and egress rules given two existing security groups and a set of ports
         @param source_group [Troposphere.ec2.SecurityGroup] Object reference to the source security group
@@ -481,9 +487,9 @@ class EnvironmentBase(object):
 
     @staticmethod
     def build_bootstrap(bootstrap_files,
-            variable_declarations=None,
-            cleanup_commands=None,
-            prepend_line='#!/bin/bash'):
+                        variable_declarations=None,
+                        cleanup_commands=None,
+                        prepend_line='#!/bin/bash'):
         '''
         Method encapsulates process of building out the bootstrap given a set of variables and a bootstrap file to source from
         Returns base 64-wrapped, joined bootstrap to be applied to an instnace
@@ -522,8 +528,8 @@ class EnvironmentBase(object):
         return ret_val
 
     def create_instance_profile(self,
-            layer_name,
-            iam_policies=None):
+                                layer_name,
+                                iam_policies=None):
         '''
         Helper method creates an IAM Role and Instance Profile for the optoinally specified IAM policies
         @param layer_name [string] friendly name for the Role and Instance Profile used for naming and path organization
@@ -548,12 +554,12 @@ class EnvironmentBase(object):
                 Roles=[Ref(iam_role)]))
 
     def add_child_template(self,
-                name,
-                template_wrapper,
-                s3_bucket=None,
-                s3_key_prefix=None,
-                s3_canned_acl=None,
-                depends_on=None):
+                           name,
+                           template_wrapper,
+                           s3_bucket=None,
+                           s3_key_prefix=None,
+                           s3_canned_acl=None,
+                           depends_on=None):
         '''
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
         @param name [str] name of this template for key naming in s3

@@ -38,6 +38,7 @@ from environmentbase.networkbase import NetworkBase
 from troposphere import Template, Ref, Join, GetAtt, Output
 import troposphere.iam as iam
 import troposphere.s3 as s3
+from environmentbase.awsbootstrap import EnvironmentUtil
 
 arguments = docopt(__doc__, version='devtools 0.1')
 
@@ -49,17 +50,14 @@ else:
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=level)
 
 regions = []
-if arguments['--region'] == 'all':
+if arguments.get('--region', 'all') == 'all':
     for region in boto.vpc.regions():
         regions.append(region.name)
 else:
-    for region in arguments['--region'].split(','):
+    for region in arguments.get('--region', 'all').split(','):
         regions.append(region)
 
-def wait_for_stack(cfconn):
-  while 'IN_PROGRESS' in cfconn.describe_stacks(stack_name_or_id=arguments.get('--stack_name', 'accountBootstrapStack'))[0].stack_status:
-    logging.debug('Stack ' + arguments.get('--stack_name', 'accountBootstrapStack') + ' is not yet completely deployed. Waiting 20 sec until next polling interval.')
-    time.sleep(20)
+env_util = EnvironmentUtil({})
 
 t = Template()
 
@@ -262,7 +260,8 @@ if arguments.get('--third_parth_auth_ids', False):
         template_body=t.to_json(),
         capabilities=['CAPABILITY_IAM'])
 
-    wait_for_stack()
+    env_util.wait_for_stack(cfconn,
+                            arguments.get('--stack_name', 'accountBootstrapStack'))
 
     stack = cfconn.describe_stacks(stack_name_or_id=arguments.get('--stack_name', 'accountBootstrapStack'))[0]
     logging.info('Stack ' + arguments.get('--stack_name', 'accountBootstrapStack') + ' has completely deployed with status of ' + stack.stack_status)
@@ -333,7 +332,8 @@ PolicyDocument={
         template_body=t.to_json(),
         capabilities=['CAPABILITY_IAM'])
 
-  wait_for_stack()
+  env_util.wait_for_stack(cfconn,
+                          arguments.get('--stack_name', 'accountBootstrapStack'))
 
   stack = cfconn.describe_stacks(stack_name_or_id=arguments.get('--stack_name', 'accountBootstrapStack'))[0]
   if stack.stack_status == 'UPDATE_COMPLETE':

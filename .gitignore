@@ -9,3 +9,4 @@
 /dist
 .idea/
 src/cfn_environment_base.egg-info/
+.DS_Store

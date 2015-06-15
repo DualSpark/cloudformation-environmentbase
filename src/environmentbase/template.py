@@ -15,7 +15,12 @@ class Template(t.Template):
     consistency since it was generated.
     '''
 
-    def __init__(self, template_name):
+    def __init__(self,
+                 template_name):
+        '''
+        Init method for environmentbase.Teplate class
+        @param template_name [string] - name of this template, used when identifying this template when uploading, etc.
+        '''
         t.Template.__init__(self)
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
@@ -72,10 +77,10 @@ class Template(t.Template):
         return json.dumps(json.loads(self.to_json()), separators=(',',':'))
 
     def upload_template(self,
-                s3_bucket,
-                s3_key_prefix=None,
-                s3_canned_acl='public-read',
-                mock_upload=False):
+                        s3_bucket,
+                        s3_key_prefix=None,
+                        s3_canned_acl='public-read',
+                        mock_upload=False):
         '''
         Upload helper to upload this template to S3 for consumption by other templates or end users.
         @param s3_bucket [string] name of the AWS S3 bucket to upload this template to.
@@ -89,7 +94,8 @@ class Template(t.Template):
                 s3_canned_acl,
                 mock_upload)
 
-    def add_parameter_idempotent(self, troposphere_parameter):
+    def add_parameter_idempotent(self,
+                                 troposphere_parameter):
         '''
         Idempotent add (add only if not exists) for parameters within the template
         @param [Troposphere.Parameter] Troposphere Parameter to add to this template
@@ -100,11 +106,11 @@ class Template(t.Template):
             return None
 
     def upload_template(self,
-                s3_bucket,
-                upload_key_name=None,
-                s3_key_prefix=None,
-                s3_canned_acl='public-read',
-                mock_upload=False):
+                        s3_bucket,
+                        upload_key_name=None,
+                        s3_key_prefix=None,
+                        s3_canned_acl='public-read',
+                        mock_upload=False):
         '''
         Upload helper to upload this template to S3 for consumption by other templates or end users.
         @param s3_bucket [string] name of the AWS S3 bucket to upload this template to.

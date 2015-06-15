@@ -66,7 +66,8 @@ class NetworkBase(EnvironmentBase):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
 
-    def add_utility_bucket(self, name='demo'):
+    def add_utility_bucket(self,
+                           name='demo'):
         '''
         Method adds a bucket to be used for infrastructure utility purposes such as backups
         @param name [str] friendly name to prepend to the CloudFormation asset name
@@ -85,8 +86,8 @@ class NetworkBase(EnvironmentBase):
 
 
     def add_vpc_az_mapping(self,
-            boto_config,
-            az_count=2):
+                           boto_config,
+                           az_count=2):
         '''
         Method gets the AZs within the given account where subnets can be created/deployed
         This is necessary due to some accounts having 4 subnets available within ec2 classic and only 3 within vpc
@@ -115,11 +116,8 @@ class NetworkBase(EnvironmentBase):
                     for item in temp_dict:
                         self.add_region_map_value(region.name, item, temp_dict[item])
 
-    def add_vpc_gateway(self, igw, vpc):
-        pass
-
     def create_network(self,
-            network_config=None):
+                       network_config=None):
         '''
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
         @param network_config [dict] collection of network parameters for creating the VPC network
@@ -186,9 +184,9 @@ class NetworkBase(EnvironmentBase):
                 self.subnets[x].append(Ref(self.local_subnets[x][y]))
 
     def create_nat_instance(self,
-            nat_subnet_number,
-            nat_instance_type=None,
-            nat_subnet_type='public'):
+                            nat_subnet_number,
+                            nat_instance_type=None,
+                            nat_subnet_type='public'):
         '''
         Method creates a NAT instance for the private subnet within the specified corresponding subnet
         @param nat_subnet_number [int] ID of the subnet that the NAT instance will be deployed to
@@ -236,7 +234,7 @@ class NetworkBase(EnvironmentBase):
                 SourceDestCheck=False))
 
     def add_network_cidr_mapping(self,
-        network_config):
+                                 network_config):
         '''
         Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.  Calculated based on CIDR block sizes and additionally checks to ensure all network segments fit inside of the specified overall VPC CIDR
         @param network_config [dict] dictionary of values containing data for creating
@@ -276,7 +274,12 @@ class NetworkBase(EnvironmentBase):
             current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
         return self.template.add_mapping('networkAddresses', ret_val)
 
-    def add_vpn_gateway(self, vpn_conf):
+    def add_vpn_gateway(self,
+                        vpn_conf):
+        '''
+        Not surprisingly, adds a VPN gateway to the network created by this template.
+        @param vpn_conf [dict] - collection of vpn-level configuration values.
+        '''
         if 'vpn_name' in vpn_conf:
             vpn_name = vpn_conf.get('vpn_name')
         else:

@@ -61,7 +61,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "environment-util = environment_util.environment_util:main",
+            "environmentutil = environmentutil.environmentutil:main",
             "awsbootstrap = environmentbase.accountbootstrap:main"
         ]
     }

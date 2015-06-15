@@ -51,7 +51,7 @@ setup(
         # eg: "keyword1", "keyword2", "keyword3",
     ],
     install_requires=[
-        "troposphere>=1.0.0",
+        "troposphere==1.0.0",
         "boto>=2.38.0",
         "ipcalc==1.1.2",
         "docopt==0.6.2"

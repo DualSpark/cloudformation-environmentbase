@@ -1,7 +1,7 @@
 import os
 import os.path
 from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
-import Template
+from .template import Template
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
 import troposphere.autoscaling as autoscaling
@@ -28,7 +28,7 @@ class EnvironmentBase(object):
         self.globals                    = arg_dict.get('global', {})
         self.template_args              = arg_dict.get('template', {})
 
-        self.template                   = Template()
+        self.template                   = Template('default_template')
         self.template.description       = self.template_args.get('description', 'No Description Specified')
 
         self.manual_parameter_bindings  = {}

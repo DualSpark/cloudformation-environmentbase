@@ -4,6 +4,7 @@ from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join,
 import Template
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
+import troposphere.elasticloadbalancing as elb
 import troposphere.autoscaling as autoscaling
 import troposphere.cloudformation as cf
 import troposphere.route53 as r53
@@ -14,6 +15,9 @@ import time
 import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
+
+HTTP_PORT='80'
+HTTPS_PORT='443'
 
 class EnvironmentBase(object):
     '''
@@ -478,6 +482,56 @@ class EnvironmentBase(object):
             FromPort=from_port,
             ToPort=to_port,
             IpProtocol=ip_protocol))
+
+    # Creates an ELB and attaches it to your template
+    # Ports should be a dictionary of ELB ports to Instance ports
+    # SSL cert name must be included if using ELB port 443
+    # TODO: Parameterize more stuff
+    def create_elb(self, resource_name, ports, instances=[], security_groups=[], ssl_cert_name=''):
+
+        stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
+        stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
+        
+        listeners = []
+        for elb_port in ports:
+            if elb_port == HTTP_PORT:
+                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTP', InstanceProtocol='HTTP',
+                                 PolicyNames=[stickiness_policy_name]))
+            elif elb_port == HTTPS_PORT:
+                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTPS', InstanceProtocol='HTTPS',
+                                 SSLCertificateId=Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", cert_name]),
+                                 PolicyNames=[stickiness_policy_name]))
+            else:
+                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
+
+        if HTTPS_PORT in ports:
+            health_check_port = ports[HTTPS_PORT]
+        elif HTTP_PORT in ports:
+            health_check_port = ports[HTTP_PORT]
+        else:
+            health_check_port = ports.values()[0]
+
+        elb_obj = elb.LoadBalancer(
+            '%sElb' % resource_name,
+            Subnets=self.subnets['public'],
+            SecurityGroups=[Ref(sg) for sg in security_groups],
+            CrossZone=True,
+            LBCookieStickinessPolicy=[stickiness_policy],
+            AccessLoggingPolicy=elb.AccessLoggingPolicy(
+                EmitInterval=5,
+                Enabled=True,
+                S3BucketName=Ref(self.utility_bucket)),
+            HealthCheck=elb.HealthCheck(
+                HealthyThreshold=3,
+                UnhealthyThreshold=5,
+                Interval=30,
+                Target='TCP:%s' % health_check_port,
+                Timeout=5),
+            Listeners=listeners,
+            Instances=instances,
+            Scheme='internet-facing')
+
+        return self.template.add_resource(elb_obj)
 
     def to_json(self):
         '''

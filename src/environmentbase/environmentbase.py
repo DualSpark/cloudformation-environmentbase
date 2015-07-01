@@ -262,7 +262,7 @@ class EnvironmentBase(object):
             launch_config_metadata=None,
             creation_policy=None,
             update_policy=None,
-            depends_on=None):
+            depends_on=[]):
         '''
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
@@ -368,25 +368,15 @@ class EnvironmentBase(object):
 
         launch_config = self.template.add_resource(launch_config_obj)
 
-        if depends_on:
-            auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
-                AvailabilityZones=self.azs,
-                LaunchConfigurationName=Ref(launch_config),
-                MaxSize=max_size,
-                MinSize=min_size,
-                DesiredCapacity=min(min_size, max_size),
-                VPCZoneIdentifier=self.subnets[subnet_type.lower()],
-                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
-                DependsOn=depends_on)
-        else:
-            auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
-                AvailabilityZones=self.azs,
-                LaunchConfigurationName=Ref(launch_config),
-                MaxSize=max_size,
-                MinSize=min_size,
-                DesiredCapacity=min(min_size, max_size),
-                VPCZoneIdentifier=self.subnets[subnet_type.lower()],
-                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'])
+        auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
+            AvailabilityZones=self.azs,
+            LaunchConfigurationName=Ref(launch_config),
+            MaxSize=max_size,
+            MinSize=min_size,
+            DesiredCapacity=min(min_size, max_size),
+            VPCZoneIdentifier=self.subnets[subnet_type.lower()],
+            TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
+            DependsOn=depends_on)
 
         lb_tmp = []
 
@@ -489,7 +479,7 @@ class EnvironmentBase(object):
     # Ports should be a dictionary of ELB ports to Instance ports
     # SSL cert name must be included if using ELB port 443
     # TODO: Parameterize more stuff
-    def create_elb(self, resource_name, ports, instances=[], security_groups=[], ssl_cert_name=''):
+    def create_elb(self, resource_name, ports, instances=[], security_groups=[], ssl_cert_name='', depends_on=[]):
 
         stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
         stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
@@ -531,7 +521,8 @@ class EnvironmentBase(object):
                 Timeout=5),
             Listeners=listeners,
             Instances=instances,
-            Scheme='internet-facing')
+            Scheme='internet-facing',
+            DependsOn=depends_on)
 
         return self.template.add_resource(elb_obj)
 
@@ -680,7 +671,7 @@ class EnvironmentBase(object):
                 s3_bucket=None,
                 s3_key_prefix=None,
                 s3_canned_acl=None,
-                depends_on=None):
+                depends_on=[]):
         '''
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
         @param name [str] name of this template for key naming in s3
@@ -738,19 +729,11 @@ class EnvironmentBase(object):
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
 
-        # DependsOn needs to go in the constructor of the object
-        if depends_on:
-            stack_obj = cf.Stack(stack_name,
-                TemplateURL=stack_url,
-                Parameters=stack_params,
-                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'),
-                DependsOn=depends_on)
-
-        else:
-            stack_obj = cf.Stack(stack_name,
-                TemplateURL=stack_url,
-                Parameters=stack_params,
-                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'))
+        stack_obj = cf.Stack(stack_name,
+            TemplateURL=stack_url,
+            Parameters=stack_params,
+            TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'),
+            DependsOn=depends_on)
 
         return self.template.add_resource(stack_obj)
 

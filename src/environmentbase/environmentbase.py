@@ -461,16 +461,24 @@ class EnvironmentBase(object):
             else:
                 label_suffix = ip_protocol.capitalize() + 'MappedPorts'
 
+        CFN_TYPES = [GetAtt]
+
+        if type(source_group) not in CFN_TYPES:
+            source_group = Ref(source_group)
+
+        if type(destination_group) not in CFN_TYPES:
+            destination_group = Ref(destination_group)
+
         self.template.add_resource(ec2.SecurityGroupIngress(destination_group_name + 'Ingress' + source_group_name + label_suffix,
-            SourceSecurityGroupId=Ref(source_group),
-            GroupId=Ref(destination_group),
+            SourceSecurityGroupId=source_group,
+            GroupId=destination_group,
             FromPort=from_port,
             ToPort=to_port,
             IpProtocol=ip_protocol))
 
         self.template.add_resource(ec2.SecurityGroupEgress(source_group_name + 'Egress' + destination_group_name + label_suffix,
-            DestinationSecurityGroupId=Ref(destination_group),
-            GroupId=Ref(source_group),
+            DestinationSecurityGroupId=destination_group,
+            GroupId=source_group,
             FromPort=from_port,
             ToPort=to_port,
             IpProtocol=ip_protocol))

@@ -1,7 +1,7 @@
 import os
 import os.path
 from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
-import Template
+from template import Template
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
 import troposphere.elasticloadbalancing as elb
@@ -32,7 +32,7 @@ class EnvironmentBase(object):
         self.globals                    = arg_dict.get('global', {})
         self.template_args              = arg_dict.get('template', {})
 
-        self.template                   = Template()
+        self.template                   = Template(self.globals['output'])
         self.template.description       = self.template_args.get('description', 'No Description Specified')
 
         self.manual_parameter_bindings  = {}
@@ -495,7 +495,7 @@ class EnvironmentBase(object):
     # Ports should be a dictionary of ELB ports to Instance ports
     # SSL cert name must be included if using ELB port 443
     # TODO: Parameterize more stuff
-    def create_elb(self, resource_name, ports, instances=[], security_groups=[], ssl_cert_name=''):
+    def create_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=None):
 
         stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
         stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
@@ -507,7 +507,7 @@ class EnvironmentBase(object):
                                  PolicyNames=[stickiness_policy_name]))
             elif elb_port == HTTPS_PORT:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTPS', InstanceProtocol='HTTPS',
-                                 SSLCertificateId=Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", cert_name]),
+                                 SSLCertificateId=Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name]),
                                  PolicyNames=[stickiness_policy_name]))
             else:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
@@ -525,10 +525,6 @@ class EnvironmentBase(object):
             SecurityGroups=[Ref(sg) for sg in security_groups],
             CrossZone=True,
             LBCookieStickinessPolicy=[stickiness_policy],
-            AccessLoggingPolicy=elb.AccessLoggingPolicy(
-                EmitInterval=5,
-                Enabled=True,
-                S3BucketName=Ref(self.utility_bucket)),
             HealthCheck=elb.HealthCheck(
                 HealthyThreshold=3,
                 UnhealthyThreshold=5,
@@ -539,13 +535,22 @@ class EnvironmentBase(object):
             Instances=instances,
             Scheme='internet-facing')
 
+        if depends_on is not None:
+            elb_obj.properties['DependsOn'] = depends_on
+
+        if utility_bucket is not None:
+            elb_obj.AccessLoggingPolicy = elb.AccessLoggingPolicy(
+                EmitInterval=5,
+                Enabled=True,
+                S3BucketName=Ref(utility_bucket))
+
         return self.template.add_resource(elb_obj)
 
     def to_json(self):
         '''
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
         '''
-        return self.template.to_json_template()
+        return self.template.to_template_json()
 
     @staticmethod
     def build_bootstrap(bootstrap_files,
@@ -635,13 +640,14 @@ class EnvironmentBase(object):
 
         if s3_key_prefix == None:
             s3_key_prefix = self.template_args.get('s3_key_name_prefix', '')
-
+        if s3_bucket is None:
+            s3_bucket = self.template_args.get('s3_bucket')
         stack_url = template.upload_template(
-                     name,
                      s3_bucket,
+                     upload_key_name=name,
                      s3_key_prefix=s3_key_prefix,
                      s3_canned_acl=self.template_args.get('s3_canned_acl', 'public-read'),
-                     mock_upload=self.template_args.get('mock_upload',False))
+                     mock_upload=self.template_args.get('mock_upload', False))
 
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []
@@ -663,7 +669,7 @@ class EnvironmentBase(object):
         stack_name = name + 'Stack'
 
         # DependsOn needs to go in the constructor of the object
-        if depends_on:
+        if depends_on is not None:
             stack_obj = cf.Stack(stack_name,
                 TemplateURL=stack_url,
                 Parameters=stack_params,

@@ -15,8 +15,7 @@ class Template(t.Template):
     consistency since it was generated.
     '''
 
-    def __init__(self,
-                 template_name):
+    def __init__(self, template_name):
         '''
         Init method for environmentbase.Teplate class
         @param template_name [string] - name of this template, used when identifying this template when uploading, etc.
@@ -76,24 +75,6 @@ class Template(t.Template):
         '''
         return json.dumps(json.loads(self.to_json()), separators=(',',':'))
 
-    def upload_template(self,
-                        s3_bucket,
-                        s3_key_prefix=None,
-                        s3_canned_acl='public-read',
-                        mock_upload=False):
-        '''
-        Upload helper to upload this template to S3 for consumption by other templates or end users.
-        @param s3_bucket [string] name of the AWS S3 bucket to upload this template to.
-        @param s3_key_prefix [string] key name prefix to prepend to the key name for the upload of this template.
-        @param s3_canned_acl [string] S3 canned ACL string value to use when setting permissions on uploaded key.
-        @param mock_upload [boolean] boolean indicating if the upload of this template should be mocked or actually performed.
-        '''
-        return upload_template(self.name,
-                s3_bucket,
-                s3_key_prefix,
-                s3_canned_acl,
-                mock_upload)
-
     def add_parameter_idempotent(self,
                                  troposphere_parameter):
         '''
@@ -122,7 +103,7 @@ class Template(t.Template):
         key_serial = str(int(time.time()))
 
         if upload_key_name == None:
-            upload_key_name = self.template_name
+            upload_key_name = self.name
 
         if s3_key_prefix == None:
             s3_key_name = '/' +  upload_key_name + '.' + key_serial + '.template'

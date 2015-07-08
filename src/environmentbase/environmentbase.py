@@ -536,7 +536,7 @@ class EnvironmentBase(object):
             Scheme='internet-facing')
 
         if depends_on is not None:
-            elb_obj.properties['DependsOn'] = depends_on
+            elb_obj.resource['DependsOn'] = [depends_on] if isinstance(depends_on, basestring) else depends_on
 
         if utility_bucket is not None:
             elb_obj.AccessLoggingPolicy = elb.AccessLoggingPolicy(

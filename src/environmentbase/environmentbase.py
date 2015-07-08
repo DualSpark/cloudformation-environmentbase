@@ -32,7 +32,7 @@ class EnvironmentBase(object):
         self.globals                    = arg_dict.get('global', {})
         self.template_args              = arg_dict.get('template', {})
 
-        self.template                   = Template(self.globals['output'])
+        self.template                   = Template(self.globals.get('output', 'default_template'))
         self.template.description       = self.template_args.get('description', 'No Description Specified')
 
         self.manual_parameter_bindings  = {}

@@ -15,22 +15,69 @@ import time
 import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
+import cli
 
-HTTP_PORT='80'
-HTTPS_PORT='443'
+HTTP_PORT = '80'
+HTTPS_PORT = '443'
+
+DEFAULT_CONFIG_FILENAME = 'config_args.json'
+DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
+
+THIS_LOCATION = os.path.dirname(__file__)
+LOCAL_CONFIG_PATH = os.path.join(THIS_LOCATION, DEFAULT_CONFIG_FILENAME)
+LOCAL_AMI_CACHE_PATH = os.path.join(THIS_LOCATION, DEFAULT_AMI_CACHE_FILENAME)
+
 
 class EnvironmentBase(object):
     '''
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
     '''
-    def __init__(self,
-                 arg_dict):
+
+    _config = {}
+
+    globals = {}
+    template_args = {}
+    template = None
+    manual_parameter_bindings = {}
+    subnets = {}
+    ignore_outputs = {}
+    strings = {}
+
+    def __init__(self, view=None):
         '''
         Init method for environment base creates all common objects for a given environment within the CloudFormation template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and CloudTrail log storage
         @param arg_dict [dict] keyword arguments to handle setting config-level parameters and arguments within this class
         '''
-        self.globals                    = arg_dict.get('global', {})
-        self.template_args              = arg_dict.get('template', {})
+
+        # Load the user interface
+        # ---------------------
+        if view is None:
+            view = cli.CLI()
+
+        # Process any global flags here before letting the view execute any requested user actions
+        # ---------------------
+
+        # Config location override
+        config_file = view.args.get('--config_file') or LOCAL_CONFIG_PATH
+
+        self.load_config(config_file)
+
+        # Test handling opt-out
+
+        # Debug toggle
+
+        # Finally allow the view to execute the user's requested action
+        # ---------------------
+        view.process_request(self)
+
+    def load_config(self, config_file):
+        with open(config_file, 'r') as f:
+            config = json.loads(f.read())
+
+        self._config = config
+
+        self.globals                    = config.get('global', {})
+        self.template_args              = config.get('template', {})
 
         self.template                   = Template(self.globals.get('output', 'default_template'))
         self.template.description       = self.template_args.get('description', 'No Description Specified')
@@ -42,16 +89,23 @@ class EnvironmentBase(object):
 
         self.add_common_parameters(self.template_args)
 
-        local_amicache = os.path.join(os.getcwd(), 'ami_cache.json')
+        self.load_ami_cache()
+
+    def load_ami_cache(self):
+        # Users can provide override ami_cache in their project root
+        local_amicache = os.path.join(os.getcwd(), DEFAULT_AMI_CACHE_FILENAME)
         if os.path.isfile(local_amicache):
             file_path = local_amicache
-        elif os.path.isfile('ami_cache.json'):
-            file_path = 'ami_cache.json'
+        # Or sibling to the executing class
+        elif os.path.isfile(DEFAULT_AMI_CACHE_FILENAME):
+            file_path = DEFAULT_AMI_CACHE_FILENAME
+        # Use our ami_cache as a fall back
         else:
-            file_path = os.path.join(os.path.dirname(__file__), 'ami_cache.json')
+            assert os.path.isfile(LOCAL_AMI_CACHE_PATH)
+            file_path = LOCAL_AMI_CACHE_PATH
 
-        ami_map_file = self.template_args.get('ami_map_file', file_path)
-        self.add_ami_mapping(ami_map_file_path=ami_map_file)
+        # ami_map_file = self.template_args.get('ami_map_file', file_path)
+        self.add_ami_mapping(ami_map_file_path=file_path)
 
     def register_elb_to_dns(self,
                             elb,
@@ -230,8 +284,7 @@ class EnvironmentBase(object):
 
         return {"Statement":statements}
 
-    def add_ami_mapping(self,
-                        ami_map_file_path='ami_cache.json'):
+    def add_ami_mapping(self, ami_map_file_path=DEFAULT_AMI_CACHE_FILENAME):
         '''
         Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
         This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
@@ -654,16 +707,30 @@ class EnvironmentBase(object):
 
         stack_params = {}
         for parameter in template.parameters.keys():
+
+            # Manual parameter bindings single-namespace
             if parameter in self.manual_parameter_bindings:
                 stack_params[parameter] = self.manual_parameter_bindings[parameter]
+
+            # Naming scheme for identifying the AZ of a subnet (not sure if this is even used anywhere)
             elif parameter.startswith('availabilityZone'):
                 stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone',''), 'AvailabilityZone')
+
+            # Match any child stack parameters that have the same name as this stacks **parameters**
             elif parameter in self.template.parameters.keys():
                 stack_params[parameter] = Ref(self.template.parameters.get(parameter))
+
+            # Match any child stack parameters that have the same name as this stacks **resources**
             elif parameter in self.template.resources.keys():
                 stack_params[parameter] = Ref(self.template.resources.get(parameter))
+
+            # Match any child stack parameters that have the same name as this stacks **outputs**
+            # TODO: Does this even work? Child runs after parent completes?
             elif parameter in self.stack_outputs:
                 stack_params[parameter] = GetAtt(self.stack_outputs[parameter], 'Outputs.' + parameter)
+
+            # Finally if nothing else matches copy the child templates parameter to this template's parameter list
+            # so the value will pass through this stack down to the child.
             else:
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
@@ -684,13 +751,6 @@ class EnvironmentBase(object):
 
         return self.template.add_resource(stack_obj)
 
-def main():
-    import json
-    config_file = os.path.join(os.path.dirname(__file__), 'config_args.json')
-    with open(config_file, 'r') as f:
-        cmd_args = json.loads(f.read())
-    test = EnvironmentBase(cmd_args)
-    print test.to_json()
 
 if __name__ == '__main__':
-    main()
+    EnvironmentBase()

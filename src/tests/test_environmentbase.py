@@ -1,7 +1,7 @@
+from __future__ import print_function
 import unittest
 import mock
-import sys
-from mock import patch
+import os
 
 from environmentbase import EnvironmentBase
 
@@ -32,6 +32,37 @@ class EnvironmentBaseTestCase(unittest.TestCase):
 
         # Check that EnvironmentBase started the CLI
         self.view.process_request.assert_called_once_with(env_base)
+
+    def test_config_override(self):
+        # Create a fake temp file
+        from tempfile import NamedTemporaryFile
+        temp = NamedTemporaryFile()
+
+        # Add config_file override flag
+        self.view.args['--config_file'] = temp.name
+        # ------------------
+
+        # bad json test
+        with self.assertRaises(ValueError):
+            EnvironmentBase(self.view)
+        # -----------------
+
+        # Add a minimal json structure to avoid a parsing exception
+        print('{}', file=temp.file)
+        temp.flush()
+
+        # good json test
+        EnvironmentBase(self.view)
+        # ------------------
+
+        # Temp files auto-delete on close, let's verify that
+        temp.close()
+        assert not os.path.isfile(temp.name)
+
+        # no file test
+        with self.assertRaises(IOError):
+            EnvironmentBase(self.view)
+
 
 if __name__ == '__main__':
     unittest.main()

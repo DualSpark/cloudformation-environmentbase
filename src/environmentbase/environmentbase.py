@@ -391,7 +391,13 @@ class EnvironmentBase(object):
 
         if ebs_data_volumes != None and len(ebs_data_volumes) > 0:
             for ebs_volume in ebs_data_volumes:
-                device_name = device_names.pop()
+                # Respect names provided by AMI when available
+                if 'name' in ebs_volume:
+                    device_name = ebs_volume.get('name')
+                    device_names.remove(device_name)
+                else:
+                    device_name = device_names.pop()
+
                 ebs_block_device = ec2.EBSBlockDevice(
                                 DeleteOnTermination=ebs_volume.get('delete_on_termination', True),
                                 VolumeSize=ebs_volume.get('size', '100'),

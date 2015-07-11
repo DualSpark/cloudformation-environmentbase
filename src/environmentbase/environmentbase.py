@@ -16,6 +16,7 @@ import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
 import cli
+import unittest
 
 HTTP_PORT = '80'
 HTTPS_PORT = '443'
@@ -63,12 +64,29 @@ class EnvironmentBase(object):
         self.load_config(config_file)
 
         # Test handling opt-out
+        if not view.args.get('--no_tests'):
+            self.run_tests()
 
         # Debug toggle
 
         # Finally allow the view to execute the user's requested action
         # ---------------------
         view.process_request(self)
+
+    def run_tests(self):
+        # 'tests' package should be sibling to *this* file's package (the controller)
+
+        # Parent of *this* file's package
+        parent_dir = os.path.join(os.path.dirname(__file__), os.pardir)
+        test_dir = os.path.join(parent_dir, 'tests')
+
+        # Get absolute path to remove ..'s
+        absolute_test_dir = os.path.abspath(test_dir)
+
+        assert os.path.isdir(absolute_test_dir)
+
+        suite = unittest.TestLoader().discover(absolute_test_dir)
+        unittest.runner.TextTestRunner().run(suite)
 
     def load_config(self, config_file):
         with open(config_file, 'r') as f:

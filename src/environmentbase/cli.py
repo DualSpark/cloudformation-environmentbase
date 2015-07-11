@@ -31,4 +31,5 @@ class CLI(object):
         self.args = docopt(__doc__, version='environmentbase 0.1')
 
     def process_request(self, controller):
-        print controller.to_json()
+        # print controller.to_json()
+        pass

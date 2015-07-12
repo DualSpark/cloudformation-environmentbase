@@ -28,6 +28,13 @@ THIS_LOCATION = os.path.dirname(__file__)
 LOCAL_CONFIG_PATH = os.path.join(THIS_LOCATION, DEFAULT_CONFIG_FILENAME)
 LOCAL_AMI_CACHE_PATH = os.path.join(THIS_LOCATION, DEFAULT_AMI_CACHE_FILENAME)
 
+TEMPLATE_REQUIREMENTS = {
+    "global": ['output', 'environment_name'],
+    "template": ['ami_map_file']
+}
+
+class ValidationError(Exception):
+    pass
 
 class EnvironmentBase(object):
     '''
@@ -46,7 +53,9 @@ class EnvironmentBase(object):
 
     def __init__(self, view=None):
         '''
-        Init method for environment base creates all common objects for a given environment within the CloudFormation template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and CloudTrail log storage
+        Init method for environment base creates all common objects for a given environment within the CloudFormation
+        template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
+        CloudTrail log storage
         @param arg_dict [dict] keyword arguments to handle setting config-level parameters and arguments within this class
         '''
 
@@ -58,22 +67,41 @@ class EnvironmentBase(object):
         # Process any global flags here before letting the view execute any requested user actions
         # ---------------------
 
-        # Config location override
-        config_file = view.args.get('--config_file') or LOCAL_CONFIG_PATH
-
-        self.load_config(config_file)
-
         # Test handling opt-out
         if not view.args.get('--no_tests'):
-            self.run_tests()
+            EnvironmentBase.run_tests()
+
+        # Config location override
+        config_file = view.args.get('--config_file') or LOCAL_CONFIG_PATH
+        self.load_config(config_file)
 
         # Debug toggle
+        self.debug = bool(view.args.get('--debug'))
+        self.template_filename = view.args.get('--template_file') or self._config['global']['output']
+        self.stack_name = view.args.get('--stack_name') or self._config['global']['environment_name']
 
         # Finally allow the view to execute the user's requested action
         # ---------------------
         view.process_request(self)
 
-    def run_tests(self):
+    def create_action(self):
+        # process template, adding each child to S3 and adding stack resources to the parent template
+
+        indent = 0 if not self.debug else 4
+
+        with open(self.template_filename, 'w') as output_file:
+            # Here to_json() loads child templates into S3
+            raw_json = self.template.to_json()
+
+            reloaded_template = json.loads(raw_json)
+            json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
+
+    def deploy_action(self):
+        # issue create_stack / update_stack to cloudformation and if requested monitor status
+        pass
+
+    @classmethod
+    def run_tests(cls):
         # 'tests' package should be sibling to *this* file's package (the controller)
 
         # Parent of *this* file's package
@@ -88,9 +116,23 @@ class EnvironmentBase(object):
         suite = unittest.TestLoader().discover(absolute_test_dir)
         unittest.runner.TextTestRunner().run(suite)
 
+    @classmethod
+    def _validate_config(cls, config):
+        for (section, keys) in TEMPLATE_REQUIREMENTS.iteritems():
+            if section not in config:
+                message = "Config file missing section: ", section
+                raise ValidationError(message)
+
+            required_keys = TEMPLATE_REQUIREMENTS[section]
+            if not all(k in config[section] for k in required_keys):
+                message = "Config file missing one of %s%s" % (section, required_keys)
+                raise ValidationError(message)
+
     def load_config(self, config_file):
         with open(config_file, 'r') as f:
             config = json.loads(f.read())
+
+        EnvironmentBase._validate_config(config)
 
         self._config = config
 

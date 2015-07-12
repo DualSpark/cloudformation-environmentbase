@@ -572,7 +572,7 @@ class EnvironmentBase(object):
     # Ports should be a dictionary of ELB ports to Instance ports
     # SSL cert name must be included if using ELB port 443
     # TODO: Parameterize more stuff
-    def create_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=None):
+    def create_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[]):
 
         stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
         stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
@@ -610,10 +610,9 @@ class EnvironmentBase(object):
                 Timeout=5),
             Listeners=listeners,
             Instances=instances,
-            Scheme='internet-facing')
-
-        if depends_on is not None:
-            elb_obj.resource['DependsOn'] = [depends_on] if isinstance(depends_on, basestring) else depends_on
+            Scheme='internet-facing',
+            DependsOn=depends_on
+        )
 
         if utility_bucket is not None:
             elb_obj.AccessLoggingPolicy = elb.AccessLoggingPolicy(
@@ -703,7 +702,7 @@ class EnvironmentBase(object):
                            s3_bucket=None,
                            s3_key_prefix=None,
                            s3_canned_acl=None,
-                           depends_on=None):
+                           depends_on=[]):
         '''
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
         @param name [str] name of this template for key naming in s3
@@ -760,18 +759,11 @@ class EnvironmentBase(object):
         stack_name = name + 'Stack'
 
         # DependsOn needs to go in the constructor of the object
-        if depends_on is not None:
-            stack_obj = cf.Stack(stack_name,
-                TemplateURL=stack_url,
-                Parameters=stack_params,
-                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'),
-                DependsOn=depends_on)
-
-        else:
-            stack_obj = cf.Stack(stack_name,
-                TemplateURL=stack_url,
-                Parameters=stack_params,
-                TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'))
+        stack_obj = cf.Stack(stack_name,
+            TemplateURL=stack_url,
+            Parameters=stack_params,
+            TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'),
+            DependsOn=depends_on)
 
         return self.template.add_resource(stack_obj)
 

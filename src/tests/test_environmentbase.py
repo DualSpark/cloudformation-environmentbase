@@ -5,8 +5,6 @@ import os
 import json
 import copy
 from tempfile import NamedTemporaryFile
-
-# Stupid Python
 from environmentbase.environmentbase import *
 
 

@@ -4,8 +4,8 @@
 Tool bundle manages generation, deployment, and feedback of cloudformation resources.
 
 Usage:
-    environmentbase.py create [--no_tests] [--config_file <FILE_LOCATION>] [--debug] [--template_file=<TEMPLATE_FILE>]
-    environmentbase.py deploy [--no_tests] [--config_file <FILE_LOCATION>] [--debug]
+    environmentbase.py create [--config_file <FILE_LOCATION>] [--debug] [--template_file=<TEMPLATE_FILE>]
+    environmentbase.py deploy [--config_file <FILE_LOCATION>] [--debug]
 
 Options:
   -h --help                            Show this screen.

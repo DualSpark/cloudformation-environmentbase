@@ -10,6 +10,7 @@ from os.path import splitext
 from setuptools import find_packages
 from setuptools import setup
 
+
 def read(*names, **kwargs):
     return io.open(
         join(dirname(__file__), *names),
@@ -26,9 +27,15 @@ setup(
     author_email="patrick@dualspark.com",
     packages=find_packages("src"),
     package_dir={"": "src"},
-    py_modules=[splitext(basename(i))[0] for i in glob.glob("src/*.py")],
+    py_modules=[splitext(basename(i))[0] for i in glob.glob("src/**/*.py")],
     include_package_data=True,
     zip_safe=False,
+    test_suite='nose2.collector.collector',
+    tests_require=[
+        'nose2',
+        'unittest2',
+        'mock'
+    ],
     classifiers=[
         # complete classifier list: http://pypi.python.org/pypi?%3Aaction=list_classifiers
         "Development Status :: 4 - Beta",
@@ -62,6 +69,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
+            "tests=tests.test_environmentbase:main"
             "environmentutil = environmentutil.environmentutil:main",
             "awsbootstrap = environmentbase.accountbootstrap:main"
         ]

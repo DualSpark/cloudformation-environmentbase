@@ -1,14 +1,19 @@
 from __future__ import print_function
-import unittest
+from unittest2 import TestCase
 import mock
 import os
 import json
 import copy
 from tempfile import NamedTemporaryFile
-from environmentbase import EnvironmentBase, TEMPLATE_REQUIREMENTS, ValidationError
+
+# Stupid Python
+try:
+    from environmentbase.environmentbase import *
+except ImportError:
+    from environmentbase import *
 
 
-class EnvironmentBaseTestCase(unittest.TestCase):
+class EnvironmentBaseTestCase(TestCase):
     def setUp(self):
         self.view = mock.MagicMock()
         self.view.process_request = mock.MagicMock()

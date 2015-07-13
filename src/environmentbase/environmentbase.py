@@ -16,7 +16,7 @@ import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
 import cli
-import unittest
+from unittest2 import TestLoader, TextTestRunner
 
 HTTP_PORT = '80'
 HTTPS_PORT = '443'
@@ -67,10 +67,6 @@ class EnvironmentBase(object):
         # Process any global flags here before letting the view execute any requested user actions
         # ---------------------
 
-        # Test handling opt-out
-        if not view.args.get('--no_tests'):
-            EnvironmentBase.run_tests()
-
         # Config location override
         config_file = view.args.get('--config_file') or LOCAL_CONFIG_PATH
         self.load_config(config_file)
@@ -99,22 +95,6 @@ class EnvironmentBase(object):
     def deploy_action(self):
         # issue create_stack / update_stack to cloudformation and if requested monitor status
         pass
-
-    @classmethod
-    def run_tests(cls):
-        # 'tests' package should be sibling to *this* file's package (the controller)
-
-        # Parent of *this* file's package
-        parent_dir = os.path.join(os.path.dirname(__file__), os.pardir)
-        test_dir = os.path.join(parent_dir, 'tests')
-
-        # Get absolute path to remove ..'s
-        absolute_test_dir = os.path.abspath(test_dir)
-
-        assert os.path.isdir(absolute_test_dir)
-
-        suite = unittest.TestLoader().discover(absolute_test_dir)
-        unittest.runner.TextTestRunner().run(suite)
 
     @classmethod
     def _validate_config(cls, config):

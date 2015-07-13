@@ -26,7 +26,7 @@ setup(
     long_description="%s" % read("README.md"),
     author="Patrick McClory",
     author_email="patrick@dualspark.com",
-    packages=find_packages("src"),
+    packages=find_packages("src", exclude=['tests*']),
     package_dir={"": "src"},
     py_modules=[splitext(basename(i))[0] for i in glob.glob("src/**/*.py")],
     include_package_data=True,

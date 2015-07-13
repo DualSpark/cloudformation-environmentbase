@@ -7,10 +7,7 @@ import copy
 from tempfile import NamedTemporaryFile
 
 # Stupid Python
-try:
-    from environmentbase.environmentbase import *
-except ImportError:
-    from environmentbase import *
+from environmentbase.environmentbase import *
 
 
 class EnvironmentBaseTestCase(TestCase):

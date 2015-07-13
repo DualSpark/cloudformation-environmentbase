@@ -29,14 +29,13 @@ Options:
 # --region <REGION>                    Comma separated list of regions to apply this setup to [default: all].
 # --third_party_auth_ids               Command-line switch indicating whether an API credential will be generated or not [default: 0].
 
-
 from docopt import docopt
-
+from .version import __version__
 
 class CLI(object):
 
     def __init__(self):
-        self.args = docopt(__doc__, version='environmentbase 0.1')
+        self.args = docopt(__doc__, version='environmentbase %s' % __version__)
 
     def process_request(self, controller):
 

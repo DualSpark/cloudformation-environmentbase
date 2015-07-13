@@ -10,6 +10,7 @@ from os.path import splitext
 from setuptools import find_packages
 from setuptools import setup
 
+execfile('src/environmentbase/version.py')
 
 def read(*names, **kwargs):
     return io.open(
@@ -19,7 +20,7 @@ def read(*names, **kwargs):
 
 setup(
     name="cfn-environment-base",
-    version="0.4.0",
+    version=__version__,
     license="ISC",
     description="Base environment for Troposphere based CFN project environments",
     long_description="%s" % read("README.md"),

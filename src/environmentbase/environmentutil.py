@@ -20,6 +20,7 @@ from docopt import Docopt
 import boto
 import json
 import logging
+from .version import __version__
 
 class EnvironmentUtil(object):
     '''
@@ -169,7 +170,7 @@ class EnvironmentUtil(object):
             return True
 
 if __name__ == '__main__':
-    arguments = docopt(__doc__, version='environmentbase-cfn environment_util 0.1')
+    arguments = docopt(__doc__, version='environmentbase-cfn environment_util %s' % __version__)
 
     if arguments.get('--debug', False):
         level = DEBUG

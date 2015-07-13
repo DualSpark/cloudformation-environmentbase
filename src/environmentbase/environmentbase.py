@@ -16,7 +16,6 @@ import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
 import cli
-from unittest2 import TestLoader, TextTestRunner
 
 HTTP_PORT = '80'
 HTTPS_PORT = '443'

@@ -16,6 +16,7 @@ import boto.s3
 from boto.s3.key import Key
 from datetime import datetime
 import cli
+from pkg_resources import resource_string
 
 HTTP_PORT = '80'
 HTTPS_PORT = '443'
@@ -23,9 +24,9 @@ HTTPS_PORT = '443'
 DEFAULT_CONFIG_FILENAME = 'config_args.json'
 DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
 
-THIS_LOCATION = os.path.dirname(__file__)
-LOCAL_CONFIG_PATH = os.path.join(THIS_LOCATION, DEFAULT_CONFIG_FILENAME)
-LOCAL_AMI_CACHE_PATH = os.path.join(THIS_LOCATION, DEFAULT_AMI_CACHE_FILENAME)
+_ROOT = os.path.abspath(os.path.dirname(__file__))
+FACTORY_DEFAULT_CONFIG = resource_string(__name__, 'data/' + DEFAULT_CONFIG_FILENAME)
+FACTORY_DEFAULT_AMI_CACHE = resource_string(__name__, 'data/' + DEFAULT_AMI_CACHE_FILENAME)
 
 TEMPLATE_REQUIREMENTS = {
     "global": ['output', 'environment_name'],
@@ -67,7 +68,7 @@ class EnvironmentBase(object):
         # ---------------------
 
         # Config location override
-        config_file = view.args.get('--config_file') or LOCAL_CONFIG_PATH
+        config_file = view.args.get('--config_file')
         self.load_config(config_file)
 
         # Debug toggle
@@ -108,8 +109,13 @@ class EnvironmentBase(object):
                 raise ValidationError(message)
 
     def load_config(self, config_file):
-        with open(config_file, 'r') as f:
-            config = json.loads(f.read())
+        if config_file:
+            with open(config_file, 'r') as f:
+                config = json.loads(f.read())
+        else:
+            config = json.loads(FACTORY_DEFAULT_CONFIG)
+            with open(DEFAULT_CONFIG_FILENAME, 'w') as f:
+                f.write(FACTORY_DEFAULT_CONFIG)
 
         EnvironmentBase._validate_config(config)
 
@@ -131,20 +137,37 @@ class EnvironmentBase(object):
         self.load_ami_cache()
 
     def load_ami_cache(self):
+        file_path = None
+
         # Users can provide override ami_cache in their project root
         local_amicache = os.path.join(os.getcwd(), DEFAULT_AMI_CACHE_FILENAME)
         if os.path.isfile(local_amicache):
             file_path = local_amicache
+
         # Or sibling to the executing class
         elif os.path.isfile(DEFAULT_AMI_CACHE_FILENAME):
             file_path = DEFAULT_AMI_CACHE_FILENAME
-        # Use our ami_cache as a fall back
-        else:
-            assert os.path.isfile(LOCAL_AMI_CACHE_PATH)
-            file_path = LOCAL_AMI_CACHE_PATH
 
         # ami_map_file = self.template_args.get('ami_map_file', file_path)
         self.add_ami_mapping(ami_map_file_path=file_path)
+
+    def add_ami_mapping(self, ami_map_file_path):
+        '''
+        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
+        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
+        @param ami_map_file [string] path representing where to find the AMI map to ingest into this template
+        '''
+        if ami_map_file_path:
+            with open(ami_map_file_path, 'r') as json_file:
+                json_data = json.load(json_file)
+        else:
+            json_data = json.loads(FACTORY_DEFAULT_AMI_CACHE)
+            with open(DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
+                f.write(FACTORY_DEFAULT_AMI_CACHE)
+
+        for region in json_data:
+            for key in json_data[region]:
+                self.add_region_map_value(region, key, json_data[region][key])
 
     def register_elb_to_dns(self,
                             elb,
@@ -322,18 +345,6 @@ class EnvironmentBase(object):
                 Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
 
         return {"Statement":statements}
-
-    def add_ami_mapping(self, ami_map_file_path=DEFAULT_AMI_CACHE_FILENAME):
-        '''
-        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
-        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
-        @param ami_map_file [string] path representing where to find the AMI map to ingest into this template
-        '''
-        with open(ami_map_file_path, 'r') as json_file:
-            json_data = json.load(json_file)
-        for region in json_data:
-            for key in json_data[region]:
-                self.add_region_map_value(region, key, json_data[region][key])
 
     def create_asg(self,
                    layer_name,
@@ -788,6 +799,3 @@ class EnvironmentBase(object):
 
         return self.template.add_resource(stack_obj)
 
-
-if __name__ == '__main__':
-    EnvironmentBase()

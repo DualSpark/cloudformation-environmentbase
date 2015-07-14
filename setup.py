@@ -65,7 +65,8 @@ setup(
         "troposphere==1.0.0",
         "boto>=2.38.0",
         "ipcalc==1.1.2",
-        "docopt==0.6.2"
+        "docopt==0.6.2",
+        "setuptools>=17.1"
     ],
 
     # Optional dependencies
@@ -96,9 +97,9 @@ setup(
     # Test runner and required testing packages
     test_suite='nose2.collector.collector',
     tests_require=[
-        'nose2',
-        'unittest2',
-        'mock'
+        'nose2>=0.5.0',
+        'unittest2>=1.1.0',
+        'mock>=1.1.2'
     ]
 
 )

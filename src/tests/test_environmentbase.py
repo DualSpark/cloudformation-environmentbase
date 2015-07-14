@@ -13,7 +13,6 @@ class EnvironmentBaseTestCase(TestCase):
     def setUp(self):
         self.view = mock.MagicMock()
         self.view.process_request = mock.MagicMock()
-        self.view.args = {'create': True}
 
         # Create fake config string
         self.dummy_value = 'dummy'
@@ -33,12 +32,14 @@ class EnvironmentBaseTestCase(TestCase):
         assert not os.path.isdir(self.temp_dir)
 
     def test_constructor(self):
+        self.view.args = {'create': True}
         env_base = EnvironmentBase(self.view)
 
         # Check that EnvironmentBase started the CLI
         self.view.process_request.assert_called_once_with(env_base)
 
     def test_config_override(self):
+        self.view.args = {'create': True}
 
         # Create fake ami_cache (we aren't testing this file but we need it since create_missing_files will be disabled)
         ami_cache = open(os.path.join(self.temp_dir, DEFAULT_AMI_CACHE_FILENAME), 'a')
@@ -74,6 +75,7 @@ class EnvironmentBaseTestCase(TestCase):
             EnvironmentBase(self.view, create_missing_files=False)
 
     def test_flags(self):
+        self.view.args = {'create': True}
         # Add config_file override flag
         temp = NamedTemporaryFile()
         print(json.dumps(self.valid_config), file=temp.file)
@@ -110,6 +112,7 @@ class EnvironmentBaseTestCase(TestCase):
         temp.close()
 
     def test_config_validation(self):
+        self.view.args = {'create': True}
         EnvironmentBase._validate_config(self.valid_config)
 
         config_copy = copy.deepcopy(self.valid_config)
@@ -137,6 +140,7 @@ class EnvironmentBaseTestCase(TestCase):
             EnvironmentBase._validate_config(config_copy)
 
     def test_factory_default(self):
+        self.view.args = {'create': True}
         # print ('test_factory_default::view.args', self.view.args)
 
         with self.assertRaises(IOError):

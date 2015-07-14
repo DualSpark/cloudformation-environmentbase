@@ -51,7 +51,7 @@ class EnvironmentBase(object):
     ignore_outputs = {}
     strings = {}
 
-    def __init__(self, view=None):
+    def __init__(self, view=None, create_missing_files=True):
         '''
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
@@ -68,7 +68,8 @@ class EnvironmentBase(object):
         # ---------------------
 
         # Config location override
-        config_file = view.args.get('--config_file')
+        config_file = view.args.get('--config_file') or DEFAULT_CONFIG_FILENAME
+        self.create_missing_files = create_missing_files
         self.load_config(config_file)
 
         # Debug toggle
@@ -109,13 +110,15 @@ class EnvironmentBase(object):
                 raise ValidationError(message)
 
     def load_config(self, config_file):
-        if config_file:
+        if config_file and os.path.isfile(config_file):
             with open(config_file, 'r') as f:
                 config = json.loads(f.read())
-        else:
+        elif self.create_missing_files:
             config = json.loads(FACTORY_DEFAULT_CONFIG)
             with open(DEFAULT_CONFIG_FILENAME, 'w') as f:
                 f.write(FACTORY_DEFAULT_CONFIG)
+        else:
+            raise IOError(DEFAULT_CONFIG_FILENAME + ' could not be found')
 
         EnvironmentBase._validate_config(config)
 
@@ -149,7 +152,7 @@ class EnvironmentBase(object):
             file_path = DEFAULT_AMI_CACHE_FILENAME
 
         # ami_map_file = self.template_args.get('ami_map_file', file_path)
-        self.add_ami_mapping(ami_map_file_path=file_path)
+        self.add_ami_mapping(file_path)
 
     def add_ami_mapping(self, ami_map_file_path):
         '''
@@ -160,10 +163,12 @@ class EnvironmentBase(object):
         if ami_map_file_path:
             with open(ami_map_file_path, 'r') as json_file:
                 json_data = json.load(json_file)
-        else:
+        elif self.create_missing_files:
             json_data = json.loads(FACTORY_DEFAULT_AMI_CACHE)
             with open(DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
                 f.write(FACTORY_DEFAULT_AMI_CACHE)
+        else:
+            raise IOError(DEFAULT_AMI_CACHE_FILENAME + ' could not be found')
 
         for region in json_data:
             for key in json_data[region]:

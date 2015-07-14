@@ -2,9 +2,10 @@ from __future__ import print_function
 from unittest2 import TestCase, main
 import mock
 import os
+import shutil
 import json
 import copy
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, mkdtemp
 from environmentbase.environmentbase import *
 
 
@@ -14,12 +15,22 @@ class EnvironmentBaseTestCase(TestCase):
         self.view.process_request = mock.MagicMock()
         self.view.args = {'create': True}
 
+        # Create fake config string
         self.dummy_value = 'dummy'
         self.valid_config = {}
         for (section, keys) in TEMPLATE_REQUIREMENTS.iteritems():
             self.valid_config[section] = {}
             for key in keys:
                 self.valid_config[section][key] = self.dummy_value
+
+        # Change to a temp dir so auto generated file don't clutter the os
+        self.temp_dir = mkdtemp()
+        os.chdir(self.temp_dir)
+
+    def tearDown(self):
+        assert os.path.isdir(self.temp_dir)
+        shutil.rmtree(self.temp_dir)
+        assert not os.path.isdir(self.temp_dir)
 
     def test_constructor(self):
         env_base = EnvironmentBase(self.view)
@@ -28,7 +39,13 @@ class EnvironmentBaseTestCase(TestCase):
         self.view.process_request.assert_called_once_with(env_base)
 
     def test_config_override(self):
-        # Create a fake temp file
+
+        # Create fake ami_cache (we aren't testing this file but we need it since create_missing_files will be disabled)
+        ami_cache = open(os.path.join(self.temp_dir, DEFAULT_AMI_CACHE_FILENAME), 'a')
+        ami_cache.write("{}")
+        ami_cache.flush()
+
+        # Create a fake config file
         temp = NamedTemporaryFile()
 
         # Add config_file override flag
@@ -37,7 +54,7 @@ class EnvironmentBaseTestCase(TestCase):
 
         # bad json test
         with self.assertRaises(ValueError):
-            EnvironmentBase(self.view)
+            EnvironmentBase(self.view, create_missing_files=False)
         # -----------------
 
         # Add a minimal json structure to avoid a parsing exception
@@ -45,7 +62,7 @@ class EnvironmentBaseTestCase(TestCase):
         temp.flush()
 
         # good json test
-        EnvironmentBase(self.view)
+        EnvironmentBase(self.view, create_missing_files=False)
         # ------------------
 
         # Temp files auto-delete on close, let's verify that
@@ -54,7 +71,7 @@ class EnvironmentBaseTestCase(TestCase):
 
         # no file test
         with self.assertRaises(IOError):
-            EnvironmentBase(self.view)
+            EnvironmentBase(self.view, create_missing_files=False)
 
     def test_flags(self):
         # Add config_file override flag
@@ -82,12 +99,12 @@ class EnvironmentBaseTestCase(TestCase):
 
         self.view.args['--stack_name'] = 'stack_name_override'
         eb = EnvironmentBase(self.view)
-        self.assertSequenceEqual(eb.stack_name, 'stack_name_override')
+        self.assertEqual(eb.stack_name, 'stack_name_override')
         del self.view.args['--stack_name']
 
         self.view.args['--template_file'] = 'template_file_override'
         eb = EnvironmentBase(self.view)
-        self.assertSequenceEqual(eb.template_filename, 'template_file_override')
+        self.assertEqual(eb.template_filename, 'template_file_override')
         del self.view.args['--template_file']
 
         temp.close()
@@ -118,6 +135,26 @@ class EnvironmentBaseTestCase(TestCase):
 
         with self.assertRaises(ValidationError):
             EnvironmentBase._validate_config(config_copy)
+
+    def test_factory_default(self):
+        # print ('test_factory_default::view.args', self.view.args)
+
+        with self.assertRaises(IOError):
+            EnvironmentBase(self.view, create_missing_files=False)
+
+        # Create refs to files that should be created and make sure they don't already exists
+        config_file = os.path.join(self.temp_dir, DEFAULT_CONFIG_FILENAME)
+        ami_cache_file = os.path.join(self.temp_dir, DEFAULT_AMI_CACHE_FILENAME)
+        self.assertFalse(os.path.isfile(config_file))
+        self.assertFalse(os.path.isfile(ami_cache_file))
+
+        # Verify that create_missing_files works as intended
+        EnvironmentBase(self.view, create_missing_files=True)
+        self.assertTrue(os.path.isfile(config_file))
+        self.assertTrue(os.path.isfile(ami_cache_file))
+
+        # Verify that the previously created files are loaded up correctly
+        EnvironmentBase(self.view, create_missing_files=False)
 
 
 if __name__ == '__main__':

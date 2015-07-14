@@ -1,5 +1,5 @@
 from __future__ import print_function
-from unittest2 import TestCase
+from unittest2 import TestCase, main
 import mock
 import os
 import json
@@ -12,9 +12,7 @@ class EnvironmentBaseTestCase(TestCase):
     def setUp(self):
         self.view = mock.MagicMock()
         self.view.process_request = mock.MagicMock()
-
-        # We wouldn't want to recursively run this test suite
-        self.view.args = {'--no_tests': True, 'create': True}
+        self.view.args = {'create': True}
 
         self.dummy_value = 'dummy'
         self.valid_config = {}
@@ -123,4 +121,4 @@ class EnvironmentBaseTestCase(TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    main()

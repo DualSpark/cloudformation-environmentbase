@@ -102,8 +102,13 @@ if __name__ == '__main__':
     print 'Regions %s' % regions
     for region in regions:
         print '\n-------------------\nProcessing %s' % region
-        images = find_amis(region, YEAR-1)
+        images = find_amis(region, YEAR)
         filtered_amis = filter_amis(images)
+
+        # If no hits retry with last years AMIs
+        if filtered_amis is None:
+            images = find_amis(region, YEAR-1)
+            filtered_amis = filter_amis(images)
 
         hvm_ami = get_hvm_ami(filtered_amis)
         print json.dumps(hvm_ami, indent=4, separators=(',', ': '))

@@ -1,11 +1,11 @@
 {
-    "ap-northeast-1": { "HVM64": "ami-1e86981f", "PV64": "ami-3c87993d" },
-    "ap-southeast-1": { "HVM64": "ami-94bb90c6", "PV64": "ami-58ba910a" },
-    "ap-southeast-2": { "HVM64": "ami-d70773ed", "PV64": "ami-1500742f" },
-    "eu-central-1": { "HVM64": "ami-0a003317", "PV64": "ami-0600331b" },
-    "eu-west-1": { "HVM64": "ami-8723aef0", "PV64": "ami-7b3db00c" },
-    "sa-east-1": { "HVM64": "ami-a59925b8", "PV64": "ami-fd9925e0" },
-    "us-east-1": { "HVM64": "ami-ee6e2a86", "PV64": "ami-8e682ce6" },
-    "us-west-1": { "HVM64": "ami-5a90891f", "PV64": "ami-f49089b1" },
-    "us-west-2": { "HVM64": "ami-c1c39af1", "PV64": "ami-9fc29baf" }
+    "ap-northeast-1": { "HVM64": "ami-cbf90ecb", "PV64": "ami-27f90e27" },
+    "ap-southeast-1": { "HVM64": "ami-68d8e93a", "PV64": "ami-acd9e8fe" },
+    "ap-southeast-2": { "HVM64": "ami-fd9cecc7", "PV64": "ami-ff9cecc5" },
+    "eu-central-1": { "HVM64": "ami-a8221fb5", "PV64": "ami-ac221fb1" },
+    "eu-west-1": { "HVM64": "ami-a10897d6", "PV64": "ami-bf0897c8" },
+    "sa-east-1": { "HVM64": "ami-b52890a8", "PV64": "ami-bb2890a6" },
+    "us-east-1": { "HVM64": "ami-1ecae776", "PV64": "ami-1ccae774" },
+    "us-west-1": { "HVM64": "ami-d114f295", "PV64": "ami-d514f291" },
+    "us-west-2": { "HVM64": "ami-e7527ed7", "PV64": "ami-ff527ecf" }
 }

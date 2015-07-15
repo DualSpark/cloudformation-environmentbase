@@ -65,7 +65,12 @@ setup(
         "troposphere==1.0.0",
         "boto>=2.38.0",
         "ipcalc==1.1.2",
-        "docopt==0.6.2"
+        "docopt==0.6.2",
+        'setuptools>=17.1',
+        'boto3',
+        'lxml',
+        'urllib2',
+        'cssselect'
     ],
 
     # Optional dependencies
@@ -100,5 +105,4 @@ setup(
         'unittest2',
         'mock'
     ]
-
 )

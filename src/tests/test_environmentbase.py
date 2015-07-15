@@ -15,37 +15,42 @@ class EnvironmentBaseTestCase(TestCase):
         self.view.process_request = mock.MagicMock()
         self.view.args = {'create': True}
 
-        # Create fake config string
-        self.dummy_value = 'dummy'
-        self.valid_config = {}
-        for (section, keys) in TEMPLATE_REQUIREMENTS.iteritems():
-            self.valid_config[section] = {}
-            for key in keys:
-                self.valid_config[section][key] = self.dummy_value
-
         # Change to a temp dir so auto generated file don't clutter the os
         self.temp_dir = mkdtemp()
         os.chdir(self.temp_dir)
 
     def tearDown(self):
-        assert os.path.isdir(self.temp_dir)
+        # Delete any files left in the temp dir
         shutil.rmtree(self.temp_dir)
         assert not os.path.isdir(self.temp_dir)
 
+    def _create_dummy_config(self, dummy_value):
+        config = {}
+        for (section, keys) in TEMPLATE_REQUIREMENTS.iteritems():
+            config[section] = {}
+            for key in keys:
+                config[section][key] = dummy_value
+        return config
+
+    def _create_local_file(self, name, content):
+        f = open(os.path.join(self.temp_dir, name), 'a')
+        f.write(content)
+        f.flush()
+        return f
+
     def test_constructor(self):
+        """Make sure EnvironmentBase passes control to view to process user requests"""
         env_base = EnvironmentBase(self.view)
 
         # Check that EnvironmentBase started the CLI
         self.view.process_request.assert_called_once_with(env_base)
 
     def test_config_override(self):
+        """  """
+        # We don't care about the AMI cache, but we the file to exist and to contain valid json
+        self._create_local_file(DEFAULT_AMI_CACHE_FILENAME, '{}')
 
-        # Create fake ami_cache (we aren't testing this file but we need it since create_missing_files will be disabled)
-        ami_cache = open(os.path.join(self.temp_dir, DEFAULT_AMI_CACHE_FILENAME), 'a')
-        ami_cache.write("{}")
-        ami_cache.flush()
-
-        # Create a fake config file
+        # Create a config file -- not in local dir --
         temp = NamedTemporaryFile()
 
         # Add config_file override flag
@@ -58,7 +63,8 @@ class EnvironmentBaseTestCase(TestCase):
         # -----------------
 
         # Add a minimal json structure to avoid a parsing exception
-        print(json.dumps(self.valid_config), file=temp.file)
+        valid_config = self._create_dummy_config('dummy')
+        temp.write(json.dumps(valid_config))
         temp.flush()
 
         # good json test
@@ -74,17 +80,20 @@ class EnvironmentBaseTestCase(TestCase):
             EnvironmentBase(self.view, create_missing_files=False)
 
     def test_flags(self):
+        dummy_value = 'dummy'
+        valid_config = self._create_dummy_config(dummy_value)
+
         # Add config_file override flag
         temp = NamedTemporaryFile()
-        print(json.dumps(self.valid_config), file=temp.file)
+        print(json.dumps(valid_config), file=temp.file)
         temp.flush()
         self.view.args['--config_file'] = temp.name
 
         # test the defaults
         eb = EnvironmentBase(self.view)
         self.assertFalse(eb.debug)
-        self.assertEqual(eb.stack_name, self.dummy_value)
-        self.assertEqual(eb.template_filename, self.dummy_value)
+        self.assertEqual(eb.stack_name, dummy_value)
+        self.assertEqual(eb.template_filename, dummy_value)
 
         # override tests
         # - config cli flag
@@ -110,31 +119,32 @@ class EnvironmentBaseTestCase(TestCase):
         temp.close()
 
     def test_config_validation(self):
-        EnvironmentBase._validate_config(self.valid_config)
+        valid_config = self._create_dummy_config('dummy')
+        EnvironmentBase._validate_config(valid_config)
 
-        config_copy = copy.deepcopy(self.valid_config)
+        # config_copy = copy.deepcopy(valid_config)
 
         # Find a section with at least one required key
         section = ''
         keys = {}
         while True:
-            (section, keys) = config_copy.items()[0]
+            (section, keys) = valid_config.items()[0]
             if len(keys) > 0:
                 break
         assert len(keys) > 0
 
         # Check missing key validation
         (key, value) = keys.items()[0]
-        del config_copy[section][key]
+        del valid_config[section][key]
 
         with self.assertRaises(ValidationError):
-            EnvironmentBase._validate_config(config_copy)
+            EnvironmentBase._validate_config(valid_config)
 
         # Check missing section validation
-        del config_copy[section]
+        del valid_config[section]
 
         with self.assertRaises(ValidationError):
-            EnvironmentBase._validate_config(config_copy)
+            EnvironmentBase._validate_config(valid_config)
 
     def test_factory_default(self):
         # print ('test_factory_default::view.args', self.view.args)

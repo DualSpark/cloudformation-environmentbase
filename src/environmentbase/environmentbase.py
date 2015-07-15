@@ -2,6 +2,7 @@ import os
 import os.path
 from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
 from template import Template
+import troposphere.constants as tpc
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
 import troposphere.elasticloadbalancing as elb
@@ -18,14 +19,15 @@ from datetime import datetime
 import cli
 from pkg_resources import resource_string
 
-HTTP_PORT = '80'
-HTTPS_PORT = '443'
+
+def _get_internal_resource(resource_name):
+    """Retrieves resource embedded in the package (even if installed as a zipped archive)."""
+    return resource_string(__name__, 'data/' + resource_name)
 
 DEFAULT_CONFIG_FILENAME = 'config_args.json'
 DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
 
-_ROOT = os.path.abspath(os.path.dirname(__file__))
-FACTORY_DEFAULT_CONFIG = resource_string(__name__, 'data/' + DEFAULT_CONFIG_FILENAME)
+FACTORY_DEFAULT_CONFIG = _get_internal_resource(DEFAULT_CONFIG_FILENAME)
 FACTORY_DEFAULT_AMI_CACHE = resource_string(__name__, 'data/' + DEFAULT_AMI_CACHE_FILENAME)
 
 TEMPLATE_REQUIREMENTS = {
@@ -33,13 +35,15 @@ TEMPLATE_REQUIREMENTS = {
     "template": ['ami_map_file']
 }
 
+
 class ValidationError(Exception):
     pass
 
+
 class EnvironmentBase(object):
-    '''
+    """
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
-    '''
+    """
 
     _config = {}
 
@@ -52,12 +56,12 @@ class EnvironmentBase(object):
     strings = {}
 
     def __init__(self, view=None, create_missing_files=True):
-        '''
+        """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
         CloudTrail log storage
         @param arg_dict [dict] keyword arguments to handle setting config-level parameters and arguments within this class
-        '''
+        """
 
         # Load the user interface
         # ---------------------
@@ -155,11 +159,11 @@ class EnvironmentBase(object):
         self.add_ami_mapping(file_path)
 
     def add_ami_mapping(self, ami_map_file_path):
-        '''
+        """
         Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
         This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
         @param ami_map_file [string] path representing where to find the AMI map to ingest into this template
-        '''
+        """
         if ami_map_file_path:
             with open(ami_map_file_path, 'r') as json_file:
                 json_data = json.load(json_file)
@@ -178,12 +182,12 @@ class EnvironmentBase(object):
                             elb,
                             tier_name,
                             tier_args):
-        '''
+        """
         Method handles the process of uniformly creating CNAME records for ELBs in a given tier
         @param elb [Troposphere.elasticloadbalancing.LoadBalancer]
         @param tier_name [str]
         @param tier_args [dict]
-        '''
+        """
         if 'environmentHostedZone' not in self.template.parameters:
             hostedzone = self.template.add_parameter(Parameter(
                 "environmentHostedZone",
@@ -239,10 +243,10 @@ class EnvironmentBase(object):
 
     def add_common_parameters(self,
                               template_config):
-        '''
+        """
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
-        '''
+        """
         self.template.add_parameter_idempotent(Parameter('ec2Key',
                 Type='String',
                 Default=template_config.get('ec2_key_default','default-key'),
@@ -265,12 +269,12 @@ class EnvironmentBase(object):
                              region,
                              key,
                              value):
-        '''
+        """
         Method adds a key value pair to the RegionMap mapping within this CloudFormation template
         @param region [string] AWS region name that the key value pair is associated with
         @param key [string] name of the key to store in the RegionMap mapping for the specified Region
         @param value [string] value portion of the key value pair related to the region specified
-        '''
+        """
         self.__init_region_map([region])
         if region not in self.template.mappings['RegionMap']:
             self.template.mappings['RegionMap'][region] = {}
@@ -280,12 +284,12 @@ class EnvironmentBase(object):
                                            utility_bucket,
                                            elb_log_prefix='elb_logs',
                                            cloudtrail_log_prefix='cloudtrail_logs'):
-        '''
+        """
         Method builds the S3 bucket policy statements which will allow the proper AWS account ids to write ELB Access Logs to the specified bucket and prefix.
         Per documentation located at: http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/configure-s3-bucket.html
         @param utility_bucket [Troposphere.s3.Bucket] object reference of the utility bucket for this tier
         @param elb_log_prefix [string] prefix for paths used to prefix the path where ELB will place access logs
-        '''
+        """
         if elb_log_prefix != None and elb_log_prefix != '':
             elb_log_prefix = elb_log_prefix + '/'
         else:
@@ -375,7 +379,7 @@ class EnvironmentBase(object):
                    creation_policy=None,
                    update_policy=None,
                    depends_on=None):
-        '''
+        """
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
         @param instance_profile [Troposphere.iam.InstanceProfile] IAM Instance Profile object to be applied to instances launched within this Auto Scaling group
@@ -395,7 +399,7 @@ class EnvironmentBase(object):
         @param load_balancer [Troposphere.elasticloadbalancing.LoadBalancer] Object reference to an ELB to be assigned to this auto scaling group
         @param instance_monitoring [Boolean] indicates that detailed monitoring should be turned on for all instnaces launched within this Auto Scaling group
         @param subnet_type [string {'public', 'private'}] string indicating which type of subnet (public or private) instances should be launched into
-        '''
+        """
         if subnet_type not in ['public', 'private']:
             raise RuntimeError('Unable to determine which type of subnet instances should be launched into. ' + str(subnet_type) + ' is not one of ["public", "private"].')
 
@@ -538,10 +542,10 @@ class EnvironmentBase(object):
 
     def __init_region_map(self,
                           region_list):
-        '''
+        """
         Internal helper method used to check to ensure mapping dictionaries are present
         @param region_list [list(str)] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
-        '''
+        """
         if 'RegionMap' not in self.template.mappings:
             self.template.mappings['RegionMap'] = {}
         for region_name in region_list:
@@ -556,7 +560,7 @@ class EnvironmentBase(object):
                              from_port,
                              to_port=None,
                              ip_protocol='tcp'):
-        '''
+        """
         Helper method creates reciprocal ingress and egress rules given two existing security groups and a set of ports
         @param source_group [Troposphere.ec2.SecurityGroup] Object reference to the source security group
         @param source_group_name [string] friendly name of the source security group used for labels
@@ -565,7 +569,7 @@ class EnvironmentBase(object):
         @param from_port [string] lower boundary of the port range to set for the secuirty group rules
         @param to_port [string] upper boundary of the port range to set for the security group rules
         @param ip_protocol [string] name of the IP protocol to set this rule for
-        '''
+        """
         if to_port == None:
             to_port = from_port
         if isinstance(from_port, unicode):
@@ -616,20 +620,20 @@ class EnvironmentBase(object):
         
         listeners = []
         for elb_port in ports:
-            if elb_port == HTTP_PORT:
+            if elb_port == tpc.HTTP_PORT:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTP', InstanceProtocol='HTTP',
                                  PolicyNames=[stickiness_policy_name]))
-            elif elb_port == HTTPS_PORT:
+            elif elb_port == tpc.HTTPS_PORT:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTPS', InstanceProtocol='HTTPS',
                                  SSLCertificateId=Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name]),
                                  PolicyNames=[stickiness_policy_name]))
             else:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
 
-        if HTTPS_PORT in ports:
-            health_check_port = ports[HTTPS_PORT]
-        elif HTTP_PORT in ports:
-            health_check_port = ports[HTTP_PORT]
+        if tpc.HTTPS_PORT in ports:
+            health_check_port = ports[tpc.HTTPS_PORT]
+        elif tpc.HTTP_PORT in ports:
+            health_check_port = ports[tpc.HTTP_PORT]
         else:
             health_check_port = ports.values()[0]
 
@@ -660,9 +664,9 @@ class EnvironmentBase(object):
         return self.template.add_resource(elb_obj)
 
     def to_json(self):
-        '''
+        """
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
-        '''
+        """
         return self.template.to_template_json()
 
     @staticmethod
@@ -670,13 +674,13 @@ class EnvironmentBase(object):
                         variable_declarations=None,
                         cleanup_commands=None,
                         prepend_line='#!/bin/bash'):
-        '''
+        """
         Method encapsulates process of building out the bootstrap given a set of variables and a bootstrap file to source from
         Returns base 64-wrapped, joined bootstrap to be applied to an instnace
         @param bootstrap_files [ string[] ] list of paths to the bash script(s) to read as the source for the bootstrap action to created
         @param variable_declaration [ list ] list of lines to add to the head of the file - used to inject bash variables into the script
         @param cleanup_commnds [ string[] ] list of lines to add at the end of the file - used for layer-specific details
-        '''
+        """
         if prepend_line != '':
             ret_val = [prepend_line]
         else:
@@ -695,10 +699,10 @@ class EnvironmentBase(object):
 
     @staticmethod
     def get_file_contents(file_name):
-        '''
+        """
         Method encpsulates reading a file into a list while removing newline characters
         @param file_name [string] path to file to read
-        '''
+        """
         ret_val = []
         with open(file_name) as f:
             content = f.readlines()
@@ -710,11 +714,11 @@ class EnvironmentBase(object):
     def create_instance_profile(self,
                                 layer_name,
                                 iam_policies=None):
-        '''
+        """
         Helper method creates an IAM Role and Instance Profile for the optoinally specified IAM policies
         @param layer_name [string] friendly name for the Role and Instance Profile used for naming and path organization
         @param iam_policies [Troposphere.iam.Policy[]] array of IAM Policies to be associated with the Role and Instance Profile created
-        '''
+        """
         iam_role_obj = iam.Role(layer_name + 'IAMRole',
                 AssumeRolePolicyDocument={
                     'Statement': [{
@@ -740,7 +744,7 @@ class EnvironmentBase(object):
                            s3_key_prefix=None,
                            s3_canned_acl=None,
                            depends_on=[]):
-        '''
+        """
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
         @param name [str] name of this template for key naming in s3
         @param template [Troposphere.Template] Troposphere Template object to add as a child to this object's template
@@ -748,7 +752,7 @@ class EnvironmentBase(object):
         @param s3_bucket [str] name of the bucket to upload keys to - will default to value in template_args if not present
         @param s3_key_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
         @param s3_canned_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
-        '''
+        """
         template = template_wrapper.template
 
         if s3_key_prefix == None:

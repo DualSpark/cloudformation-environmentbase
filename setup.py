@@ -69,7 +69,6 @@ setup(
         'setuptools>=17.1',
         'boto3',
         'lxml',
-        'urllib2',
         'cssselect'
     ],
 
@@ -101,8 +100,8 @@ setup(
     # Test runner and required testing packages
     test_suite='nose2.collector.collector',
     tests_require=[
-        'nose2',
-        'unittest2',
-        'mock'
+        'nose2>=0.5.0',
+        'unittest2>=1.1.0',
+        'mock>=1.1.2'
     ]
 )

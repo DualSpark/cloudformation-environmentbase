@@ -13,7 +13,6 @@ class EnvironmentBaseTestCase(TestCase):
     def setUp(self):
         self.view = mock.MagicMock()
         self.view.process_request = mock.MagicMock()
-        self.view.args = {'create': True}
 
         # Change to a temp dir so auto generated file don't clutter the os
         self.temp_dir = mkdtemp()
@@ -40,6 +39,7 @@ class EnvironmentBaseTestCase(TestCase):
 
     def test_constructor(self):
         """Make sure EnvironmentBase passes control to view to process user requests"""
+        self.view.args = {'create': True}
         env_base = EnvironmentBase(self.view)
 
         # Check that EnvironmentBase started the CLI
@@ -49,6 +49,7 @@ class EnvironmentBaseTestCase(TestCase):
         """  """
         # We don't care about the AMI cache, but we the file to exist and to contain valid json
         self._create_local_file(DEFAULT_AMI_CACHE_FILENAME, '{}')
+        self.view.args = {'create': True}
 
         # Create a config file -- not in local dir --
         temp = NamedTemporaryFile()
@@ -82,6 +83,7 @@ class EnvironmentBaseTestCase(TestCase):
     def test_flags(self):
         dummy_value = 'dummy'
         valid_config = self._create_dummy_config(dummy_value)
+        self.view.args = {'create': True}
 
         # Add config_file override flag
         temp = NamedTemporaryFile()
@@ -121,6 +123,7 @@ class EnvironmentBaseTestCase(TestCase):
     def test_config_validation(self):
         valid_config = self._create_dummy_config('dummy')
         EnvironmentBase._validate_config(valid_config)
+        self.view.args = {'create': True}
 
         # config_copy = copy.deepcopy(valid_config)
 
@@ -147,6 +150,7 @@ class EnvironmentBaseTestCase(TestCase):
             EnvironmentBase._validate_config(valid_config)
 
     def test_factory_default(self):
+        self.view.args = {'create': True}
         # print ('test_factory_default::view.args', self.view.args)
 
         with self.assertRaises(IOError):

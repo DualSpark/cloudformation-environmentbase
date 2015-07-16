@@ -92,7 +92,7 @@ class EnvironmentBase(object):
 
         with open(self.template_filename, 'w') as output_file:
             # Here to_json() loads child templates into S3
-            raw_json = self.template.to_json()
+            raw_json = self.template.to_template_json()
 
             reloaded_template = json.loads(raw_json)
             json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))

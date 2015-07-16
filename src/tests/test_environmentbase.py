@@ -1,12 +1,13 @@
-from __future__ import print_function
 from unittest2 import TestCase, main
 import mock
+from mock import patch
 import os
 import shutil
 import json
-import copy
+import sys
 from tempfile import NamedTemporaryFile, mkdtemp
-from environmentbase.environmentbase import *
+from environmentbase import cli, environmentbase as eb
+from troposphere import ec2
 
 
 class EnvironmentBaseTestCase(TestCase):
@@ -25,7 +26,7 @@ class EnvironmentBaseTestCase(TestCase):
 
     def _create_dummy_config(self, dummy_value):
         config = {}
-        for (section, keys) in TEMPLATE_REQUIREMENTS.iteritems():
+        for (section, keys) in eb.TEMPLATE_REQUIREMENTS.iteritems():
             config[section] = {}
             for key in keys:
                 config[section][key] = dummy_value
@@ -40,15 +41,16 @@ class EnvironmentBaseTestCase(TestCase):
     def test_constructor(self):
         """Make sure EnvironmentBase passes control to view to process user requests"""
         self.view.args = {'create': True}
-        env_base = EnvironmentBase(self.view)
+        env_base = eb.EnvironmentBase(self.view)
 
         # Check that EnvironmentBase started the CLI
         self.view.process_request.assert_called_once_with(env_base)
 
     def test_config_override(self):
-        """  """
+        """ When providing an alternate config_file location verify that it's loading the right file."""
+
         # We don't care about the AMI cache, but we the file to exist and to contain valid json
-        self._create_local_file(DEFAULT_AMI_CACHE_FILENAME, '{}')
+        self._create_local_file(eb.DEFAULT_AMI_CACHE_FILENAME, '{}')
         self.view.args = {'create': True}
 
         # Create a config file -- not in local dir --
@@ -56,11 +58,12 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Add config_file override flag
         self.view.args['--config_file'] = temp.name
+
         # ------------------
 
         # bad json test
         with self.assertRaises(ValueError):
-            EnvironmentBase(self.view, create_missing_files=False)
+            eb.EnvironmentBase(self.view, create_missing_files=False)
         # -----------------
 
         # Add a minimal json structure to avoid a parsing exception
@@ -69,7 +72,7 @@ class EnvironmentBaseTestCase(TestCase):
         temp.flush()
 
         # good json test
-        EnvironmentBase(self.view, create_missing_files=False)
+        eb.EnvironmentBase(self.view, create_missing_files=False)
         # ------------------
 
         # Temp files auto-delete on close, let's verify that
@@ -78,7 +81,7 @@ class EnvironmentBaseTestCase(TestCase):
 
         # no file test
         with self.assertRaises(IOError):
-            EnvironmentBase(self.view, create_missing_files=False)
+            eb.EnvironmentBase(self.view, create_missing_files=False)
 
     def test_flags(self):
         dummy_value = 'dummy'
@@ -87,15 +90,15 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Add config_file override flag
         temp = NamedTemporaryFile()
-        print(json.dumps(valid_config), file=temp.file)
+        temp.file.write(json.dumps(valid_config))
         temp.flush()
         self.view.args['--config_file'] = temp.name
 
         # test the defaults
-        eb = EnvironmentBase(self.view)
-        self.assertFalse(eb.debug)
-        self.assertEqual(eb.stack_name, dummy_value)
-        self.assertEqual(eb.template_filename, dummy_value)
+        base = eb.EnvironmentBase(self.view)
+        self.assertFalse(base.debug)
+        self.assertEqual(base.stack_name, dummy_value)
+        self.assertEqual(base.template_filename, dummy_value)
 
         # override tests
         # - config cli flag
@@ -104,25 +107,25 @@ class EnvironmentBaseTestCase(TestCase):
         # - remove cli flag
 
         self.view.args['--debug'] = True
-        eb = EnvironmentBase(self.view)
-        self.assertTrue(eb.debug)
+        base = eb.EnvironmentBase(self.view)
+        self.assertTrue(base.debug)
         del self.view.args['--debug']
 
         self.view.args['--stack_name'] = 'stack_name_override'
-        eb = EnvironmentBase(self.view)
-        self.assertEqual(eb.stack_name, 'stack_name_override')
+        base = eb.EnvironmentBase(self.view)
+        self.assertEqual(base.stack_name, 'stack_name_override')
         del self.view.args['--stack_name']
 
         self.view.args['--template_file'] = 'template_file_override'
-        eb = EnvironmentBase(self.view)
-        self.assertEqual(eb.template_filename, 'template_file_override')
+        base = eb.EnvironmentBase(self.view)
+        self.assertEqual(base.template_filename, 'template_file_override')
         del self.view.args['--template_file']
 
         temp.close()
 
     def test_config_validation(self):
         valid_config = self._create_dummy_config('dummy')
-        EnvironmentBase._validate_config(valid_config)
+        eb.EnvironmentBase._validate_config(valid_config)
         self.view.args = {'create': True}
 
         # config_copy = copy.deepcopy(valid_config)
@@ -140,36 +143,61 @@ class EnvironmentBaseTestCase(TestCase):
         (key, value) = keys.items()[0]
         del valid_config[section][key]
 
-        with self.assertRaises(ValidationError):
-            EnvironmentBase._validate_config(valid_config)
+        with self.assertRaises(eb.ValidationError):
+            eb.EnvironmentBase._validate_config(valid_config)
 
         # Check missing section validation
         del valid_config[section]
 
-        with self.assertRaises(ValidationError):
-            EnvironmentBase._validate_config(valid_config)
+        with self.assertRaises(eb.ValidationError):
+            eb.EnvironmentBase._validate_config(valid_config)
 
     def test_factory_default(self):
         self.view.args = {'create': True}
-        # print ('test_factory_default::view.args', self.view.args)
 
         with self.assertRaises(IOError):
-            EnvironmentBase(self.view, create_missing_files=False)
+            eb.EnvironmentBase(self.view, create_missing_files=False)
 
         # Create refs to files that should be created and make sure they don't already exists
-        config_file = os.path.join(self.temp_dir, DEFAULT_CONFIG_FILENAME)
-        ami_cache_file = os.path.join(self.temp_dir, DEFAULT_AMI_CACHE_FILENAME)
+        config_file = os.path.join(self.temp_dir, eb.DEFAULT_CONFIG_FILENAME)
+        ami_cache_file = os.path.join(self.temp_dir, eb.DEFAULT_AMI_CACHE_FILENAME)
         self.assertFalse(os.path.isfile(config_file))
         self.assertFalse(os.path.isfile(ami_cache_file))
 
         # Verify that create_missing_files works as intended
-        EnvironmentBase(self.view, create_missing_files=True)
+        eb.EnvironmentBase(self.view, create_missing_files=True)
         self.assertTrue(os.path.isfile(config_file))
         self.assertTrue(os.path.isfile(ami_cache_file))
 
         # Verify that the previously created files are loaded up correctly
-        EnvironmentBase(self.view, create_missing_files=False)
+        eb.EnvironmentBase(self.view, create_missing_files=False)
 
+    def test_controller_subclass(self):
+        class MySubclass(eb.EnvironmentBase):
+            def __init__(self, view):
+                # Run parent initializer
+                eb.EnvironmentBase.__init__(self, view)
+
+            def create_action(self):
+                # Add some stuff
+                res = ec2.Instance("ec2instance", InstanceType="m3.medium", ImageId="ami-951945d0")
+                self.template.add_resource(res)
+
+                # This triggers serialization of the template and any child stacks
+                super(MySubclass, self).create_action()
+
+        # Initialize the the controller with faked 'create' CLI parameter
+        with patch.object(sys, 'argv', ['environmentbase', 'create']):
+            MySubclass(cli.CLI(quiet=True))
+
+        # Load the generated output template
+        with open('environmentbase.template', 'r') as f:
+            template = json.load(f)
+
+        # Verify that the ec2 instance is in the output
+        self.assertTrue('ec2instance' in template['Resources'])
+
+        # print json.dumps(template, indent=4)
 
 if __name__ == '__main__':
     main()

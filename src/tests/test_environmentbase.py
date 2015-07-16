@@ -5,16 +5,13 @@ import os
 import shutil
 import json
 import sys
-from tempfile import NamedTemporaryFile, mkdtemp
+from tempfile import mkdtemp
 from environmentbase import cli, environmentbase as eb
 from troposphere import ec2
 
 
 class EnvironmentBaseTestCase(TestCase):
     def setUp(self):
-        self.view = mock.MagicMock()
-        self.view.process_request = mock.MagicMock()
-
         # Change to a temp dir so auto generated file don't clutter the os
         self.temp_dir = mkdtemp()
         os.chdir(self.temp_dir)
@@ -23,6 +20,16 @@ class EnvironmentBaseTestCase(TestCase):
         # Delete any files left in the temp dir
         shutil.rmtree(self.temp_dir)
         assert not os.path.isdir(self.temp_dir)
+
+    def fake_cli(self, extra_args):
+        args = ['environmentbase']
+        args.extend(extra_args)
+
+        with patch.object(sys, 'argv', args):
+            my_cli = cli.CLI(quiet=True)
+            my_cli.process_request = mock.MagicMock()
+
+        return my_cli
 
     def _create_dummy_config(self, dummy_value):
         config = {}
@@ -40,95 +47,100 @@ class EnvironmentBaseTestCase(TestCase):
 
     def test_constructor(self):
         """Make sure EnvironmentBase passes control to view to process user requests"""
-        self.view.args = {'create': True}
-        env_base = eb.EnvironmentBase(self.view)
+        fake_cli = self.fake_cli(['create'])
+        env_base = eb.EnvironmentBase(fake_cli)
 
         # Check that EnvironmentBase started the CLI
-        self.view.process_request.assert_called_once_with(env_base)
+        fake_cli.process_request.assert_called_once_with(env_base)
+
+    def test_alternate_view(self):
+        """ More of an example of how to use your own custom view than a test """
+        actions_called = {'deploy': 0, 'create': 0}
+
+        class MyView(object):
+
+            def __init__(self):
+                # Start an api, a web server or a rich client UI for example
+                # Record user request(s), the controller will then call process_request()
+                # so the can relay user requests to the appropriate controller action
+                self.user_actions = ['create', 'deploy', 'deploy']
+                self.user_config_changes = {'debug': True, 'output_filename': 'output.txt'}
+
+            def update_config(self, config):
+                # Update any config properties you need to
+                config['global']['print_debug'] = self.user_config_changes['debug']
+                config['global']['output'] = self.user_config_changes['output_filename']
+
+            def process_request(self, controller):
+
+                for action in self.user_actions:
+                    # if action == 'create':
+                    #     controller.create_action()
+                    # elif action == 'deploy':
+                    #     controller.deploy_action()
+
+                    actions_called[action] += 1
+
+        eb.EnvironmentBase(MyView())
+
+        self.assertEqual(actions_called['create'], 1)
+        self.assertEqual(actions_called['deploy'], 2)
 
     def test_config_override(self):
-        """ When providing an alternate config_file location verify that it's loading the right file."""
+        """ Make sure local config files overrides default values."""
 
-        # We don't care about the AMI cache, but we the file to exist and to contain valid json
+        # We don't care about the AMI cache for this test,
+        # but the file has to exist and to contain valid json
         self._create_local_file(eb.DEFAULT_AMI_CACHE_FILENAME, '{}')
-        self.view.args = {'create': True}
 
-        # Create a config file -- not in local dir --
-        temp = NamedTemporaryFile()
+        fake_cli = self.fake_cli(['create'])
 
-        # Add config_file override flag
-        self.view.args['--config_file'] = temp.name
+        # We don't use the factory_defualts as the real config so if no config file exists,
+        # and we are asked not to create a new one then we must fail and exit
+        assert not os.path.isfile(eb.CONFIG_FILENAME)
 
-        # ------------------
+        with self.assertRaises(IOError):
+            eb.EnvironmentBase(fake_cli, create_missing_files=False)
 
-        # bad json test
-        with self.assertRaises(ValueError):
-            eb.EnvironmentBase(self.view, create_missing_files=False)
+        assert not os.path.isfile(eb.CONFIG_FILENAME)
+
         # -----------------
 
-        # Add a minimal json structure to avoid a parsing exception
-        valid_config = self._create_dummy_config('dummy')
-        temp.write(json.dumps(valid_config))
-        temp.flush()
+        # If the file exists but is not valid json we fail out
+        with open(eb.CONFIG_FILENAME, 'w') as f:
+            f.write("{}")
+            with self.assertRaises(ValueError):
+                eb.EnvironmentBase(fake_cli, create_missing_files=False)
 
-        # good json test
-        eb.EnvironmentBase(self.view, create_missing_files=False)
-        # ------------------
+        # Create a local config and verify that EnvironmentBase overrides the factory default
+        with open(eb.CONFIG_FILENAME, 'w') as f:
+            config = self._create_dummy_config('dummy')
 
-        # Temp files auto-delete on close, let's verify that
-        temp.close()
-        assert not os.path.isfile(temp.name)
+            # Change one of the values
+            original_value = eb.FACTORY_DEFAULT_CONFIG['global']['print_debug']
+            config['global']['print_debug'] = not original_value
 
-        # no file test
-        with self.assertRaises(IOError):
-            eb.EnvironmentBase(self.view, create_missing_files=False)
+            # write out the file override
+            f.write(json.dumps(config))
+            f.flush()
 
-    def test_flags(self):
-        dummy_value = 'dummy'
-        valid_config = self._create_dummy_config(dummy_value)
-        self.view.args = {'create': True}
+            base = eb.EnvironmentBase(fake_cli)
+            self.assertNotEqual(base.config['global']['print_debug'], original_value)
 
-        # Add config_file override flag
-        temp = NamedTemporaryFile()
-        temp.file.write(json.dumps(valid_config))
-        temp.flush()
-        self.view.args['--config_file'] = temp.name
+        # Make sure the file was created as requested (create_missing_files=True by default)
+        self.assertTrue(os.path.isfile(eb.CONFIG_FILENAME))
 
-        # test the defaults
-        base = eb.EnvironmentBase(self.view)
-        self.assertFalse(base.debug)
-        self.assertEqual(base.stack_name, dummy_value)
-        self.assertEqual(base.template_filename, dummy_value)
-
-        # override tests
-        # - config cli flag
-        # - recreate EB
-        # - test result
-        # - remove cli flag
-
-        self.view.args['--debug'] = True
-        base = eb.EnvironmentBase(self.view)
-        self.assertTrue(base.debug)
-        del self.view.args['--debug']
-
-        self.view.args['--stack_name'] = 'stack_name_override'
-        base = eb.EnvironmentBase(self.view)
-        self.assertEqual(base.stack_name, 'stack_name_override')
-        del self.view.args['--stack_name']
-
-        self.view.args['--template_file'] = 'template_file_override'
-        base = eb.EnvironmentBase(self.view)
-        self.assertEqual(base.template_filename, 'template_file_override')
-        del self.view.args['--template_file']
-
-        temp.close()
+        # Make sure it reloaded our saved config file
+        base = eb.EnvironmentBase(fake_cli)
+        self.assertNotEqual(base.config['global']['print_debug'], original_value)
 
     def test_config_validation(self):
+        """
+        environmentbase.TEMPLATE_REQUIREMENTS defines the required sections and keys for a valid input config file
+        This test ensures that EnvironmentBase._validate_config() enforces the TEMPLATE_REQUIREMENTS contract
+        """
         valid_config = self._create_dummy_config('dummy')
         eb.EnvironmentBase._validate_config(valid_config)
-        self.view.args = {'create': True}
-
-        # config_copy = copy.deepcopy(valid_config)
 
         # Find a section with at least one required key
         section = ''
@@ -152,28 +164,46 @@ class EnvironmentBaseTestCase(TestCase):
         with self.assertRaises(eb.ValidationError):
             eb.EnvironmentBase._validate_config(valid_config)
 
-    def test_factory_default(self):
-        self.view.args = {'create': True}
+    def test_flags(self):
+        """ Verify cli flags update config object """
 
+        # Verify that debug and output are set to the factory default
+        base = eb.EnvironmentBase(self.fake_cli(['create']))
+        self.assertEqual(base.config['global']['print_debug'],
+                         eb.FACTORY_DEFAULT_CONFIG['global']['print_debug'])
+        self.assertEqual(base.config['global']['output'],
+                         eb.FACTORY_DEFAULT_CONFIG['global']['output'])
+
+        # verify that the the debug cli flag changes the config value
+        base = eb.EnvironmentBase(self.fake_cli(['create', '--debug']))
+        self.assertTrue(base.config['global']['print_debug'])
+
+        # verify that the --template_file flag changes the config value
+        dummy_value = 'dummy'
+        base = eb.EnvironmentBase(self.fake_cli(['create', '--template_file', dummy_value]))
+        self.assertEqual(base.config['global']['output'], dummy_value)
+
+    def test_factory_default(self):
         with self.assertRaises(IOError):
-            eb.EnvironmentBase(self.view, create_missing_files=False)
+            eb.EnvironmentBase(self.fake_cli(['create']), create_missing_files=False)
 
         # Create refs to files that should be created and make sure they don't already exists
-        config_file = os.path.join(self.temp_dir, eb.DEFAULT_CONFIG_FILENAME)
+        config_file = os.path.join(self.temp_dir, eb.CONFIG_FILENAME)
         ami_cache_file = os.path.join(self.temp_dir, eb.DEFAULT_AMI_CACHE_FILENAME)
         self.assertFalse(os.path.isfile(config_file))
         self.assertFalse(os.path.isfile(ami_cache_file))
 
         # Verify that create_missing_files works as intended
-        eb.EnvironmentBase(self.view, create_missing_files=True)
+        eb.EnvironmentBase(self.fake_cli(['create']), create_missing_files=True)
         self.assertTrue(os.path.isfile(config_file))
         self.assertTrue(os.path.isfile(ami_cache_file))
 
         # Verify that the previously created files are loaded up correctly
-        eb.EnvironmentBase(self.view, create_missing_files=False)
+        eb.EnvironmentBase(self.fake_cli(['create']), create_missing_files=False)
 
     def test_controller_subclass(self):
-        class MySubclass(eb.EnvironmentBase):
+        """ Example of out to subclass the Controller to provide additional resources """
+        class MyController(eb.EnvironmentBase):
             def __init__(self, view):
                 # Run parent initializer
                 eb.EnvironmentBase.__init__(self, view)
@@ -184,11 +214,12 @@ class EnvironmentBaseTestCase(TestCase):
                 self.template.add_resource(res)
 
                 # This triggers serialization of the template and any child stacks
-                super(MySubclass, self).create_action()
+                super(MyController, self).create_action()
 
         # Initialize the the controller with faked 'create' CLI parameter
         with patch.object(sys, 'argv', ['environmentbase', 'create']):
-            MySubclass(cli.CLI(quiet=True))
+            MyController(cli.CLI(quiet=True))
+
 
         # Load the generated output template
         with open('environmentbase.template', 'r') as f:

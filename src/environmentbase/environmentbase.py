@@ -11,6 +11,7 @@ import troposphere.cloudformation as cf
 import troposphere.route53 as r53
 import hashlib
 import json
+import copy
 import boto
 import time
 import boto.s3
@@ -22,16 +23,17 @@ from pkg_resources import resource_string
 
 def _get_internal_resource(resource_name):
     """Retrieves resource embedded in the package (even if installed as a zipped archive)."""
-    return resource_string(__name__, 'data/' + resource_name)
+    return json.loads(resource_string(__name__, 'data/' + resource_name))
 
-DEFAULT_CONFIG_FILENAME = 'config_args.json'
+CONFIG_FILENAME = 'config.json'
+
 DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
 
-FACTORY_DEFAULT_CONFIG = _get_internal_resource(DEFAULT_CONFIG_FILENAME)
-FACTORY_DEFAULT_AMI_CACHE = resource_string(__name__, 'data/' + DEFAULT_AMI_CACHE_FILENAME)
+FACTORY_DEFAULT_CONFIG = _get_internal_resource(CONFIG_FILENAME)
+FACTORY_DEFAULT_AMI_CACHE = _get_internal_resource(DEFAULT_AMI_CACHE_FILENAME)
 
 TEMPLATE_REQUIREMENTS = {
-    "global": ['output', 'environment_name'],
+    "global": ['output', 'environment_name', 'print_debug'],
     "template": ['ami_map_file']
 }
 
@@ -45,8 +47,7 @@ class EnvironmentBase(object):
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
     """
 
-    _config = {}
-
+    config = {}
     globals = {}
     template_args = {}
     template = None
@@ -64,33 +65,25 @@ class EnvironmentBase(object):
         """
 
         # Load the user interface
-        # ---------------------
         if view is None:
             view = cli.CLI()
 
-        # Process any global flags here before letting the view execute any requested user actions
-        # ---------------------
-
         # Config location override
-        config_file = view.args.get('--config_file') or DEFAULT_CONFIG_FILENAME
         self.create_missing_files = create_missing_files
-        self.load_config(config_file)
+        self.handle_local_config()
 
-        # Debug toggle
-        self.debug = bool(view.args.get('--debug'))
-        self.template_filename = view.args.get('--template_file') or self._config['global']['output']
-        self.stack_name = view.args.get('--stack_name') or self._config['global']['environment_name']
+        # Process any global flags here before letting the view execute any requested user actions
+        view.update_config(self.config)
 
         # Finally allow the view to execute the user's requested action
-        # ---------------------
         view.process_request(self)
 
     def create_action(self):
         # process template, adding each child to S3 and adding stack resources to the parent template
 
-        indent = 0 if not self.debug else 4
+        indent = 0 if not self.config['global']['print_debug'] else 4
 
-        with open(self.template_filename, 'w') as output_file:
+        with open(self.config['global']['output'], 'w') as output_file:
             # Here to_json() loads child templates into S3
             raw_json = self.template.to_template_json()
 
@@ -113,20 +106,29 @@ class EnvironmentBase(object):
                 message = "Config file missing one of %s%s" % (section, required_keys)
                 raise ValidationError(message)
 
-    def load_config(self, config_file):
-        if config_file and os.path.isfile(config_file):
-            with open(config_file, 'r') as f:
+    def handle_local_config(self):
+        """
+        Use local file if present, otherwise use factory values and write that to disk.
+        Unless create_missing_files is false, in that case throw exception
+        """
+        # If override config file exists, use it
+        if os.path.isfile(CONFIG_FILENAME):
+            with open(CONFIG_FILENAME, 'r') as f:
                 config = json.loads(f.read())
+
+        # If we are instructed to create fresh override file, do it
         elif self.create_missing_files:
-            config = json.loads(FACTORY_DEFAULT_CONFIG)
-            with open(DEFAULT_CONFIG_FILENAME, 'w') as f:
-                f.write(FACTORY_DEFAULT_CONFIG)
+            config = copy.deepcopy(FACTORY_DEFAULT_CONFIG)
+            with open(CONFIG_FILENAME, 'w') as f:
+                f.write(json.dumps(FACTORY_DEFAULT_CONFIG, indent=4, separators=(',', ': ')))
+
+        # Otherwise complain
         else:
-            raise IOError(DEFAULT_CONFIG_FILENAME + ' could not be found')
+            raise IOError(CONFIG_FILENAME + ' could not be found')
 
+        # Validate and save results
         EnvironmentBase._validate_config(config)
-
-        self._config = config
+        self.config = config
 
         self.globals                    = config.get('global', {})
         self.template_args              = config.get('template', {})
@@ -168,9 +170,9 @@ class EnvironmentBase(object):
             with open(ami_map_file_path, 'r') as json_file:
                 json_data = json.load(json_file)
         elif self.create_missing_files:
-            json_data = json.loads(FACTORY_DEFAULT_AMI_CACHE)
+            json_data = FACTORY_DEFAULT_AMI_CACHE
             with open(DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
-                f.write(FACTORY_DEFAULT_AMI_CACHE)
+                f.write(json.dumps(FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
         else:
             raise IOError(DEFAULT_AMI_CACHE_FILENAME + ' could not be found')
 

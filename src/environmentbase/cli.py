@@ -10,7 +10,7 @@ Usage:
 Options:
   -h --help                            Show this screen.
   -v --version                         Show version.
-  --debug                              Prints parent template to console out [default: 0].
+  --debug                              Prints parent template to console out.
   --config_file <CONFIG_FILE>          Name of json configuration file.
   --stack_name <STACK_NAME>            User-definable value for the CloudFormation stack being deployed.
   --template_file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
@@ -36,22 +36,31 @@ from . import version
 class CLI(object):
 
     def __init__(self, quiet=False):
-        self.args = docopt(__doc__, version='environmentbase %s' % version.__version__)
         self.quiet = quiet
 
-    def process_request(self, controller):
+        self.args = docopt(__doc__, version='environmentbase %s' % version.__version__)
 
+    def update_config(self, config):
+        if self.args.get('--debug'):
+            config['global']['print_debug'] = True
+
+        template_file = self.args.get('--template_file')
+        if template_file is not None:
+            config['global']['output'] = template_file
+
+    def process_request(self, controller):
         if not self.quiet:
             print ''
 
-        if controller.debug:
-            print self.args
-            print controller.to_json()
+            if controller.config['global']['print_debug']:
+                print self.args
+
+            controller.to_json()
 
         if self.args.get('create', False):
             if not self.quiet:
-                print 'Generating template for %s stack' % controller.stack_name
-                print '\nWriting template to %s\n' % controller.template_filename
+                # print 'Generating template for %s stack' % controller.config['global']['output']
+                print '\nWriting template to %s\n' % controller.config['global']['output']
             controller.create_action()
 
         elif self.args.get('deploy', False):

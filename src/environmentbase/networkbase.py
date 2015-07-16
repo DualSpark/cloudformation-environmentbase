@@ -11,27 +11,30 @@ from environmentbase import EnvironmentBase
 from datetime import datetime
 from ipcalc import IP, Network
 
+
 class NetworkBase(EnvironmentBase):
     '''
     Class creates all of the base networking infrastructure for a common deployment within AWS
     This is intended to be the 'base' template for deploying child templates
     '''
 
-    def __init__(self, arg_dict):
+    def __init__(self, view=None):
         '''
         Init method wires up all the required networking resources to deploy this set of infrastructure
         @param arg_dict [dict] collection of keyword arguments for this class implementation
         '''
-        network_config = arg_dict.get('network', {})
-        template_config = arg_dict.get('template', {})
+        EnvironmentBase.__init__(self, view)
 
-        EnvironmentBase.__init__(self, arg_dict)
+    def create_action(self):
+        network_config = self.config.get('network', {})
+        template_config = self.config.get('template', {})
+
         self.vpc = None
         self.azs = []
 
         self.local_subnets = {}
         self.stack_outputs = {}
-        self.add_vpc_az_mapping(boto_config=arg_dict.get('boto', {}),
+        self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}),
                 az_count=max(network_config.get('public_subnet_count', 2), network_config.get('private_subnet_count',2)))
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network(network_config=network_config)
@@ -65,6 +68,8 @@ class NetworkBase(EnvironmentBase):
         for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
+        # This triggers serialization of the template and any child stacks
+        super(NetworkBase, self).create_action()
 
     def add_utility_bucket(self,
                            name='demo'):
@@ -142,7 +147,7 @@ class NetworkBase(EnvironmentBase):
 
         nat_instance_type = self.template.add_parameter(Parameter('natInstanceType',
                 Type='String',
-                Default=str(network_config.get('nat_instance_type', 'm1.small')),
+                Default=str(network_config.get('nat_instance_type', 't2.small')),
                 AllowedValues=self.strings['valid_instance_types'],
                 ConstraintDescription=self.strings['valid_instance_type_message'],
                 Description='Instance type to use when launching NAT instances.'))
@@ -296,7 +301,7 @@ class NetworkBase(EnvironmentBase):
 
 if __name__ == '__main__':
     import json
-    with open('config_args.json', 'r') as f:
+    with open('config.json', 'r') as f:
         cmd_args = json.loads(f.read())
     test = NetworkBase(cmd_args)
     print test.to_json()

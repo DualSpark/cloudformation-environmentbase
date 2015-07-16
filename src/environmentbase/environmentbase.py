@@ -1,22 +1,17 @@
-import os
-import os.path
-from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
-from template import Template
-import troposphere.constants as tpc
+import os,os.path,hashlib,json,time,copy
+import boto, boto.s3, botocore.exceptions, boto3
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
 import troposphere.elasticloadbalancing as elb
 import troposphere.autoscaling as autoscaling
 import troposphere.cloudformation as cf
 import troposphere.route53 as r53
-import hashlib
-import json
-import copy
-import boto
-import time
-import boto.s3
+import troposphere.constants as tpc
+from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
+from template import Template
 from boto.s3.key import Key
 from datetime import datetime
+
 import cli
 from pkg_resources import resource_string
 
@@ -28,6 +23,8 @@ def _get_internal_resource(resource_name):
 CONFIG_FILENAME = 'config.json'
 
 DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
+
+TIMEOUT = 60
 
 FACTORY_DEFAULT_CONFIG = _get_internal_resource(CONFIG_FILENAME)
 FACTORY_DEFAULT_AMI_CACHE = _get_internal_resource(DEFAULT_AMI_CACHE_FILENAME)
@@ -91,8 +88,64 @@ class EnvironmentBase(object):
             json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
 
     def deploy_action(self):
-        # issue create_stack / update_stack to cloudformation and if requested monitor status
-        pass
+
+        cfn_conn = boto3.client('cloudformation')
+        cfn_template_filename = self.config['global']['output']
+
+        if os.path.isfile(cfn_template_filename):
+            with open(self.config['global']['output'], 'r') as cfn_template_file:
+                cfn_template = cfn_template_file.read().replace('\n', '')
+
+        else:
+            print 'Template at: %s not found\n' % cfn_template_filename
+            sys.exit(1)
+
+        stack_name = self.config['global']['environment_name']
+        stack_params = [{
+            'ParameterKey': 'KeyName', 
+            'ParameterValue': self.config['template']['ec2_key_default']
+        }]
+
+        try:
+            response = cfn_conn.describe_stacks(StackName=stack_name)
+
+            stack = None
+            for s in response.get('Stacks'):
+                if s.get('StackName') == stack_name:
+                    stack = s
+            if not stack:
+                raise Exception('Cannot find stack %s' % stack_name)
+
+            status = stack.get('StackStatus')
+
+            if status == 'ROLLBACK_COMPLETE':
+                print 'Stack rolled back. Deleting it first.\n'
+                cfn_conn.delete_stack(StackName=stack_name)
+                print 'Re-run the command once it is deleted.\n'
+                raise Exception('Cannot update, current state: %s' % status)
+
+            # CREATE_COMPLETE and UPDATE_COMPLETE are both permissible states
+            if not status.endswith('_COMPLETE'):
+                raise Exception('Cannot update, current state: %s' % status)
+
+            cfn_conn.update_stack(
+                StackName=stack_name,
+                TemplateBody=cfn_template,
+                Parameters=stack_params,
+                Capabilities=['CAPABILITY_IAM'])
+            print "Updated existing stack %s\n" % stack_name
+
+        except botocore.exceptions.ClientError:
+            # Load template to string
+            cfn_conn.create_stack(
+                StackName=stack_name,
+                TemplateBody=cfn_template,
+                Parameters=stack_params,
+                Capabilities=['CAPABILITY_IAM'],
+                DisableRollback=True,
+                TimeoutInMinutes=TIMEOUT)
+            print "Created new CF stack %s\n" % stack_name
+
 
     @classmethod
     def _validate_config(cls, config):

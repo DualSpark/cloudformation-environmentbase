@@ -30,24 +30,28 @@ Options:
 # --third_party_auth_ids               Command-line switch indicating whether an API credential will be generated or not [default: 0].
 
 from docopt import docopt
-from .version import __version__
+from . import version
+
 
 class CLI(object):
 
-    def __init__(self):
-        self.args = docopt(__doc__, version='environmentbase %s' % __version__)
+    def __init__(self, quiet=False):
+        self.args = docopt(__doc__, version='environmentbase %s' % version.__version__)
+        self.quiet = quiet
 
     def process_request(self, controller):
 
-        print ''
+        if not self.quiet:
+            print ''
 
         if controller.debug:
             print self.args
             print controller.to_json()
 
         if self.args.get('create', False):
-            print 'Generating template for %s stack' % controller.stack_name
-            print '\nWriting template to %s\n' % controller.template_filename
+            if not self.quiet:
+                print 'Generating template for %s stack' % controller.stack_name
+                print '\nWriting template to %s\n' % controller.template_filename
             controller.create_action()
 
         elif self.args.get('deploy', False):

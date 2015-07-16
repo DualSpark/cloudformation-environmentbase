@@ -11,6 +11,7 @@ from troposphere import ec2
 
 
 class EnvironmentBaseTestCase(TestCase):
+
     def setUp(self):
         # Change to a temp dir so auto generated file don't clutter the os
         self.temp_dir = mkdtemp()
@@ -229,6 +230,17 @@ class EnvironmentBaseTestCase(TestCase):
         self.assertTrue('ec2instance' in template['Resources'])
 
         # print json.dumps(template, indent=4)
+
+
+    # Cloudformation doesn't currently support a dry run, so this test would create a live stack
+    # def test_deploy(self):
+    #     with patch.object(sys, 'argv', [
+    #         'environmentbase',
+    #         'deploy',
+    #         '--debug',
+    #         '--template_file', os.path.join(os.path.dirname(os.path.realpath(__file__)), 'resources/amzn_linux_ec2.json')]):
+    #         env_base = eb.EnvironmentBase()
+
 
 if __name__ == '__main__':
     main()

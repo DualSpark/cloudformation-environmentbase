@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-'''environemntbase.py
+"""
+environemntbase
 
 Tool bundle manages generation, deployment, and feedback of cloudformation resources.
 
 Usage:
-    environmentbase.py create [--config_file <FILE_LOCATION>] [--debug] [--template_file=<TEMPLATE_FILE>]
-    environmentbase.py deploy [--config_file <FILE_LOCATION>] [--debug]
+    environmentbase (create|deploy) [--config_file <FILE_LOCATION>] [--debug] [--template_file=<TEMPLATE_FILE>]
 
 Options:
   -h --help                            Show this screen.
@@ -14,7 +14,7 @@ Options:
   --config_file <CONFIG_FILE>          Name of json configuration file.
   --stack_name <STACK_NAME>            User-definable value for the CloudFormation stack being deployed.
   --template_file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
-'''
+"""
 
 
 # environemntbase (create|deploy) [--no_tests] [--config_file <FILE_LOCATION>] [--debug] [--region <REGION>]
@@ -30,7 +30,7 @@ Options:
 # --third_party_auth_ids               Command-line switch indicating whether an API credential will be generated or not [default: 0].
 
 from docopt import docopt
-from . import version
+import version
 
 
 class CLI(object):

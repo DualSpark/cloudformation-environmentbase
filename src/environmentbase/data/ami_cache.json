@@ -12,7 +12,7 @@
     "centOS65AmiId": "ami-1a013c5f"
   },
   "us-west-2": {
-    "natAmiId": "ami-6d29b85d",
+    "natAmiId": "ami-69ae8259",
     "ubuntu1404LtsAmiId": "ami-6ac2a85a",
     "amazonLinuxAmiId": "ami-d13845e1",
     "centOS65AmiId": "ami-b6bdde86"

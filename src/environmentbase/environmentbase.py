@@ -108,7 +108,7 @@ class EnvironmentBase(object):
 
         stack_name = self.config['global']['environment_name']
         stack_params = [{
-            'ParameterKey': 'KeyName', 
+            'ParameterKey': 'ec2Key',
             'ParameterValue': self.config['template']['ec2_key_default']
         }]
 

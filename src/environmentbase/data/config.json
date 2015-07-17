@@ -13,7 +13,7 @@
   "template": {
     "ami_map_file": "ami_cache.json",
     "description": "Environment Generator Base deployment.",
-    "ec2_key_default": "pmdev",
+    "ec2_key_default": "dualspark_rsa",
     "remote_access_cidr": "0.0.0.0/0",
     "s3_utility_bucket": "dualspark",
     "s3_key_name_prefix": "/devtools/cloudformation",
@@ -35,9 +35,9 @@
     "private_subnet_size": "22",
     "network_cidr_base": "172.16.0.0",
     "network_cidr_size": "20",
-    "nat_instance_type": "m1.small"
+    "nat_instance_type": "t2.micro"
   },
   "bastion": {
-    "instance_type_default": "t1.micro"
+    "instance_type_default": "t2.micro"
   }
 }

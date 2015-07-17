@@ -18,13 +18,6 @@ class NetworkBase(EnvironmentBase):
     This is intended to be the 'base' template for deploying child templates
     '''
 
-    def __init__(self, view=None):
-        '''
-        Init method wires up all the required networking resources to deploy this set of infrastructure
-        @param arg_dict [dict] collection of keyword arguments for this class implementation
-        '''
-        EnvironmentBase.__init__(self, view)
-
     def create_action(self):
         network_config = self.config.get('network', {})
         template_config = self.config.get('template', {})

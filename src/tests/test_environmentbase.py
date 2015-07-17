@@ -5,6 +5,7 @@ import os
 import shutil
 import json
 import sys
+import copy
 from tempfile import mkdtemp
 from environmentbase import cli, environmentbase as eb
 from troposphere import ec2
@@ -32,12 +33,18 @@ class EnvironmentBaseTestCase(TestCase):
 
         return my_cli
 
-    def _create_dummy_config(self, dummy_value):
+    def _create_dummy_config(self):
+        dummy_string = 'dummy'
+        dummy_bool = False
+
         config = {}
         for (section, keys) in eb.TEMPLATE_REQUIREMENTS.iteritems():
             config[section] = {}
-            for key in keys:
-                config[section][key] = dummy_value
+            for (key, key_type) in keys:
+                if key_type == basestring:
+                    config[section][key] = dummy_string
+                elif key_type == bool:
+                    config[section][key] = dummy_bool
         return config
 
     def _create_local_file(self, name, content):
@@ -96,41 +103,48 @@ class EnvironmentBaseTestCase(TestCase):
 
         fake_cli = self.fake_cli(['create'])
 
-        # We don't use the factory_defualts as the real config so if no config file exists,
+        # 1) We don't use the factory_defualts as the real config so if no config file exists,
         # and we are asked not to create a new one then we must fail and exit
-        assert not os.path.isfile(eb.DEFAULT_CONFIG_FILENAME)
-
         with self.assertRaises(IOError):
             eb.EnvironmentBase(fake_cli, create_missing_files=False)
 
         assert not os.path.isfile(eb.DEFAULT_CONFIG_FILENAME)
 
-        # If the file exists but is not valid json we fail out
+        # 2) If the file exists but is not valid json we fail out
         with open(eb.DEFAULT_CONFIG_FILENAME, 'w') as f:
             f.write("{}")
             with self.assertRaises(ValueError):
                 eb.EnvironmentBase(fake_cli, create_missing_files=False)
 
-        # Create a local config and verify that EnvironmentBase overrides the factory default
+        # 3) Create a local config file and verify that it overrides the factory default
+        config = self._create_dummy_config()
+
+        # Change one of the values
+        original_value = config['global']['print_debug']
+        config['global']['print_debug'] = not original_value
         with open(eb.DEFAULT_CONFIG_FILENAME, 'w') as f:
-            config = self._create_dummy_config('dummy')
-
-            # Change one of the values
-            original_value = eb.FACTORY_DEFAULT_CONFIG['global']['print_debug']
-            config['global']['print_debug'] = not original_value
-
-            # write out the file override
             f.write(json.dumps(config))
             f.flush()
-
             base = eb.EnvironmentBase(fake_cli)
-            self.assertNotEqual(base.config['global']['print_debug'], original_value)
 
-        # Make sure the file was created as requested (create_missing_files=True by default)
-        self.assertTrue(os.path.isfile(eb.DEFAULT_CONFIG_FILENAME))
+        self.assertNotEqual(base.config['global']['print_debug'], original_value)
 
-        # Make sure it reloaded our saved config file
-        base = eb.EnvironmentBase(fake_cli)
+        # 4) Validate local config with non-default name
+        config_filename = 'not_default_name'
+
+        # existence check
+        with self.assertRaises(IOError):
+            eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]))
+
+        # remove config.json and create the alternate config file
+        os.remove(eb.DEFAULT_CONFIG_FILENAME)
+        self.assertFalse(os.path.isfile(eb.DEFAULT_CONFIG_FILENAME))
+
+        with open(config_filename, 'w') as f:
+            f.write(json.dumps(config))
+            f.flush()
+            base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]))
+
         self.assertNotEqual(base.config['global']['print_debug'], original_value)
 
     def test_config_validation(self):
@@ -138,7 +152,7 @@ class EnvironmentBaseTestCase(TestCase):
         environmentbase.TEMPLATE_REQUIREMENTS defines the required sections and keys for a valid input config file
         This test ensures that EnvironmentBase._validate_config() enforces the TEMPLATE_REQUIREMENTS contract
         """
-        valid_config = self._create_dummy_config('dummy')
+        valid_config = self._create_dummy_config()
         eb.EnvironmentBase._validate_config(valid_config)
 
         # Find a section with at least one required key
@@ -149,6 +163,12 @@ class EnvironmentBaseTestCase(TestCase):
             if len(keys) > 0:
                 break
         assert len(keys) > 0
+
+        # Check type error
+        with self.assertRaises(eb.ValidationError):
+            invalid_config = copy.deepcopy(valid_config)
+            invalid_config['global']['print_debug'] = "dfhkjdshf"
+            eb.EnvironmentBase._validate_config(invalid_config)
 
         # Check missing key validation
         (key, value) = keys.items()[0]

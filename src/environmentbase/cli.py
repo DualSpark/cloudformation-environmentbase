@@ -62,8 +62,6 @@ class CLI(object):
         if not self.quiet:
             print ''
 
-            controller.to_json()
-
         if self.args.get('create', False):
             if not self.quiet:
                 print 'Generating template for %s stack' % controller.config['global']['environment_name']

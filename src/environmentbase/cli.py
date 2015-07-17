@@ -16,21 +16,10 @@ Options:
   --template-file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
 """
 
-# environemntbase (create|deploy) [--no_tests] [--config_file <FILE_LOCATION>] [--debug] [--region <REGION>]
-#                 [--generate_topics] [--topic_name <TOPIC_NAME>] [--trail_name <TRAIL_NAME>]
-#                 [--third_party_auth_ids] [--debug]
-#
-# --existing_bucket <EXISTING_BUCKET>  Indicates that an existing bucket should be used.
-# --bucket_region <BUCKET_REGION>      Region in which to create the S3 bucket for cloudtrail aggregation [default: us-west-2].
-# --generate_topics                    Command-line switch indicating whether topics will be generated or not [default: 0].
-# --topic_name <TOPIC_NAME>            Name of the topic to create when generating SNS topics for CloudTrail [deault: cloudtrailtopic].
-# --trail_name <TRAIL_NAME>            Name of the trail to create within CloudTrail [default: Default].
-# --region <REGION>                    Comma separated list of regions to apply this setup to [default: all].
-# --third_party_auth_ids               Command-line switch indicating whether an API credential will be generated or not [default: 0].
-
 from docopt import docopt
 import version
 import json
+
 
 class CLI(object):
 
@@ -47,7 +36,7 @@ class CLI(object):
 
         # Parsing this config filename here is required since
         # the file is already loaded in self.update_config()
-        self.config_filename = self.args.get('--config_file')
+        self.config_filename = self.args.get('--config-file')
 
     def update_config(self, config):
         """
@@ -58,10 +47,10 @@ class CLI(object):
         if self.args.get('--debug'):
             config['global']['print_debug'] = True
 
-            if config['global']['print_debug']:
+            if not self.quiet:
                 print "CLI arguments", json.dumps(self.args, indent=4, sort_keys=True)
 
-        template_file = self.args.get('--template_file')
+        template_file = self.args.get('--template-file')
         if template_file is not None:
             config['global']['output'] = template_file
 

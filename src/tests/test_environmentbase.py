@@ -177,9 +177,9 @@ class EnvironmentBaseTestCase(TestCase):
         base = eb.EnvironmentBase(self.fake_cli(['create', '--debug']))
         self.assertTrue(base.config['global']['print_debug'])
 
-        # verify that the --template_file flag changes the config value
+        # verify that the --template-file flag changes the config value
         dummy_value = 'dummy'
-        base = eb.EnvironmentBase(self.fake_cli(['create', '--template_file', dummy_value]))
+        base = eb.EnvironmentBase(self.fake_cli(['create', '--template-file', dummy_value]))
         self.assertEqual(base.config['global']['output'], dummy_value)
 
     def test_factory_default(self):

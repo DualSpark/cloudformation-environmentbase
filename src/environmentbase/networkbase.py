@@ -62,10 +62,9 @@ class NetworkBase(EnvironmentBase):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def create_action(self):
+        self.initialize_template()
         self.construct_network()
-
-        # This triggers serialization of the template and any child stacks
-        super(NetworkBase, self).create_action()
+        self.write_tempate_to_file()
 
     def add_utility_bucket(self,
                            name='demo'):

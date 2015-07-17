@@ -47,7 +47,6 @@ class ChildTemplateBase(EnvironmentBase):
         """
         Create_action method manages creation of common parameters for derived classes
         """
+        self.initialize_template()
         self.setup_parameters()
-
-        # This triggers serialization of the template and any child stacks
-        super(ChildTemplateBase, self).create_action()
+        self.write_tempate_to_file()

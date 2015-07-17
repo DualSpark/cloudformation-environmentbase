@@ -34,6 +34,33 @@ TEMPLATE_REQUIREMENTS = {
 }
 
 
+def _build_common_strings():
+    return {
+            "valid_instance_types": ["t2.micro", "t2.small", "t2.medium",
+                                     "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
+                                     "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge",
+                                     "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
+                                     "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge",
+                                     "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
+                                     "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
+                                     "g2.2xlarge"],
+            "valid_instance_type_message": "must be a valid EC2 instance type.",
+            "valid_db_instance_types": ["db.t1.micro", "db.m1.small",
+                                        "db.m3.medium", "db.m3.large", "db.m3.xlarge", "db.m3.2xlarge",
+                                        "db.r3.large", "db.r3.xlarge", "db.r3.2xlarge", "db.r3.4xlarge", "db.r3.8xlarge",
+                                        "db.t2.micro", "db.t2.small", "db.t2.medium"],
+            "valid_db_instance_type_message": "must be a valid RDS DB instance type.",
+            "boolean_options": ["True", "False"],
+            "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "cidr_regex_message": "must be a valid IP CIDR range of the form x.x.x.x/x.",
+            "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})",
+            "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
+            "valid_ebs_size_message" : "must be a valid EBS size between 1GB and 1024GB.",
+            "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]",
+            "ec2_key": "[\\x20-\\x7E]*",
+            "ec2_key_message": "can only contain ASCII characters."}
+
+
 class ValidationError(Exception):
     pass
 
@@ -50,8 +77,8 @@ class EnvironmentBase(object):
     template = None
     manual_parameter_bindings = {}
     subnets = {}
-    ignore_outputs = {}
-    strings = {}
+    ignore_outputs = ['templateValidationHash', 'dateGenerated']
+    strings = _build_common_strings()
 
     def __init__(self, view=None, create_missing_files=True, config_filename=DEFAULT_CONFIG_FILENAME):
         """
@@ -78,6 +105,10 @@ class EnvironmentBase(object):
         # Process any global flags here before letting the view execute any requested user actions
         view.update_config(self.config)
 
+        # Shortcut references to config sections
+        self.globals = self.config.get('global', {})
+        self.template_args = self.config.get('template', {})
+
         # Finally allow the view to execute the user's requested action
         view.process_request(self)
 
@@ -92,6 +123,8 @@ class EnvironmentBase(object):
             json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
 
     def create_action(self):
+        self.initialize_template()
+
         # process template, adding each child to S3 and adding stack resources to the parent template
         self.write_tempate_to_file()
 
@@ -193,19 +226,11 @@ class EnvironmentBase(object):
         EnvironmentBase._validate_config(config)
         self.config = config
 
-        self.globals                    = config.get('global', {})
-        self.template_args              = config.get('template', {})
+    def initialize_template(self):
+        self.template = Template(self.globals.get('output', 'default_template'))
 
-        self.template                   = Template(self.globals.get('output', 'default_template'))
-        self.template.description       = self.template_args.get('description', 'No Description Specified')
-
-        self.manual_parameter_bindings  = {}
-        self.subnets                    = {}
-        self.ignore_outputs             = ['templateValidationHash', 'dateGenerated']
-        self.strings                    = self.__build_common_strings()
-
+        self.template.description = self.template_args.get('description', 'No Description Specified')
         self.add_common_parameters(self.template_args)
-
         self.load_ami_cache()
 
     def load_ami_cache(self):
@@ -278,33 +303,6 @@ class EnvironmentBase(object):
             Type='CNAME',
             TTL='300',
             ResourceRecords=[GetAtt(elb, 'DNSName')]))
-
-    @staticmethod
-    def __build_common_strings():
-        return {
-                "valid_instance_types": ["t2.micro", "t2.small", "t2.medium",
-                                         "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
-                                         "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge",
-                                         "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
-                                         "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge",
-                                         "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
-                                         "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
-                                         "g2.2xlarge"],
-                "valid_instance_type_message": "must be a valid EC2 instance type.",
-                "valid_db_instance_types": ["db.t1.micro", "db.m1.small",
-                                            "db.m3.medium", "db.m3.large", "db.m3.xlarge", "db.m3.2xlarge",
-                                            "db.r3.large", "db.r3.xlarge", "db.r3.2xlarge", "db.r3.4xlarge", "db.r3.8xlarge",
-                                            "db.t2.micro", "db.t2.small", "db.t2.medium"],
-                "valid_db_instance_type_message": "must be a valid RDS DB instance type.",
-                "boolean_options": ["True", "False"],
-                "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
-                "cidr_regex_message": "must be a valid IP CIDR range of the form x.x.x.x/x.",
-                "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})",
-                "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
-                "valid_ebs_size_message" : "must be a valid EBS size between 1GB and 1024GB.",
-                "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]",
-                "ec2_key": "[\\x20-\\x7E]*",
-                "ec2_key_message": "can only contain ASCII characters."}
 
     def add_common_parameters(self,
                               template_config):

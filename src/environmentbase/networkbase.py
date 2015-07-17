@@ -31,7 +31,7 @@ class NetworkBase(EnvironmentBase):
                 az_count=max(network_config.get('public_subnet_count', 2), network_config.get('private_subnet_count',2)))
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network(network_config=network_config)
-        self.utility_bucket = self.add_utility_bucket(name=template_config.get('s3_utility_bucket', 'demo'))
+        self.add_utility_bucket(name=template_config.get('s3_utility_bucket', 'demo'))
 
         self.common_sg = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',

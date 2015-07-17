@@ -441,7 +441,7 @@ class EnvironmentBase(object):
                    launch_config_metadata=None,
                    creation_policy=None,
                    update_policy=None,
-                   depends_on=None):
+                   depends_on=[]):
         """
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
@@ -547,25 +547,15 @@ class EnvironmentBase(object):
 
         launch_config = self.template.add_resource(launch_config_obj)
 
-        if depends_on:
-            auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
-                AvailabilityZones=self.azs,
-                LaunchConfigurationName=Ref(launch_config),
-                MaxSize=max_size,
-                MinSize=min_size,
-                DesiredCapacity=min(min_size, max_size),
-                VPCZoneIdentifier=self.subnets[subnet_type.lower()],
-                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
-                DependsOn=depends_on)
-        else:
-            auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
-                AvailabilityZones=self.azs,
-                LaunchConfigurationName=Ref(launch_config),
-                MaxSize=max_size,
-                MinSize=min_size,
-                DesiredCapacity=min(min_size, max_size),
-                VPCZoneIdentifier=self.subnets[subnet_type.lower()],
-                TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'])
+        auto_scaling_obj = autoscaling.AutoScalingGroup(layer_name + 'AutoScalingGroup',
+            AvailabilityZones=self.azs,
+            LaunchConfigurationName=Ref(launch_config),
+            MaxSize=max_size,
+            MinSize=min_size,
+            DesiredCapacity=min(min_size, max_size),
+            VPCZoneIdentifier=self.subnets[subnet_type.lower()],
+            TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
+            DependsOn=depends_on)
 
         lb_tmp = []
 
@@ -862,7 +852,6 @@ class EnvironmentBase(object):
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
 
-        # DependsOn needs to go in the constructor of the object
         stack_obj = cf.Stack(stack_name,
             TemplateURL=stack_url,
             Parameters=stack_params,

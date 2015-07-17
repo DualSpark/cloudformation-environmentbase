@@ -1,4 +1,4 @@
-import os,os.path,hashlib,json,time,copy
+import os,os.path,hashlib,json,time,copy,sys
 import boto, boto.s3, botocore.exceptions, boto3
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
@@ -20,13 +20,12 @@ def _get_internal_resource(resource_name):
     """Retrieves resource embedded in the package (even if installed as a zipped archive)."""
     return json.loads(resource_string(__name__, 'data/' + resource_name))
 
-CONFIG_FILENAME = 'config.json'
-
+DEFAULT_CONFIG_FILENAME = 'config.json'
 DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
 
 TIMEOUT = 60
 
-FACTORY_DEFAULT_CONFIG = _get_internal_resource(CONFIG_FILENAME)
+FACTORY_DEFAULT_CONFIG = _get_internal_resource(DEFAULT_CONFIG_FILENAME)
 FACTORY_DEFAULT_AMI_CACHE = _get_internal_resource(DEFAULT_AMI_CACHE_FILENAME)
 
 TEMPLATE_REQUIREMENTS = {
@@ -44,6 +43,7 @@ class EnvironmentBase(object):
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
     """
 
+    config_filename = None
     config = {}
     globals = {}
     template_args = {}
@@ -53,7 +53,7 @@ class EnvironmentBase(object):
     ignore_outputs = {}
     strings = {}
 
-    def __init__(self, view=None, create_missing_files=True):
+    def __init__(self, view=None, create_missing_files=True, config_filename=DEFAULT_CONFIG_FILENAME):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
@@ -64,6 +64,12 @@ class EnvironmentBase(object):
         # Load the user interface
         if view is None:
             view = cli.CLI()
+
+        # Config filename check has to happen now because the rest of the settings rely on having a loaded config file
+        if hasattr(view, 'config_filename') and view.config_filename is not None:
+            self.config_filename = view.config_filename
+        else:
+            self.config_filename = config_filename
 
         # Config location override
         self.create_missing_files = create_missing_files
@@ -164,20 +170,22 @@ class EnvironmentBase(object):
         Use local file if present, otherwise use factory values and write that to disk.
         Unless create_missing_files is false, in that case throw exception
         """
+
         # If override config file exists, use it
-        if os.path.isfile(CONFIG_FILENAME):
-            with open(CONFIG_FILENAME, 'r') as f:
+        if os.path.isfile(self.config_filename):
+            with open(self.config_filename, 'r') as f:
                 config = json.loads(f.read())
 
         # If we are instructed to create fresh override file, do it
-        elif self.create_missing_files:
+        # unless the filename is something other than DEFAULT_CONFIG_FILENAME
+        elif self.create_missing_files and self.config_filename == DEFAULT_CONFIG_FILENAME:
             config = copy.deepcopy(FACTORY_DEFAULT_CONFIG)
-            with open(CONFIG_FILENAME, 'w') as f:
+            with open(self.config_filename, 'w') as f:
                 f.write(json.dumps(FACTORY_DEFAULT_CONFIG, indent=4, separators=(',', ': ')))
 
         # Otherwise complain
         else:
-            raise IOError(CONFIG_FILENAME + ' could not be found')
+            raise IOError(self.config_filename + ' could not be found')
 
         # Validate and save results
         EnvironmentBase._validate_config(config)

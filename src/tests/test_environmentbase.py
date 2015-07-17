@@ -98,23 +98,21 @@ class EnvironmentBaseTestCase(TestCase):
 
         # We don't use the factory_defualts as the real config so if no config file exists,
         # and we are asked not to create a new one then we must fail and exit
-        assert not os.path.isfile(eb.CONFIG_FILENAME)
+        assert not os.path.isfile(eb.DEFAULT_CONFIG_FILENAME)
 
         with self.assertRaises(IOError):
             eb.EnvironmentBase(fake_cli, create_missing_files=False)
 
-        assert not os.path.isfile(eb.CONFIG_FILENAME)
-
-        # -----------------
+        assert not os.path.isfile(eb.DEFAULT_CONFIG_FILENAME)
 
         # If the file exists but is not valid json we fail out
-        with open(eb.CONFIG_FILENAME, 'w') as f:
+        with open(eb.DEFAULT_CONFIG_FILENAME, 'w') as f:
             f.write("{}")
             with self.assertRaises(ValueError):
                 eb.EnvironmentBase(fake_cli, create_missing_files=False)
 
         # Create a local config and verify that EnvironmentBase overrides the factory default
-        with open(eb.CONFIG_FILENAME, 'w') as f:
+        with open(eb.DEFAULT_CONFIG_FILENAME, 'w') as f:
             config = self._create_dummy_config('dummy')
 
             # Change one of the values
@@ -129,7 +127,7 @@ class EnvironmentBaseTestCase(TestCase):
             self.assertNotEqual(base.config['global']['print_debug'], original_value)
 
         # Make sure the file was created as requested (create_missing_files=True by default)
-        self.assertTrue(os.path.isfile(eb.CONFIG_FILENAME))
+        self.assertTrue(os.path.isfile(eb.DEFAULT_CONFIG_FILENAME))
 
         # Make sure it reloaded our saved config file
         base = eb.EnvironmentBase(fake_cli)
@@ -189,7 +187,7 @@ class EnvironmentBaseTestCase(TestCase):
             eb.EnvironmentBase(self.fake_cli(['create']), create_missing_files=False)
 
         # Create refs to files that should be created and make sure they don't already exists
-        config_file = os.path.join(self.temp_dir, eb.CONFIG_FILENAME)
+        config_file = os.path.join(self.temp_dir, eb.DEFAULT_CONFIG_FILENAME)
         ami_cache_file = os.path.join(self.temp_dir, eb.DEFAULT_AMI_CACHE_FILENAME)
         self.assertFalse(os.path.isfile(config_file))
         self.assertFalse(os.path.isfile(ami_cache_file))
@@ -220,7 +218,6 @@ class EnvironmentBaseTestCase(TestCase):
         # Initialize the the controller with faked 'create' CLI parameter
         with patch.object(sys, 'argv', ['environmentbase', 'create']):
             MyController(cli.CLI(quiet=True))
-
 
         # Load the generated output template
         with open('environmentbase.template', 'r') as f:

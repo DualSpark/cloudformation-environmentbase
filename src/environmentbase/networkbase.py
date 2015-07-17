@@ -64,7 +64,7 @@ class NetworkBase(EnvironmentBase):
     def create_action(self):
         self.initialize_template()
         self.construct_network()
-        self.write_tempate_to_file()
+        self.write_template_to_file()
 
     def add_utility_bucket(self,
                            name='demo'):

@@ -81,9 +81,7 @@ class EnvironmentBase(object):
         # Finally allow the view to execute the user's requested action
         view.process_request(self)
 
-    def create_action(self):
-        # process template, adding each child to S3 and adding stack resources to the parent template
-
+    def write_tempate_to_file(self):
         indent = 0 if not self.config['global']['print_debug'] else 4
 
         with open(self.config['global']['output'], 'w') as output_file:
@@ -92,6 +90,10 @@ class EnvironmentBase(object):
 
             reloaded_template = json.loads(raw_json)
             json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
+
+    def create_action(self):
+        # process template, adding each child to S3 and adding stack resources to the parent template
+        self.write_tempate_to_file()
 
     def deploy_action(self):
 

@@ -18,7 +18,7 @@ class NetworkBase(EnvironmentBase):
     This is intended to be the 'base' template for deploying child templates
     '''
 
-    def create_action(self):
+    def construct_network(self):
         network_config = self.config.get('network', {})
         template_config = self.config.get('template', {})
 
@@ -60,6 +60,9 @@ class NetworkBase(EnvironmentBase):
 
         for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
+
+    def create_action(self):
+        self.construct_network()
 
         # This triggers serialization of the template and any child stacks
         super(NetworkBase, self).create_action()

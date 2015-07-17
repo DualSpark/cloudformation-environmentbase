@@ -7,10 +7,7 @@ class ChildTemplateBase(EnvironmentBase):
     Base class to manage common input parameters for non-network templates.
     """
 
-    def create_action(self):
-        """
-        Create_action method manages creation of common parameters for derived classes
-        """
+    def setup_parameters(self):
         self.vpc_cidr = self.template.add_parameter(Parameter('vpcCidr',
             Description='CIDR of the VPC network',
             Type='String',
@@ -45,6 +42,12 @@ class ChildTemplateBase(EnvironmentBase):
             self.azs.append(Ref(self.template.add_parameter(Parameter('availabilityZone' + str(x),
                 Description='Availability Zone ' + str(x),
                 Type='String'))))
+
+    def create_action(self):
+        """
+        Create_action method manages creation of common parameters for derived classes
+        """
+        self.setup_parameters()
 
         # This triggers serialization of the template and any child stacks
         super(ChildTemplateBase, self).create_action()

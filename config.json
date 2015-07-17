@@ -1,0 +1,43 @@
+{
+    "logging": {
+        "cloudtrail_log_prefix": "cloudtrail_logs",
+        "elb_log_prefix": "elb_logs"
+    },
+    "network": {
+        "network_cidr_base": "172.16.0.0",
+        "private_subnet_size": "22",
+        "public_subnet_size": "24",
+        "nat_instance_type": "t2.micro",
+        "network_cidr_size": "20",
+        "public_subnet_count": 2,
+        "private_subnet_count": 2
+    },
+    "boto": {
+        "aws_secret_access_key": null,
+        "aws_access_key_id": null,
+        "default_aws_region": "us-west-2"
+    },
+    "global": {
+        "output": "environmentbase.template",
+        "environment_name": "environmentbase",
+        "print_debug": false
+    },
+    "bastion": {
+        "instance_type_default": "t2.micro"
+    },
+    "template": {
+        "description": "Environment Generator Base deployment.",
+        "ami_map_file": "ami_cache.json",
+        "s3_key_name_prefix": "/devtools/cloudformation",
+        "s3_utility_bucket": "dualspark",
+        "ec2_key_default": "dualspark_rsa",
+        "remote_access_cidr": "0.0.0.0/0",
+        "s3_canned_acl": "public-read"
+    },
+    "images": {
+        "windows2012r2Base": "Windows_Server-2012-R2_RTM-English-64Bit-Base-2015.05.13",
+        "ubuntu1404LTS": "ubuntu/images/hvm-ssd/ubuntu-trusty-14.04-amd64-server-20150325",
+        "amazonLinux": "amzn-ami-hvm-2015.03.0.x86_64-gp2",
+        "nat": "amzn-ami-vpc-nat-pv-2014.09.1.x86_64-ebs"
+    }
+}

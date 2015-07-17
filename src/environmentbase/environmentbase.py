@@ -29,8 +29,14 @@ FACTORY_DEFAULT_CONFIG = _get_internal_resource(DEFAULT_CONFIG_FILENAME)
 FACTORY_DEFAULT_AMI_CACHE = _get_internal_resource(DEFAULT_AMI_CACHE_FILENAME)
 
 TEMPLATE_REQUIREMENTS = {
-    "global": ['output', 'environment_name', 'print_debug'],
-    "template": ['ami_map_file']
+    "global": [
+        ('output', basestring),
+        ('environment_name', basestring),
+        ('print_debug', bool)
+    ],
+    "template": [
+        ('ami_map_file', basestring)
+    ]
 }
 
 
@@ -190,15 +196,24 @@ class EnvironmentBase(object):
 
     @classmethod
     def _validate_config(cls, config):
-        for (section, keys) in TEMPLATE_REQUIREMENTS.iteritems():
+        for (section, key_reqs) in TEMPLATE_REQUIREMENTS.iteritems():
             if section not in config:
                 message = "Config file missing section: ", section
                 raise ValidationError(message)
 
-            required_keys = TEMPLATE_REQUIREMENTS[section]
-            if not all(k in config[section] for k in required_keys):
-                message = "Config file missing one of %s%s" % (section, required_keys)
-                raise ValidationError(message)
+            keys = config[section]
+            for (required_key , key_type) in key_reqs:
+                if required_key not in keys:
+                    message = "Config file missing required key %s::%s" % (section, required_key)
+                    raise ValidationError(message)
+
+                # print required_key, key_type, '==', type(keys[required_key]), '?', isinstance(keys[required_key], key_type)
+
+                # required_keys
+                if not isinstance(keys[required_key], key_type):
+                    message = "Type mismatch in config file key %s::%s should be of type %s, not %s" % \
+                              (section, required_key, key_type.__name__, type(keys[required_key]).__name__)
+                    raise ValidationError(message)
 
     def handle_local_config(self):
         """

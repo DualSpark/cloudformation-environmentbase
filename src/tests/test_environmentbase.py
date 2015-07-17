@@ -5,6 +5,7 @@ import os
 import shutil
 import json
 import sys
+import copy
 from tempfile import mkdtemp
 from environmentbase import cli, environmentbase as eb
 from troposphere import ec2
@@ -32,12 +33,18 @@ class EnvironmentBaseTestCase(TestCase):
 
         return my_cli
 
-    def _create_dummy_config(self, dummy_value):
+    def _create_dummy_config(self):
+        dummy_string = 'dummy'
+        dummy_bool = False
+
         config = {}
         for (section, keys) in eb.TEMPLATE_REQUIREMENTS.iteritems():
             config[section] = {}
-            for key in keys:
-                config[section][key] = dummy_value
+            for (key, key_type) in keys:
+                if key_type == basestring:
+                    config[section][key] = dummy_string
+                elif key_type == bool:
+                    config[section][key] = dummy_bool
         return config
 
     def _create_local_file(self, name, content):
@@ -113,7 +120,7 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Create a local config and verify that EnvironmentBase overrides the factory default
         with open(eb.DEFAULT_CONFIG_FILENAME, 'w') as f:
-            config = self._create_dummy_config('dummy')
+            config = self._create_dummy_config()
 
             # Change one of the values
             original_value = eb.FACTORY_DEFAULT_CONFIG['global']['print_debug']
@@ -138,7 +145,7 @@ class EnvironmentBaseTestCase(TestCase):
         environmentbase.TEMPLATE_REQUIREMENTS defines the required sections and keys for a valid input config file
         This test ensures that EnvironmentBase._validate_config() enforces the TEMPLATE_REQUIREMENTS contract
         """
-        valid_config = self._create_dummy_config('dummy')
+        valid_config = self._create_dummy_config()
         eb.EnvironmentBase._validate_config(valid_config)
 
         # Find a section with at least one required key
@@ -149,6 +156,12 @@ class EnvironmentBaseTestCase(TestCase):
             if len(keys) > 0:
                 break
         assert len(keys) > 0
+
+        # Check type error
+        with self.assertRaises(eb.ValidationError):
+            invalid_config = copy.deepcopy(valid_config)
+            invalid_config['global']['print_debug'] = "dfhkjdshf"
+            eb.EnvironmentBase._validate_config(invalid_config)
 
         # Check missing key validation
         (key, value) = keys.items()[0]

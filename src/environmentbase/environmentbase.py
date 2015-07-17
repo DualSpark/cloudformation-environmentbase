@@ -7,11 +7,8 @@ import troposphere.autoscaling as autoscaling
 import troposphere.cloudformation as cf
 import troposphere.route53 as r53
 import troposphere.constants as tpc
-from troposphere import Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
+from troposphere import Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
 from template import Template
-from boto.s3.key import Key
-from datetime import datetime
-
 import cli
 from pkg_resources import resource_string
 
@@ -30,16 +27,21 @@ FACTORY_DEFAULT_AMI_CACHE = _get_internal_resource(DEFAULT_AMI_CACHE_FILENAME)
 
 TEMPLATE_REQUIREMENTS = {
     "global": [
+        # External template name: *output* filename when running create, *input* filename when running deploy
         ('output', basestring),
+        # Name of top-level stack when deploying template
         ('environment_name', basestring),
+        # Prints extra information useful for debugging
         ('print_debug', bool)
     ],
     "template": [
+        # Name of json file containing mapping labels to AMI ids
         ('ami_map_file', basestring)
     ]
 }
 
 
+# TODO: externalize this to the data dir
 def _build_common_strings():
     return {
             "valid_instance_types": ["t2.micro", "t2.small", "t2.medium",
@@ -90,8 +92,10 @@ class EnvironmentBase(object):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
-        CloudTrail log storage
-        @param arg_dict [dict] keyword arguments to handle setting config-level parameters and arguments within this class
+        CloudTrail log storage.
+        :param view: View object to use.
+        :param create_missing_files: Specifies policy to use when local files are missing.  When disabled missing files will cause an IOException
+        :param config_filename: The name of the config file to load by default.  Note: User can still override this value from the CLI with '--config-file'.
         """
 
         # Load the user interface
@@ -119,6 +123,9 @@ class EnvironmentBase(object):
         view.process_request(self)
 
     def write_template_to_file(self):
+        """
+        Serializes self.template to string and writes it to the file named in config['global']['output']
+        """
         indent = 0 if not self.config['global']['print_debug'] else 4
 
         with open(self.config['global']['output'], 'w') as output_file:
@@ -129,13 +136,22 @@ class EnvironmentBase(object):
             json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
 
     def create_action(self):
+        """
+        Default create_action invoked by the CLI
+        Initializes a new template instance, and write it to file.
+        """
         self.initialize_template()
 
-        # process template, adding each child to S3 and adding stack resources to the parent template
+        # Do custom troposphere resource creation here ... but in your overridden copy of this method
+
         self.write_template_to_file()
 
     def deploy_action(self):
-
+        """
+        Default deploy_action invoked by the CLI
+        Attempt to query the status of the stack. If it already exists and is in a ready state, it will issue an
+        update-stack command. If the stack does not yet exist, it will issue a create-stack command
+        """
         cfn_conn = boto3.client('cloudformation')
         cfn_template_filename = self.config['global']['output']
 
@@ -193,9 +209,13 @@ class EnvironmentBase(object):
                 TimeoutInMinutes=TIMEOUT)
             print "Created new CF stack %s\n" % stack_name
 
-
     @classmethod
     def _validate_config(cls, config):
+        """
+        Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present
+        and that the required types match. Throws ValidationError if not valid.
+        :param config: dict to be validated
+        """
         for (section, key_reqs) in TEMPLATE_REQUIREMENTS.iteritems():
             if section not in config:
                 message = "Config file missing section: ", section
@@ -207,8 +227,6 @@ class EnvironmentBase(object):
                     message = "Config file missing required key %s::%s" % (section, required_key)
                     raise ValidationError(message)
 
-                # print required_key, key_type, '==', type(keys[required_key]), '?', isinstance(keys[required_key], key_type)
-
                 # required_keys
                 if not isinstance(keys[required_key], key_type):
                     message = "Type mismatch in config file key %s::%s should be of type %s, not %s" % \
@@ -217,8 +235,8 @@ class EnvironmentBase(object):
 
     def handle_local_config(self):
         """
-        Use local file if present, otherwise use factory values and write that to disk.
-        Unless create_missing_files is false, in that case throw exception
+        Use local file if present, otherwise use factory values and write that to disk
+        unless self.create_missing_files == false, in which case throw IOError
         """
 
         # If override config file exists, use it
@@ -242,6 +260,9 @@ class EnvironmentBase(object):
         self.config = config
 
     def initialize_template(self):
+        """
+        Create new Template instance, set description and common parameters and load AMI cache.
+        """
         self.template = Template(self.globals.get('output', 'default_template'))
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
@@ -249,6 +270,9 @@ class EnvironmentBase(object):
         self.load_ami_cache()
 
     def load_ami_cache(self):
+        """
+        Read in ami_cache file and attach AMI mapping to template. This file associates human readable handles to AMI ids.
+        """
         file_path = None
 
         # Users can provide override ami_cache in their project root

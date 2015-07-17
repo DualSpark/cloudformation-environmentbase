@@ -19,6 +19,9 @@ class NetworkBase(EnvironmentBase):
     '''
 
     def construct_network(self):
+        """
+        Main function to construct VPC, subnets, security groups, NAT instances, etc
+        """
         network_config = self.config.get('network', {})
         template_config = self.config.get('template', {})
 
@@ -62,6 +65,9 @@ class NetworkBase(EnvironmentBase):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def create_action(self):
+        """
+        Override EnvironmentBase.create_action() to construct VPC
+        """
         self.initialize_template()
         self.construct_network()
         self.write_template_to_file()

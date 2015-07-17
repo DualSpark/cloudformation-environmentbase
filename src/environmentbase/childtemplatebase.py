@@ -49,4 +49,4 @@ class ChildTemplateBase(EnvironmentBase):
         """
         self.initialize_template()
         self.setup_parameters()
-        self.write_tempate_to_file()
+        self.write_template_to_file()

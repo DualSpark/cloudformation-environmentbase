@@ -216,7 +216,7 @@ class EnvironmentBaseTestCase(TestCase):
                 self.template.add_resource(res)
 
                 # This triggers serialization of the template and any child stacks
-                self.write_tempate_to_file()
+                self.write_template_to_file()
 
         # Initialize the the controller with faked 'create' CLI parameter
         with patch.object(sys, 'argv', ['environmentbase', 'create']):

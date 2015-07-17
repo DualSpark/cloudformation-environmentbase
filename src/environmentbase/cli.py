@@ -16,7 +16,6 @@ Options:
   --template_file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
 """
 
-
 # environemntbase (create|deploy) [--no_tests] [--config_file <FILE_LOCATION>] [--debug] [--region <REGION>]
 #                 [--generate_topics] [--topic_name <TOPIC_NAME>] [--trail_name <TRAIL_NAME>]
 #                 [--third_party_auth_ids] [--debug]
@@ -36,11 +35,26 @@ import version
 class CLI(object):
 
     def __init__(self, quiet=False):
+        """
+        CLI constructor is responsible for parsing sys.argv to collect configuration information.
+        If you need to change the config file from the default name set the property 'config_filename'
+        from the constructor.
+        quiet: is provided to suppress output, primarily for unit testing
+        """
         self.quiet = quiet
 
         self.args = docopt(__doc__, version='environmentbase %s' % version.__version__)
 
+        # Parsing this config filename here is required since
+        # the file is already loaded in self.update_config()
+        self.config_filename = self.args.get('--config_file')
+
     def update_config(self, config):
+        """
+        The controller provides its config object containing settings loaded from file.  Potentially from the filename
+        provided in the constructor above.  This function allows the CLI to override any of those values the user may
+        have requested.
+        """
         if self.args.get('--debug'):
             config['global']['print_debug'] = True
 
@@ -49,6 +63,10 @@ class CLI(object):
             config['global']['output'] = template_file
 
     def process_request(self, controller):
+        """
+        Controller has finished initializing its config. This function maps user requested action to
+        controller.XXX_action().  Currently supported actions: create_action() and deploy_action().
+        """
         if not self.quiet:
             print ''
 
@@ -59,7 +77,7 @@ class CLI(object):
 
         if self.args.get('create', False):
             if not self.quiet:
-                # print 'Generating template for %s stack' % controller.config['global']['output']
+                print 'Generating template for %s stack' % controller.config['global']['environment_name']
                 print '\nWriting template to %s\n' % controller.config['global']['output']
             controller.create_action()
 

@@ -48,6 +48,8 @@ class ElkDemo(EnvironmentBase): def __init__(self, class_args):
 EnvironmentBase.__init__(self, class_args)
 ```
 
+See [example usage](docs/usage.rst) for a brief example of a subclass with overridden create and deploy methods.
+
 Documentation within the class takes a modified usage of the
 [doxygen](http://www.stack.nl/~dimitri/doxygen/manual/docblocks.html#pythonblocks)
 standard by adding a @classarg identifier that indicates that a given method

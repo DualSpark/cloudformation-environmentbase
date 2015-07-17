@@ -5,15 +5,15 @@ environemntbase
 Tool bundle manages generation, deployment, and feedback of cloudformation resources.
 
 Usage:
-    environmentbase (create|deploy) [--config_file <FILE_LOCATION>] [--debug] [--template_file=<TEMPLATE_FILE>]
+    environmentbase (create|deploy) [--config-file <FILE_LOCATION>] [--debug] [--template-file=<TEMPLATE_FILE>]
 
 Options:
   -h --help                            Show this screen.
   -v --version                         Show version.
   --debug                              Prints parent template to console out.
-  --config_file <CONFIG_FILE>          Name of json configuration file.
-  --stack_name <STACK_NAME>            User-definable value for the CloudFormation stack being deployed.
-  --template_file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
+  --config-file <CONFIG_FILE>          Name of json configuration file.
+  --stack-name <STACK_NAME>            User-definable value for the CloudFormation stack being deployed.
+  --template-file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
 """
 
 # environemntbase (create|deploy) [--no_tests] [--config_file <FILE_LOCATION>] [--debug] [--region <REGION>]
@@ -30,7 +30,7 @@ Options:
 
 from docopt import docopt
 import version
-
+import json
 
 class CLI(object):
 
@@ -58,6 +58,9 @@ class CLI(object):
         if self.args.get('--debug'):
             config['global']['print_debug'] = True
 
+            if config['global']['print_debug']:
+                print "CLI arguments", json.dumps(self.args, indent=4, sort_keys=True)
+
         template_file = self.args.get('--template_file')
         if template_file is not None:
             config['global']['output'] = template_file
@@ -69,9 +72,6 @@ class CLI(object):
         """
         if not self.quiet:
             print ''
-
-            if controller.config['global']['print_debug']:
-                print self.args
 
             controller.to_json()
 

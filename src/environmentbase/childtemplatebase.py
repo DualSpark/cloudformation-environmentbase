@@ -3,17 +3,14 @@ from environmentbase import EnvironmentBase
 
 
 class ChildTemplateBase(EnvironmentBase):
-    '''
+    """
     Base class to manage common input parameters for non-network templates.
-    '''
+    """
 
-    def __init__(self, arg_dict):
-        '''
-        Init method manages creation of common parameters for derived classes
-        @param arg_dict [dict] collection of keyword arguments for this class implementation
-        '''
-        EnvironmentBase.__init__(self, arg_dict)
-
+    def create_action(self):
+        """
+        Create_action method manages creation of common parameters for derived classes
+        """
         self.vpc_cidr = self.template.add_parameter(Parameter('vpcCidr',
             Description='CIDR of the VPC network',
             Type='String',
@@ -32,7 +29,7 @@ class ChildTemplateBase(EnvironmentBase):
             Description='Name of the S3 bucket used for infrastructure utility',
             Type='String'))
 
-        network_config = arg_dict.get('network', {})
+        network_config = self.config.get('network', {})
 
         for y in ['public', 'private']:
             if y not in self.subnets:
@@ -48,3 +45,6 @@ class ChildTemplateBase(EnvironmentBase):
             self.azs.append(Ref(self.template.add_parameter(Parameter('availabilityZone' + str(x),
                 Description='Availability Zone ' + str(x),
                 Type='String'))))
+
+        # This triggers serialization of the template and any child stacks
+        super(ChildTemplateBase, self).create_action()

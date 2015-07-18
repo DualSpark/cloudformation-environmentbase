@@ -1,8 +1,8 @@
-from . import environmentbase
+from . import networkbase
 
 
 def main():
-    environmentbase.EnvironmentBase()
+    networkbase.NetworkBase()
 
 if __name__ == '__main__':
     main()

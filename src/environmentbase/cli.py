@@ -11,7 +11,7 @@ Options:
   -h --help                            Show this screen.
   -v --version                         Show version.
   --debug                              Prints parent template to console out.
-  --config-file <CONFIG_FILE>          Name of json configuration file.
+  --config-file <CONFIG_FILE>          Name of json configuration file. Default value is config.json
   --stack-name <STACK_NAME>            User-definable value for the CloudFormation stack being deployed.
   --template-file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
 """

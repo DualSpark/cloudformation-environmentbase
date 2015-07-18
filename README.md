@@ -86,7 +86,7 @@ To use this script, you must install some requirements (listed  [here](https://g
 This can be done by running the following command from this directory:
 
 ```bash
-sudo pip install . --upgrade
+sudo pip install -e .
 ```
 
 To use the script itself, you can run it directly from the command line:
@@ -114,7 +114,12 @@ The IAM permissions required to perform the VPC lookups are the following:
 Once you have either set up your boto.cfg file, you can run the process as follows:
 
 ```bash
-environmentbase create --config-file config_args.json
+environmentbase create
+```
+
+This first run will provide you a copy of config.json.  If you want to use a different filename use 
+```bash
+environmentbase create --config-file config_args.json 
 ```
 
 ## File Descriptions

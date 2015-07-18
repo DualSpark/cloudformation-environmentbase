@@ -42,10 +42,33 @@ project folder (this is not yet packaged in a deployable artifact). The import
 and class definition for your class will look similar to the following:
 
 ```python
-from environmentbase .environmentbase import EnvironmentBase
+from environmentbase.networkbase import NetworkBase
 
-class ElkDemo(EnvironmentBase): def __init__(self, class_args):
-EnvironmentBase.__init__(self, class_args)
+class MyEnvClass(NetworkBase):
+    '''
+    Class creates a VPC and common network components for the environment
+    '''
+
+    def create_action(self):
+
+        self.initialize_template()
+        self.construct_network()
+
+        # Do custom troposphere resource creation here
+
+        self.write_template_to_file()
+
+
+    def deploy_action(self):
+
+        # Do custom deploy steps here
+
+        super(MyEnvClass, self).deploy_action()
+
+
+if __name__ == '__main__':
+
+    MyEnvClass()
 ```
 
 See [example usage](docs/usage.rst) for a brief example of a subclass with overridden create and deploy methods.
@@ -58,30 +81,26 @@ type and description of that parameter.
 
 ## Command Line Usage
 
-To use this script, you must install the following Python libraries:
-
-* [docopt](http://docopt.org)
-* [boto](boto.readthedocs.org/en/latest/)
-* [troposphere](https://github.com/cloudtools/troposphere)
-* [ipcalc](https://pypi.python.org/pypi/ipcalc/)
+To use this script, you must install some requirements (listed  [here](https://github.com/DualSpark/cloudformation-environmentbase/blob/master/setup.py#L64))
 
 This can be done by running the following command from this directory:
 
 ```bash
-sudo pip install -r requirements.txt --upgrade
+sudo pip install . --upgrade
 ```
 
 To use the script itself, you can run it directly from the command line:
 
 ```bash
-python environmentbase.py -h
+python setup.py install
+environmentbase --help
 ```
 
 This script uses Docopt to collect and parse arguments per the help
 documentation included. You do have the option of either passing in
 a configuration file representing these values or using the command line
 arguments to set them individually. A sample (with defaults) of the
-configuration file is located in the config_args.json file. To run this, you
+configuration file is located in the config.json file. To run this, you
 must have a boto.cfg file set with the credentials for the target account where
 you'd like to deploy the CloudFormation template to.
 
@@ -92,18 +111,10 @@ The IAM permissions required to perform the VPC lookups are the following:
 "ec2:DescribeRegions"], "Effect": "Allow", "Resource": "*" }]}
 ```
 
-Once you have either set up your boto.cfg file or have gathered an access key
-and secret key for a user with the requisite permissions, you can run the
-process as follows:
+Once you have either set up your boto.cfg file, you can run the process as follows:
 
 ```bash
-python environmentbase.py create --config config_args.json
-```
-
-or
-
-```bash
-python environmentbase.py create --aws_access_key_id <ACCESS_KEY_ID> --aws_secret_access_key <SECRET_ACCESS_KEY>
+environmentbase create --config-file config_args.json
 ```
 
 ## File Descriptions
@@ -115,7 +126,7 @@ object within the CloudFormation template. This is a simple way to abstract AMI
 Id's out of the solution and can be used in conjunction with Packer to populate
 custom AMIs directly from external tools.
 
-### config_args.json
+### config.json
 
 This is a sample 'config' file to be passed into the command line use case and
 identifies a simple dictionary of configuration keys and values to be used
@@ -129,6 +140,12 @@ pseudo-[doxygen](http://www.stack.nl/~dimitri/doxygen/manual/docblocks.html#pyth
 format and the command line argument parsing process is implemented in Docopt.
 This script requires that all packages in the requirements.txt file are
 installed.
+
+### networkbase.py
+
+This python script extends the functionlity of environmentbase.py to include all of the basic
+network infrastructure including VPC, public and private subnets, NAT instances, and security groups.
+The basic usage example shows how to use the class with your own code.
 
 ### environmentbase.template
 

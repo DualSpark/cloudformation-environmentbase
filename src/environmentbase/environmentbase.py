@@ -899,3 +899,5 @@ class EnvironmentBase(object):
 
         return self.template.add_resource(stack_obj)
 
+if __name__ == '__main__':
+    EnvironmentBase()

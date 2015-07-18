@@ -36,7 +36,10 @@ TEMPLATE_REQUIREMENTS = {
     ],
     "template": [
         # Name of json file containing mapping labels to AMI ids
-        ('ami_map_file', basestring)
+        ('ami_map_file', basestring),
+        ('mock_upload', bool),
+        ('s3_canned_acl', basestring),
+        ('s3_bucket', basestring)
     ]
 }
 
@@ -830,8 +833,7 @@ class EnvironmentBase(object):
                 Roles=[Ref(iam_role)]))
 
     def add_child_template(self,
-                           name,
-                           template_wrapper,
+                           template,
                            s3_bucket=None,
                            s3_key_prefix=None,
                            s3_canned_acl=None,
@@ -845,7 +847,7 @@ class EnvironmentBase(object):
         @param s3_key_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
         @param s3_canned_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
         """
-        template = template_wrapper.template
+        name = template.name
 
         if s3_key_prefix == None:
             s3_key_prefix = self.template_args.get('s3_key_name_prefix', '')

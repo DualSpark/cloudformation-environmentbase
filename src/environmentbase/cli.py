@@ -23,7 +23,7 @@ import json
 
 class CLI(object):
 
-    def __init__(self, quiet=False):
+    def __init__(self, quiet=False, doc=__doc__):
         """
         CLI constructor is responsible for parsing sys.argv to collect configuration information.
         If you need to change the config file from the default name set the property 'config_filename'
@@ -32,7 +32,7 @@ class CLI(object):
         """
         self.quiet = quiet
 
-        self.args = docopt(__doc__, version='environmentbase %s' % version.__version__)
+        self.args = docopt(doc, version='environmentbase %s' % version.__version__)
 
         # Parsing this config filename here is required since
         # the file is already loaded in self.update_config()

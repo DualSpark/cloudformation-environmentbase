@@ -15,7 +15,7 @@ import resources as res
 
 TIMEOUT = 60
 
-TEMPLATE_REQUIREMENTS = {
+CONFIG_REQUIREMENTS = {
     "global": [
         # External template name: *output* filename when running create, *input* filename when running deploy
         ('output', basestring),
@@ -180,7 +180,7 @@ class EnvironmentBase(object):
         and that the required types match. Throws ValidationError if not valid.
         :param config: dict to be validated
         """
-        for (section, key_reqs) in TEMPLATE_REQUIREMENTS.iteritems():
+        for (section, key_reqs) in CONFIG_REQUIREMENTS.iteritems():
             if section not in config:
                 message = "Config file missing section: ", section
                 raise ValidationError(message)

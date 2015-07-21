@@ -1,4 +1,5 @@
-from troposphere import Output, Ref, Join, iam
+from troposphere import Output, Ref, Join, Parameter, Base64
+from troposphere import iam
 import troposphere as t
 import boto.s3
 from boto.s3.key import Key
@@ -7,18 +8,19 @@ import json
 import boto
 import time
 from datetime import datetime
+import resources as res
 
 
 class Template(t.Template):
-    '''
+    """
     Custom wrapper for Troposphere Template object which handles S3 uploads and a specific
     workflow around hashing the template to allow for a validation mechanism of a template's
     consistency since it was generated.
-    '''
+    """
 
     def __init__(self, template_name):
         '''
-        Init method for environmentbase.Teplate class
+        Init method for environmentbase.Template class
         @param template_name [string] - name of this template, used when identifying this template when uploading, etc.
         '''
         t.Template.__init__(self)
@@ -32,13 +34,6 @@ class Template(t.Template):
         m = hashlib.sha256()
         m.update(self.__validation_formatter())
         return m.hexdigest()
-
-    def merge(self, template):
-        '''
-        Copies into this Template the Parameters, Outputs, Resources,
-        :param template:
-        :return:
-        '''
 
     def to_template_json(self):
         '''

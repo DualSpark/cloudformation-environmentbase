@@ -18,6 +18,12 @@ class Template(t.Template):
     consistency since it was generated.
     """
 
+    # input parameters for public and private subnets provided externally
+    subnets = {
+        'public': [],
+        'private': []
+    }
+
     def __init__(self, template_name):
         '''
         Init method for environmentbase.Template class
@@ -148,6 +154,61 @@ class Template(t.Template):
         return self.add_resource(iam.InstanceProfile(layer_name + 'InstancePolicy',
                 Path='/' + path_prefix + '/',
                 Roles=[Ref(iam_role)]))
+
+    def add_common_parameters(self, public_subnet_count=2, private_subnet_count=2):
+        """
+        Adds parameters to template for use as a child stack:
+            vpcCidr,
+            vpcId,
+            commonSecurityGroup,
+            utilityBucket,
+            each subnet: [public|private]Subnet[0-9],
+            each AZ name: availabilityZone[0-9]
+        """
+        self.vpc_cidr = self.add_parameter(Parameter(
+            'vpcCidr',
+            Description='CIDR of the VPC network',
+            Type='String',
+            AllowedPattern=res.get_str('cidr_regex'),
+            ConstraintDescription=res.get_str('cidr_regex_message')))
+
+        self.vpc_id = self.add_parameter(Parameter(
+            'vpcId',
+            Description='ID of the VPC network',
+            Type='String'))
+
+        self.common_security_group = self.add_parameter(Parameter(
+            'commonSecurityGroup',
+            Description='Security Group ID of the common security group for this environment',
+            Type='String'))
+
+        self.utility_bucket = self.add_parameter(Parameter(
+            'utilityBucket',
+            Description='Name of the S3 bucket used for infrastructure utility',
+            Type='String'))
+
+        largest_subnet_type = max(int(public_subnet_count), int(private_subnet_count))
+
+        for y in ['public', 'private']:
+            if y not in self.subnets:
+                self.subnets[y] = []
+            for x in range(0, largest_subnet_type):
+                subnet_param = Parameter(
+                    y.lower() + 'Subnet' + str(x),
+                    Description='Private subnet ' + str(x),
+                    Type='String')
+                self.add_parameter(subnet_param)
+                self.subnets[y].append(Ref(subnet_param))
+
+        self.azs = []
+
+        for x in range(0, largest_subnet_type):
+            az_param = Parameter(
+                'availabilityZone' + str(x),
+                Description='Availability Zone ' + str(x),
+                Type='String')
+            self.add_parameter(az_param)
+            self.azs.append(Ref(az_param))
 
     @staticmethod
     def build_bootstrap(bootstrap_files,

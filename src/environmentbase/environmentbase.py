@@ -10,20 +10,10 @@ import troposphere.constants as tpc
 from troposphere import Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
 from template import Template
 import cli
-from pkg_resources import resource_string
-
-
-def _get_internal_resource(resource_name):
-    """Retrieves resource embedded in the package (even if installed as a zipped archive)."""
-    return json.loads(resource_string(__name__, 'data/' + resource_name))
-
-DEFAULT_CONFIG_FILENAME = 'config.json'
-DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
+import warnings
+import resources as res
 
 TIMEOUT = 60
-
-FACTORY_DEFAULT_CONFIG = _get_internal_resource(DEFAULT_CONFIG_FILENAME)
-FACTORY_DEFAULT_AMI_CACHE = _get_internal_resource(DEFAULT_AMI_CACHE_FILENAME)
 
 TEMPLATE_REQUIREMENTS = {
     "global": [
@@ -44,34 +34,6 @@ TEMPLATE_REQUIREMENTS = {
 }
 
 
-# TODO: externalize this to the data dir
-def _build_common_strings():
-    return {
-            "valid_instance_types": ["t2.micro", "t2.small", "t2.medium",
-                                     "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
-                                     "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge",
-                                     "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
-                                     "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge",
-                                     "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
-                                     "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
-                                     "g2.2xlarge"],
-            "valid_instance_type_message": "must be a valid EC2 instance type.",
-            "valid_db_instance_types": ["db.t1.micro", "db.m1.small",
-                                        "db.m3.medium", "db.m3.large", "db.m3.xlarge", "db.m3.2xlarge",
-                                        "db.r3.large", "db.r3.xlarge", "db.r3.2xlarge", "db.r3.4xlarge", "db.r3.8xlarge",
-                                        "db.t2.micro", "db.t2.small", "db.t2.medium"],
-            "valid_db_instance_type_message": "must be a valid RDS DB instance type.",
-            "boolean_options": ["True", "False"],
-            "cidr_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
-            "cidr_regex_message": "must be a valid IP CIDR range of the form x.x.x.x/x.",
-            "ip_regex": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})",
-            "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
-            "valid_ebs_size_message" : "must be a valid EBS size between 1GB and 1024GB.",
-            "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]",
-            "ec2_key": "[\\x20-\\x7E]*",
-            "ec2_key_message": "can only contain ASCII characters."}
-
-
 class ValidationError(Exception):
     pass
 
@@ -89,9 +51,8 @@ class EnvironmentBase(object):
     manual_parameter_bindings = {}
     subnets = {}
     ignore_outputs = ['templateValidationHash', 'dateGenerated']
-    strings = _build_common_strings()
 
-    def __init__(self, view=None, create_missing_files=True, config_filename=DEFAULT_CONFIG_FILENAME):
+    def __init__(self, view=None, create_missing_files=True, config_filename=res.DEFAULT_CONFIG_FILENAME):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
@@ -249,10 +210,10 @@ class EnvironmentBase(object):
 
         # If we are instructed to create fresh override file, do it
         # unless the filename is something other than DEFAULT_CONFIG_FILENAME
-        elif self.create_missing_files and self.config_filename == DEFAULT_CONFIG_FILENAME:
-            config = copy.deepcopy(FACTORY_DEFAULT_CONFIG)
+        elif self.create_missing_files and self.config_filename == res.DEFAULT_CONFIG_FILENAME:
+            config = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
             with open(self.config_filename, 'w') as f:
-                f.write(json.dumps(FACTORY_DEFAULT_CONFIG, indent=4, separators=(',', ': ')))
+                f.write(json.dumps(res.FACTORY_DEFAULT_CONFIG, indent=4, separators=(',', ': ')))
 
         # Otherwise complain
         else:
@@ -279,13 +240,13 @@ class EnvironmentBase(object):
         file_path = None
 
         # Users can provide override ami_cache in their project root
-        local_amicache = os.path.join(os.getcwd(), DEFAULT_AMI_CACHE_FILENAME)
+        local_amicache = os.path.join(os.getcwd(), res.DEFAULT_AMI_CACHE_FILENAME)
         if os.path.isfile(local_amicache):
             file_path = local_amicache
 
         # Or sibling to the executing class
-        elif os.path.isfile(DEFAULT_AMI_CACHE_FILENAME):
-            file_path = DEFAULT_AMI_CACHE_FILENAME
+        elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
+            file_path = res.DEFAULT_AMI_CACHE_FILENAME
 
         # ami_map_file = self.template_args.get('ami_map_file', file_path)
         self.add_ami_mapping(file_path)
@@ -300,11 +261,11 @@ class EnvironmentBase(object):
             with open(ami_map_file_path, 'r') as json_file:
                 json_data = json.load(json_file)
         elif self.create_missing_files:
-            json_data = FACTORY_DEFAULT_AMI_CACHE
-            with open(DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
-                f.write(json.dumps(FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
+            json_data = res.FACTORY_DEFAULT_AMI_CACHE
+            with open(res.DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
+                f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
         else:
-            raise IOError(DEFAULT_AMI_CACHE_FILENAME + ' could not be found')
+            raise IOError(res.DEFAULT_AMI_CACHE_FILENAME + ' could not be found')
 
         for region in json_data:
             for key in json_data[region]:
@@ -356,10 +317,10 @@ class EnvironmentBase(object):
                 Type='String',
                 Default=template_config.get('ec2_key_default','default-key'),
                 Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
-                AllowedPattern=self.strings.get('ec2_key'),
+                AllowedPattern=res.get_str('ec2_key'),
                 MinLength=1,
                 MaxLength=255,
-                ConstraintDescription=self.strings.get('ec2_key_message')))
+                ConstraintDescription=res.get_str('ec2_key_message')))
 
         self.remote_access_cidr = self.template.add_parameter(Parameter('remoteAccessLocation',
                 Description='CIDR block identifying the network address space that will be allowed to ingress into public access points within this solution',
@@ -367,8 +328,8 @@ class EnvironmentBase(object):
                 Default='0.0.0.0/0',
                 MinLength=9,
                 MaxLength=18,
-                AllowedPattern=self.strings.get('cidr_regex'),
-                ConstraintDescription=self.strings.get('cidr_regex_message')))
+                AllowedPattern=res.get_str('cidr_regex'),
+                ConstraintDescription=res.get_str('cidr_regex_message')))
 
     def add_region_map_value(self,
                              region,

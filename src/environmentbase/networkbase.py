@@ -10,7 +10,7 @@ import json
 from environmentbase import EnvironmentBase
 from datetime import datetime
 from ipcalc import IP, Network
-
+import resources as res
 
 class NetworkBase(EnvironmentBase):
     '''
@@ -82,7 +82,7 @@ class NetworkBase(EnvironmentBase):
             AccessControl=s3.BucketOwnerFullControl,
             DeletionPolicy=Retain))
 
-        bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=self.strings.get('elb_log_prefix',''), cloudtrail_log_prefix=self.strings.get('cloudtrail_log_prefix', ''))
+        bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
 
         self.template.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketLoggingPolicy',
                 Bucket=Ref(self.utility_bucket),
@@ -149,8 +149,8 @@ class NetworkBase(EnvironmentBase):
         nat_instance_type = self.template.add_parameter(Parameter('natInstanceType',
                 Type='String',
                 Default=str(network_config.get('nat_instance_type', 't2.small')),
-                AllowedValues=self.strings['valid_instance_types'],
-                ConstraintDescription=self.strings['valid_instance_type_message'],
+                AllowedValues=res.get_str('valid_instance_types'),
+                ConstraintDescription=res.get_str('valid_instance_type_message'),
                 Description='Instance type to use when launching NAT instances.'))
 
         for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):

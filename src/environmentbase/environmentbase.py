@@ -761,6 +761,21 @@ class EnvironmentBase(object):
         path_prefix = self.globals.get('environment_name', 'environmentbase')
         return self.template.add_instance_profile(layer_name, iam_policies, path_prefix)
 
+    def add_common_params_to_child_template(self, template):
+        pub_subs = self.config['network']['public_subnet_count']
+        priv_subs = self.config['network']['private_subnet_count']
+        template.add_common_parameters(pub_subs, priv_subs)
+
+        template.add_parameter_idempotent(Parameter(
+            'ec2Key',
+            Type='String',
+            Default=self.config.get('template').get('ec2_key_default', 'default-key'),
+            Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
+            AllowedPattern=res.get_str('ec2_key'),
+            MinLength=1,
+            MaxLength=255,
+            ConstraintDescription=res.get_str('ec2_key_message')))
+
     def add_child_template(self,
                            template,
                            s3_bucket=None,

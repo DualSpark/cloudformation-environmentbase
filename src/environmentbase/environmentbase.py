@@ -772,26 +772,14 @@ class EnvironmentBase(object):
                                 iam_policies=None):
         """
         Helper method creates an IAM Role and Instance Profile for the optoinally specified IAM policies
-        @param layer_name [string] friendly name for the Role and Instance Profile used for naming and path organization
-        @param iam_policies [Troposphere.iam.Policy[]] array of IAM Policies to be associated with the Role and Instance Profile created
+        :param layer_name: [string] friendly name for the Role and Instance Profile used for naming and path organization
+        :param iam_policies: [Troposphere.iam.Policy[]] array of IAM Policies to be associated with the Role and Instance Profile created
+
         """
-        iam_role_obj = iam.Role(layer_name + 'IAMRole',
-                AssumeRolePolicyDocument={
-                    'Statement': [{
-                        'Effect': 'Allow',
-                        'Principal': {'Service': ['ec2.amazonaws.com']},
-                        'Action': ['sts:AssumeRole']
-                    }]},
-                    Path=Join('',['/' + self.globals.get('environment_name', 'environmentbase') + '/', layer_name , '/']))
+        warnings.warn("This method has been moved to environmentbase.Template.add_instance_profile()", DeprecationWarning, stacklevel=2)
 
-        if iam_policies != None:
-            iam_role_obj.Policies = iam_policies
-
-        iam_role = self.template.add_resource(iam_role_obj)
-
-        return self.template.add_resource(iam.InstanceProfile(layer_name + 'InstancePolicy',
-                Path='/' + self.globals.get('environment_name', 'environmentbase') + '/',
-                Roles=[Ref(iam_role)]))
+        path_prefix = self.globals.get('environment_name', 'environmentbase')
+        return self.template.add_instance_profile(layer_name, iam_policies, path_prefix)
 
     def add_child_template(self,
                            template,

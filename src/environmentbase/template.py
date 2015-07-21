@@ -1,4 +1,4 @@
-from troposphere import Output
+from troposphere import Output, Ref, Join, iam
 import troposphere as t
 import boto.s3
 from boto.s3.key import Key
@@ -7,6 +7,7 @@ import json
 import boto
 import time
 from datetime import datetime
+
 
 class Template(t.Template):
     '''
@@ -133,3 +134,22 @@ class Template(t.Template):
             stack_url = stack_url.split('?')[0]
 
         return stack_url
+
+    def add_instance_profile(self, layer_name, iam_policies, path_prefix):
+        iam_role_obj = iam.Role(layer_name + 'IAMRole',
+                AssumeRolePolicyDocument={
+                    'Statement': [{
+                        'Effect': 'Allow',
+                        'Principal': {'Service': ['ec2.amazonaws.com']},
+                        'Action': ['sts:AssumeRole']
+                    }]},
+                    Path=Join('', ['/' + path_prefix + '/', layer_name , '/']))
+
+        if iam_policies != None:
+            iam_role_obj.Policies = iam_policies
+
+        iam_role = self.add_resource(iam_role_obj)
+
+        return self.add_resource(iam.InstanceProfile(layer_name + 'InstancePolicy',
+                Path='/' + path_prefix + '/',
+                Roles=[Ref(iam_role)]))

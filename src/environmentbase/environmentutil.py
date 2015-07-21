@@ -23,6 +23,7 @@ import logging
 from .version import __version__
 import time
 
+
 class EnvironmentUtil(object):
     '''
     EnvironmentUtil class holds common task methods for deploying, managing or

@@ -148,3 +148,45 @@ class Template(t.Template):
         return self.add_resource(iam.InstanceProfile(layer_name + 'InstancePolicy',
                 Path='/' + path_prefix + '/',
                 Roles=[Ref(iam_role)]))
+
+    @staticmethod
+    def build_bootstrap(bootstrap_files,
+                        variable_declarations=None,
+                        cleanup_commands=None,
+                        prepend_line='#!/bin/bash'):
+        """
+        Method encapsulates process of building out the bootstrap given a set of variables and a bootstrap file to source from
+        Returns base 64-wrapped, joined bootstrap to be applied to an instnace
+        @param bootstrap_files [ string[] ] list of paths to the bash script(s) to read as the source for the bootstrap action to created
+        @param variable_declaration [ list ] list of lines to add to the head of the file - used to inject bash variables into the script
+        @param cleanup_commnds [ string[] ] list of lines to add at the end of the file - used for layer-specific details
+        """
+        if prepend_line != '':
+            ret_val = [prepend_line]
+        else:
+            ret_val = []
+
+        if variable_declarations is not None:
+            for line in variable_declarations:
+                ret_val.append(line)
+        for bootstrap_file in bootstrap_files:
+            for line in Template.get_file_contents(bootstrap_file):
+                ret_val.append(line)
+        if cleanup_commands is not None:
+            for line in cleanup_commands:
+                ret_val.append(line)
+        return Base64(Join("\n", ret_val))
+
+    @staticmethod
+    def get_file_contents(file_name):
+        """
+        Method encpsulates reading a file into a list while removing newline characters
+        @param file_name [string] path to file to read
+        """
+        ret_val = []
+        with open(file_name) as f:
+            content = f.readlines()
+        for line in content:
+            if not line.startswith('#~'):
+                ret_val.append(line.replace("\n", ""))
+        return ret_val

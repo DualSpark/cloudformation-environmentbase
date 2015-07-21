@@ -737,35 +737,14 @@ class EnvironmentBase(object):
         @param variable_declaration [ list ] list of lines to add to the head of the file - used to inject bash variables into the script
         @param cleanup_commnds [ string[] ] list of lines to add at the end of the file - used for layer-specific details
         """
-        if prepend_line != '':
-            ret_val = [prepend_line]
-        else:
-            ret_val = []
+        warnings.warn("Method moved to environmentbase.Template.build_bootstrap()",
+                      DeprecationWarning, stacklevel=2)
 
-        if variable_declarations != None:
-            for line in variable_declarations:
-                ret_val.append(line)
-        for bootstrap_file in bootstrap_files:
-            for line in EnvironmentBase.get_file_contents(bootstrap_file):
-                ret_val.append(line)
-        if cleanup_commands != None:
-            for line in cleanup_commands:
-                ret_val.append(line)
-        return Base64(Join("\n", ret_val))
-
-    @staticmethod
-    def get_file_contents(file_name):
-        """
-        Method encpsulates reading a file into a list while removing newline characters
-        @param file_name [string] path to file to read
-        """
-        ret_val = []
-        with open(file_name) as f:
-            content = f.readlines()
-        for line in content:
-            if not line.startswith('#~'):
-                ret_val.append(line.replace("\n", ""))
-        return ret_val
+        return Template.build_bootstrap(
+            bootstrap_files,
+            variable_declarations,
+            cleanup_commands,
+            prepend_line)
 
     def create_instance_profile(self,
                                 layer_name,
@@ -776,7 +755,8 @@ class EnvironmentBase(object):
         :param iam_policies: [Troposphere.iam.Policy[]] array of IAM Policies to be associated with the Role and Instance Profile created
 
         """
-        warnings.warn("This method has been moved to environmentbase.Template.add_instance_profile()", DeprecationWarning, stacklevel=2)
+        warnings.warn("Method moved to environmentbase.Template.add_instance_profile()",
+                      DeprecationWarning, stacklevel=2)
 
         path_prefix = self.globals.get('environment_name', 'environmentbase')
         return self.template.add_instance_profile(layer_name, iam_policies, path_prefix)

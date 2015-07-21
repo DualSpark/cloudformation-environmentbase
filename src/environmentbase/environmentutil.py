@@ -16,11 +16,12 @@ Options:
   --aws_region <AWS_REGION>    Region to start queries to AWS API from [default: us-east-1].
   --config_file <CONFIG_FILE>  JSON Config file holding the extended configuration for this toolset [default: config_args.json].
 '''
-from docopt import Docopt
+from docopt import docopt
 import boto
 import json
 import logging
 from .version import __version__
+import time
 
 class EnvironmentUtil(object):
     '''
@@ -37,7 +38,7 @@ class EnvironmentUtil(object):
         self.configuration = config_args
 
     def get_ami_map(self,
-                    aws_region=None):
+                    aws_region=None, image_names=None):
         '''
         Method iterates on all AWS regions for a given set of AMI names to gather AMI IDs and
         to create a regionmap for CloudFormation templates.
@@ -78,7 +79,7 @@ class EnvironmentUtil(object):
         @param output_file [string] - file location where the ami cache is to be saved locally
         '''
         with open(output_file, 'w') as f:
-            logigng.debug('Writing ami cache file to [' + output_file + ']')
+            logging.debug('Writing ami cache file to [' + output_file + ']')
             f.write(json.dumps(self.get_ami_map(aws_region)))
 
     def get_stack_status(self,
@@ -89,7 +90,7 @@ class EnvironmentUtil(object):
         @param cf_conn [Boto.CloudFormation.Connection] - Connection object to CloudFormation via Boto
         @param stack_name [string] - Name of the stack to check status on
         '''
-        api_result = cfconn.describe_stacks(stack_name_or_id=stack_name)
+        api_result = cf_conn.describe_stacks(stack_name_or_id=stack_name)
         if len(api_result) == 0:
             return 'NOT_CREATED'
         else:
@@ -107,16 +108,17 @@ class EnvironmentUtil(object):
         @param stack_name [string] - Name of the stack to check status on
         @param sleep_time [int] - number of seconds to wait between polls of the AWS API for status on the specified CloudFormation stack
         '''
-        stack_status == self.get_stack_status(cf_conn, stack_name)
+        stack_status = self.get_stack_status(cf_conn, stack_name)
         loop_id = 0
         while 'IN_PROGRESS' in stack_status:
             if loop_id != 0:
-                logging.info('Stack ' + stack_name + ' is not yet completely deployed. Waiting 20 sec until next polling interval. Update query count [' + str(loop_id)) + ']')
+                message = 'Stack %s is not yet completely deployed. Waiting 20 sec until next polling interval. Update query count [ %s ]' % (stack_name, str(loop_id))
+                logging.info(message)
                 time.sleep(sleep_time)
             stack_status = self.get_stack_status(cf_conn, stack_name)
             loop_id += 1
 
-        if cfconn.describe_stacks(stack_name_or_id=stack_name)[0].stack_status in ['CREATE_COMPLETE', 'UPDATE_COMPLETE']:
+        if cf_conn.describe_stacks(stack_name_or_id=stack_name)[0].stack_status in ['CREATE_COMPLETE', 'UPDATE_COMPLETE']:
             return True
         else:
             return False
@@ -142,8 +144,8 @@ class EnvironmentUtil(object):
             logging.debug('Setting default AWS Region for API access from overall configuration [' + aws_region + ']')
 
         logging.info('Connecting to CloudFormation in region [' + aws_region + ']')
-        cfconn = boto.connect_cloudformation(aws_region)
-        logging.info('Starting deploy of stack [' + stack_name + '] to AWS in region [' + aws_region + ']'])
+        cf_conn = boto.connect_cloudformation(aws_region)
+        logging.info('Starting deploy of stack [' + stack_name + '] to AWS in region [' + aws_region + ']')
 
         command_args = {'capabilities': capabilities}
 
@@ -157,14 +159,15 @@ class EnvironmentUtil(object):
             command_args['template_s3_url'] = template_string_or_url
 
         logging.debug('Calling stack deploy for [' + stack_name + '] with arguments: ' + json.dumps(command_args))
-        cfconn.create_stack(stack_name, **command_args)
+        cf_conn.create_stack(stack_name, **command_args)
 
         if wait_for_complete:
-            if(self.wait_for_stack(cfconn, stack_name)):
+            if self.wait_for_stack(cf_conn, stack_name):
                 logging.info('Stack [' + stack_name + '] successfully deployed to AWS in region [' + aws_region + ']')
                 return True
             else:
-                logging.warn('Stack [' + stack_name _ '] failed to deploy to AWS in region [' + aws_region + ']' + ' with status [' + self.get_stack_status(cf_conn, stack_name) + ']')
+                message = 'Stack [%s] failed to deploy to AWS in region [%s] with status [%s]' % (stack_name, aws_region, self.get_stack_status(cf_conn, stack_name))
+                logging.warn(message)
                 return False
         else:
             return True
@@ -173,9 +176,9 @@ if __name__ == '__main__':
     arguments = docopt(__doc__, version='environmentbase-cfn environment_util %s' % __version__)
 
     if arguments.get('--debug', False):
-        level = DEBUG
+        level = 'DEBUG'
     else:
-        level = INFO
+        level = 'INFO'
     logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=level)
 
     config_file_path = arguments.get('--config_file', 'config_args.json')

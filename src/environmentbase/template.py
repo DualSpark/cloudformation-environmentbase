@@ -35,9 +35,10 @@ class Template(t.Template):
     def merge(self, template):
         '''
         Copies into this Template the Parameters, Outputs, Resources,
-        :param template:
-        :return:
+        @param template [EnvironmentBase.Template] - instance of an EnvironmentBase template to be merged into the current template.
+        return:
         '''
+        pass
 
     def to_template_json(self):
         '''

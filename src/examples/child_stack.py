@@ -4,9 +4,9 @@ from troposphere import ec2
 
 
 class MyRootTemplate(NetworkBase):
-    """
+    '''
     Class creates a VPC and common network components for the environment
-    """
+    '''
 
     def create_action(self):
 
@@ -25,9 +25,9 @@ class MyRootTemplate(NetworkBase):
 
 
 class MyChildTemplate(Template):
-    """
+    '''
     Class creates a VPC and common network components for the environment
-    """
+    '''
 
     def __init__(self, template_name):
 

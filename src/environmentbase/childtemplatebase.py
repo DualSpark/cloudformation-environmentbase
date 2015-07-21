@@ -3,11 +3,15 @@ from environmentbase import EnvironmentBase
 
 
 class ChildTemplateBase(EnvironmentBase):
-    """
+    '''
     Base class to manage common input parameters for non-network templates.
-    """
+    '''
 
     def setup_parameters(self):
+        '''
+        Method sets up common parameters for the ChildTemplateBase class including vpcCidr, vpcId utilityBucket, network configuration, availability zones and subnets.
+        This is what populates the values within CloudFormation for common values from the aprent to the child via Parameters.
+        '''
         self.vpc_cidr = self.template.add_parameter(Parameter('vpcCidr',
             Description='CIDR of the VPC network',
             Type='String',
@@ -44,9 +48,9 @@ class ChildTemplateBase(EnvironmentBase):
                 Type='String'))))
 
     def create_action(self):
-        """
+        '''
         Create_action method manages creation of common parameters for derived classes
-        """
+        '''
         self.initialize_template()
         self.setup_parameters()
         self.write_template_to_file()

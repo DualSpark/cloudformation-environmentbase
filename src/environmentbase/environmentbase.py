@@ -231,11 +231,15 @@ class EnvironmentBase(object):
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
         self.add_common_parameters(self.template_args)
-        self.load_ami_cache()
+        EnvironmentBase.load_ami_cache(self.template, self.create_missing_files)
 
-    def load_ami_cache(self):
+    @staticmethod
+    def load_ami_cache(template, create_missing_files=True):
         """
-        Read in ami_cache file and attach AMI mapping to template. This file associates human readable handles to AMI ids.
+        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
+        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
+        @param template The template to attach the AMI mapping to
+        @param create_missing_file File loading policy, if true
         """
         file_path = None
 
@@ -248,28 +252,17 @@ class EnvironmentBase(object):
         elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
             file_path = res.DEFAULT_AMI_CACHE_FILENAME
 
-        # ami_map_file = self.template_args.get('ami_map_file', file_path)
-        self.add_ami_mapping(file_path)
-
-    def add_ami_mapping(self, ami_map_file_path):
-        """
-        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
-        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
-        @param ami_map_file [string] path representing where to find the AMI map to ingest into this template
-        """
-        if ami_map_file_path:
-            with open(ami_map_file_path, 'r') as json_file:
+        if file_path:
+            with open(file_path, 'r') as json_file:
                 json_data = json.load(json_file)
-        elif self.create_missing_files:
+        elif create_missing_files:
             json_data = res.FACTORY_DEFAULT_AMI_CACHE
             with open(res.DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
                 f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
         else:
             raise IOError(res.DEFAULT_AMI_CACHE_FILENAME + ' could not be found')
 
-        for region in json_data:
-            for key in json_data[region]:
-                self.add_region_map_value(region, key, json_data[region][key])
+        template.add_ami_mapping(json_data)
 
     def register_elb_to_dns(self,
                             elb,
@@ -331,21 +324,6 @@ class EnvironmentBase(object):
                 AllowedPattern=res.get_str('cidr_regex'),
                 ConstraintDescription=res.get_str('cidr_regex_message')))
 
-    def add_region_map_value(self,
-                             region,
-                             key,
-                             value):
-        """
-        Method adds a key value pair to the RegionMap mapping within this CloudFormation template
-        @param region [string] AWS region name that the key value pair is associated with
-        @param key [string] name of the key to store in the RegionMap mapping for the specified Region
-        @param value [string] value portion of the key value pair related to the region specified
-        """
-        self.__init_region_map([region])
-        if region not in self.template.mappings['RegionMap']:
-            self.template.mappings['RegionMap'][region] = {}
-        self.template.mappings['RegionMap'][region][key] = value
-
     def get_logging_bucket_policy_document(self,
                                            utility_bucket,
                                            elb_log_prefix='elb_logs',
@@ -377,7 +355,7 @@ class EnvironmentBase(object):
                      'us-gov-west-1': '048591011584'}
 
         for region in elb_accts:
-            self.add_region_map_value(region, 'elbAccountId', elb_accts[region])
+            self.template.add_region_map_value(region, 'elbAccountId', elb_accts[region])
 
         statements = [{"Action" : ["s3:PutObject"],
                        "Effect" : "Allow",
@@ -596,18 +574,6 @@ class EnvironmentBase(object):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.template.add_resource(auto_scaling_obj)
 
-    def __init_region_map(self,
-                          region_list):
-        """
-        Internal helper method used to check to ensure mapping dictionaries are present
-        @param region_list [list(str)] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
-        """
-        if 'RegionMap' not in self.template.mappings:
-            self.template.mappings['RegionMap'] = {}
-        for region_name in region_list:
-            if region_name not in self.template.mappings['RegionMap']:
-                self.template.mappings['RegionMap'][region_name] = {}
-
     def create_reciprocal_sg(self,
                              source_group,
                              source_group_name,
@@ -673,7 +639,7 @@ class EnvironmentBase(object):
 
         stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
         stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
-        
+
         listeners = []
         for elb_port in ports:
             if elb_port == tpc.HTTP_PORT:

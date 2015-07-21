@@ -12,6 +12,7 @@ from datetime import datetime
 from ipcalc import IP, Network
 import resources as res
 
+
 class NetworkBase(EnvironmentBase):
     '''
     Class creates all of the base networking infrastructure for a common deployment within AWS
@@ -120,7 +121,7 @@ class NetworkBase(EnvironmentBase):
                 if len(temp_dict) >= az_count:
                     az_dict[region.name] = {}
                     for item in temp_dict:
-                        self.add_region_map_value(region.name, item, temp_dict[item])
+                        self.template.add_region_map_value(region.name, item, temp_dict[item])
 
     def create_network(self,
                        network_config=None):
@@ -295,7 +296,7 @@ class NetworkBase(EnvironmentBase):
             Type=vpn_conf.get('vpn_type', 'ipsec.1'),
             Tags=[ec2.Tag(key='Name', value=vpn_name)]))
 
-        gateway_connection = self.template.add_resource(ec2.VPNGatewayAttachment('vpnGatewayAttachment',
+        gateway_connection = self.template.add_resource(ec2.VPCGatewayAttachment('vpnGatewayAttachment',
             VpcId=Ref(self.vpc),
             InternetGatewayId=Ref(self.igw),
             VpnGatewayId=Ref(gateway)))

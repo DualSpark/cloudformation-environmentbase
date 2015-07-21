@@ -251,3 +251,58 @@ class Template(t.Template):
             if not line.startswith('#~'):
                 ret_val.append(line.replace("\n", ""))
         return ret_val
+
+    def load_ami_cache(self):
+        """
+        Read in ami_cache file and attach AMI mapping to template. This file associates human readable handles to AMI ids.
+        """
+        file_path = None
+
+        # Users can provide override ami_cache in their project root
+        local_amicache = os.path.join(os.getcwd(), res.DEFAULT_AMI_CACHE_FILENAME)
+        if os.path.isfile(local_amicache):
+            file_path = local_amicache
+
+        # Or sibling to the executing class
+        elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
+            file_path = res.DEFAULT_AMI_CACHE_FILENAME
+
+        # ami_map_file = self.template_args.get('ami_map_file', file_path)
+        self.add_ami_mapping(file_path)
+
+    def add_ami_mapping(self, json_data):
+        """
+        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
+        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
+        @param ami_map_file [string] path representing where to find the AMI map to ingest into this template
+        """
+        for region in json_data:
+            for key in json_data[region]:
+                self.add_region_map_value(region, key, json_data[region][key])
+
+    def add_region_map_value(self,
+                             region,
+                             key,
+                             value):
+        """
+        Method adds a key value pair to the RegionMap mapping within this CloudFormation template
+        @param region [string] AWS region name that the key value pair is associated with
+        @param key [string] name of the key to store in the RegionMap mapping for the specified Region
+        @param value [string] value portion of the key value pair related to the region specified
+        """
+        self.__init_region_map([region])
+        if region not in self.mappings['RegionMap']:
+            self.mappings['RegionMap'][region] = {}
+        self.mappings['RegionMap'][region][key] = value
+
+    def __init_region_map(self,
+                          region_list):
+        """
+        Internal helper method used to check to ensure mapping dictionaries are present
+        @param region_list [list(str)] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
+        """
+        if 'RegionMap' not in self.mappings:
+            self.mappings['RegionMap'] = {}
+        for region_name in region_list:
+            if region_name not in self.mappings['RegionMap']:
+                self.mappings['RegionMap'][region_name] = {}

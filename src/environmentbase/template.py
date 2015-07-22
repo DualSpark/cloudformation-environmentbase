@@ -7,8 +7,13 @@ import hashlib
 import json
 import boto
 import time
+import os
 from datetime import datetime
 import resources as res
+
+
+def tropo_to_string(snippet, indent=4, sort_keys=True, separators=(',', ': ')):
+    return json.dumps(snippet, cls=t.awsencode, indent=indent, sort_keys=sort_keys, separators=separators)
 
 
 class Template(t.Template):

@@ -1,4 +1,4 @@
-import os,os.path,hashlib,json,time,copy,sys
+import os,os.path,hashlib,time,copy,sys
 import boto, boto.s3, botocore.exceptions, boto3
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
@@ -13,25 +13,14 @@ import cli
 import warnings
 import resources as res
 
-TIMEOUT = 60
+# Allow comments in json if you can but at least parse regular json if not
+try:
+    import commentjson as json
+except ImportError:
+    import json
 
-CONFIG_REQUIREMENTS = {
-    "global": [
-        # External template name: *output* filename when running create, *input* filename when running deploy
-        ('output', basestring),
-        # Name of top-level stack when deploying template
-        ('environment_name', basestring),
-        # Prints extra information useful for debugging
-        ('print_debug', bool)
-    ],
-    "template": [
-        # Name of json file containing mapping labels to AMI ids
-        ('ami_map_file', basestring),
-        ('mock_upload', bool),
-        ('s3_canned_acl', basestring),
-        ('s3_bucket', basestring)
-    ]
-}
+
+TIMEOUT = 60
 
 
 class ValidationError(Exception):
@@ -174,29 +163,66 @@ class EnvironmentBase(object):
                 TimeoutInMinutes=TIMEOUT)
             print "Created new CF stack %s\n" % stack_name
 
-    @classmethod
-    def _validate_config(cls, config):
+    def _validate_config(self, config):
         """
         Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present
         and that the required types match. Throws ValidationError if not valid.
         :param config: dict to be validated
         """
-        for (section, key_reqs) in CONFIG_REQUIREMENTS.iteritems():
+        # Merge in any requirements provided by subclass's
+        config_reqs_copy = copy.deepcopy(res.CONFIG_REQUIREMENTS)
+        config_reqs_copy.update(self.get_config_schema_hook())
+
+        for (section, key_reqs) in config_reqs_copy.iteritems():
             if section not in config:
                 message = "Config file missing section: ", section
                 raise ValidationError(message)
 
             keys = config[section]
-            for (required_key , key_type) in key_reqs:
+            for (required_key, key_typename) in key_reqs.iteritems():
                 if required_key not in keys:
                     message = "Config file missing required key %s::%s" % (section, required_key)
                     raise ValidationError(message)
 
                 # required_keys
+                key_type = res.get_type(key_typename)
                 if not isinstance(keys[required_key], key_type):
                     message = "Type mismatch in config file key %s::%s should be of type %s, not %s" % \
                               (section, required_key, key_type.__name__, type(keys[required_key]).__name__)
                     raise ValidationError(message)
+
+    @staticmethod
+    def get_config_schema_hook():
+        """
+        This method is provided for subclasses to update config requirements with additional required keys and their types.
+        The format is a 2-level dictionary with key values being one of bool/int/float/basestring.
+        Example (yes comments are allowed):
+        {
+            "template": {
+                // Name of json file containing mapping labels to AMI ids
+                "ami_map_file": "basestring",
+                "mock_upload": "bool",
+            }
+        }
+        :return: dict of config settings to be merged into base config, match existing keys to replace.
+        """
+        return {}
+
+    @staticmethod
+    def get_factory_defaults_hook():
+        """
+        This method is provided for subclasses to update factory default config file with additional sections.
+        The format is basic json (with comment support).  Currently restricted to 2-level dictionaries.
+        {
+            "template": {
+                // Name of json file containing mapping labels to AMI ids
+                "ami_map_file": "ami_cache.json",
+                "mock_upload": false,
+            }
+        }
+        :return: dict of config settings to be merged into base config, match existing keys to replace.
+        """
+        return {}
 
     def handle_local_config(self):
         """
@@ -207,21 +233,28 @@ class EnvironmentBase(object):
         # If override config file exists, use it
         if os.path.isfile(self.config_filename):
             with open(self.config_filename, 'r') as f:
-                config = json.loads(f.read())
+                content = f.read()
+                config = json.loads(content)
 
         # If we are instructed to create fresh override file, do it
         # unless the filename is something other than DEFAULT_CONFIG_FILENAME
         elif self.create_missing_files and self.config_filename == res.DEFAULT_CONFIG_FILENAME:
-            config = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
+            # Merge in any defaults provided by subclass's
+            default_config_copy = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
+            default_config_copy.update(self.get_factory_defaults_hook())
+
+            # Don't want changes to config modifying the FACTORY_DEFAULT
+            config = copy.deepcopy(default_config_copy)
+
             with open(self.config_filename, 'w') as f:
-                f.write(json.dumps(res.FACTORY_DEFAULT_CONFIG, indent=4, separators=(',', ': ')))
+                f.write(json.dumps(default_config_copy, indent=4, separators=(',', ': ')))
 
         # Otherwise complain
         else:
             raise IOError(self.config_filename + ' could not be found')
 
         # Validate and save results
-        EnvironmentBase._validate_config(config)
+        self._validate_config(config)
         self.config = config
 
     def initialize_template(self):

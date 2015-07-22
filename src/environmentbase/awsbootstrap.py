@@ -38,7 +38,7 @@ from environmentbase.networkbase import NetworkBase
 from troposphere import Template, Ref, Join, GetAtt, Output
 import troposphere.iam as iam
 import troposphere.s3 as s3
-from environmentbase.awsbootstrap import EnvironmentUtil
+from environmentutil import EnvironmentUtil
 
 arguments = docopt(__doc__, version='devtools 0.1')
 
@@ -103,7 +103,7 @@ if arguments.get('--third_parth_auth_ids', False):
         UserName=Ref(federated_auth_user)))
 
 if arguments.get('--existing_bucket', None):
-    logging_bucket = argumetns.get('--existing_bucket', None)
+    logging_bucket = arguments.get('--existing_bucket', None)
 else:
     logging_bucket_resource = t.add_resource(s3.Bucket('cloudTrailBucket',
         DependsOn=federated_auth_user.title))
@@ -148,15 +148,15 @@ developer_args['Policies'].append(iam.Policy(
             "NotAction": "iam:*",
             "Resource": "*"}]}))
 
-developer_role = t.add_resource(iam.Role('developerRole', **developer_args)
+developer_role = t.add_resource(iam.Role('developerRole', **developer_args))
 
 t.add_output(Output('developerRole',
   Value=Ref(developer_role),
   Description='Name of the AWS role for developer or power user access to the Console and API'))
 
 read_only_iam_policy = iam.Policy(
-        PolicyName='readOnlyAccess',
-        PolicyDocument={
+    PolicyName='readOnlyAccess',
+    PolicyDocument={
           "Version": "2012-10-17",
           "Statement": [
             {
@@ -226,7 +226,11 @@ read_only_iam_policy = iam.Policy(
                 "trustedadvisor:Describe*"
               ],
               "Effect": "Allow",
-              "Resource": "*"}]})
+              "Resource": "*"
+            }
+          ]
+        })
+
 
 read_only_role = t.add_resource(iam.Role('readOnlyRole',
   DependsOn=logging_bucket_resource.title,
@@ -276,71 +280,77 @@ if arguments.get('--third_parth_auth_ids', False):
     del t.outputs['federatedAuthUserAccessKeyId']
     del t.outputs['federatedAuthUserSecretAccessKey']
 
-t.add_resource(s3.BucketPolicy('cloudTrailBucketPolicy',
-Bucket=logging_bucket,
-PolicyDocument={
-"Version": "2012-10-17",
-"Statement": [
-  {
-    "Sid": "AWSCloudTrailAclCheck20131101",
-    "Effect": "Allow",
-    "Principal": {
-      "AWS": [
-        "arn:aws:iam::903692715234:root",
-        "arn:aws:iam::859597730677:root",
-        "arn:aws:iam::814480443879:root",
-        "arn:aws:iam::216624486486:root",
-        "arn:aws:iam::086441151436:root",
-        "arn:aws:iam::388731089494:root",
-        "arn:aws:iam::284668455005:root",
-        "arn:aws:iam::113285607260:root",
-        "arn:aws:iam::035351147821:root"
-      ]
-    },
-    "Action": "s3:GetBucketAcl",
-    "Resource": Join('', ["arn:aws:s3:::", logging_bucket])
-  },
-  {
-    "Sid": "AWSCloudTrailWrite20131101",
-    "Effect": "Allow",
-    "Principal": {
-      "AWS": [
-        "arn:aws:iam::903692715234:root",
-        "arn:aws:iam::859597730677:root",
-        "arn:aws:iam::814480443879:root",
-        "arn:aws:iam::216624486486:root",
-        "arn:aws:iam::086441151436:root",
-        "arn:aws:iam::388731089494:root",
-        "arn:aws:iam::284668455005:root",
-        "arn:aws:iam::113285607260:root",
-        "arn:aws:iam::035351147821:root"
-      ]
-    },
-    "Action": "s3:PutObject",
-    "Resource": Join('', ["arn:aws:s3:::", logging_bucket, "/AWSLogs/", Ref('AWS::AccountId'), "/*"]),
-    "Condition": {
-      "StringEquals": {
-        "s3:x-amz-acl": "bucket-owner-full-control"}}}]}))
+    t.add_resource(s3.BucketPolicy(
+        'cloudTrailBucketPolicy',
+        Bucket=logging_bucket,
+        PolicyDocument=
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "AWSCloudTrailAclCheck20131101",
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": [
+                    "arn:aws:iam::903692715234:root",
+                    "arn:aws:iam::859597730677:root",
+                    "arn:aws:iam::814480443879:root",
+                    "arn:aws:iam::216624486486:root",
+                    "arn:aws:iam::086441151436:root",
+                    "arn:aws:iam::388731089494:root",
+                    "arn:aws:iam::284668455005:root",
+                    "arn:aws:iam::113285607260:root",
+                    "arn:aws:iam::035351147821:root"
+                  ]
+                },
+                "Action": "s3:GetBucketAcl",
+                "Resource": Join('', ["arn:aws:s3:::", logging_bucket])
+              },
+              {
+                "Sid": "AWSCloudTrailWrite20131101",
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": [
+                    "arn:aws:iam::903692715234:root",
+                    "arn:aws:iam::859597730677:root",
+                    "arn:aws:iam::814480443879:root",
+                    "arn:aws:iam::216624486486:root",
+                    "arn:aws:iam::086441151436:root",
+                    "arn:aws:iam::388731089494:root",
+                    "arn:aws:iam::284668455005:root",
+                    "arn:aws:iam::113285607260:root",
+                    "arn:aws:iam::035351147821:root"
+                  ]
+                },
+                "Action": "s3:PutObject",
+                "Resource": Join('', ["arn:aws:s3:::", logging_bucket, "/AWSLogs/", Ref('AWS::AccountId'), "/*"]),
+                "Condition": {
+                  "StringEquals": {
+                    "s3:x-amz-acl": "bucket-owner-full-control"
+                  }
+                }
+              }
+            ]
+        }))
 
+    logging.debug('**********')
+    logging.debug('Final template (without creds in output): ' + t.to_json())
+    logging.debug('**********')
 
-  logging.debug('**********')
-  logging.debug('Final template (without creds in output): ' + t.to_json())
-  logging.debug('**********')
-
-  logging.debug('Updating CloudFormation stack with final template')
-  cfconn.update_stack(stack_name=arguments.get('--stack_name', 'accountBootstrapStack'),
+    logging.debug('Updating CloudFormation stack with final template')
+    cfconn.update_stack(stack_name=arguments.get('--stack_name', 'accountBootstrapStack'),
         template_body=t.to_json(),
         capabilities=['CAPABILITY_IAM'])
 
-  env_util.wait_for_stack(cfconn,
+    env_util.wait_for_stack(cfconn,
                           arguments.get('--stack_name', 'accountBootstrapStack'))
 
-  stack = cfconn.describe_stacks(stack_name_or_id=arguments.get('--stack_name', 'accountBootstrapStack'))[0]
-  if stack.stack_status == 'UPDATE_COMPLETE':
+    stack = cfconn.describe_stacks(stack_name_or_id=arguments.get('--stack_name', 'accountBootstrapStack'))[0]
+    if stack.stack_status == 'UPDATE_COMPLETE':
       logging.info('Stack ' + arguments.get('--stack_name', 'accountBootstrapStack') + ' has completely deployed with status of ' + stack.stack_status)
-  else:
-    logging.error('Final stack failed to deploy. Please check errors in AWS console, repair CloudFormation template and redeploy. Note that credentials are currently visible in the CloudFormation Console.')
-    exit(1)
+    else:
+        logging.error('Final stack failed to deploy. Please check errors in AWS console, repair CloudFormation template and redeploy. Note that credentials are currently visible in the CloudFormation Console.')
+        exit(1)
 else:
   logging.error('Stack failed to deploy. Please check errors in AWS console, repair CloudFormation template and redeploy.')
   exit(1)

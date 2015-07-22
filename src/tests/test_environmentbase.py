@@ -191,6 +191,35 @@ class EnvironmentBaseTestCase(TestCase):
         with self.assertRaises(eb.ValidationError):
             eb.EnvironmentBase._validate_config(valid_config)
 
+    def test_extending_config(self):
+        class SubController(eb.EnvironmentBase):
+            @staticmethod
+            def get_factory_defaults_hook():
+                return {'new_section': {'new_key': 'value'}}
+
+            @staticmethod
+            def get_config_schema_hook():
+                return {'new_section': {'new_key': 'basestring'}}
+
+        cli = self.fake_cli(['create'])
+        sub_ctlr = SubController(cli)
+
+        # Make sure the runtime config and the file saved to disk have the new parameter
+        self.assertEquals(sub_ctlr.config['new_section']['new_key'], 'value')
+
+        with open(res.DEFAULT_CONFIG_FILENAME, 'r') as f:
+            external_config = json.load(f)
+            self.assertEquals(external_config['new_section']['new_key'], 'value')
+        os.remove(res.DEFAULT_CONFIG_FILENAME)
+
+        # Check extended validation
+        # recreate config file without 'new_section' and make sure it fails validation
+        dummy_config = self._create_dummy_config()
+        self._create_local_file(res.DEFAULT_CONFIG_FILENAME, json.dumps(dummy_config, indent=4))
+
+        with self.assertRaises(eb.ValidationError):
+            SubController(cli)
+
     def test_flags(self):
         """ Verify cli flags update config object """
 

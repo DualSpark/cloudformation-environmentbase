@@ -29,10 +29,11 @@ class NetworkBase(EnvironmentBase):
         self.vpc = None
         self.azs = []
 
+        az_count = int(network_config.get('az_count', '2'))
+
         self.local_subnets = {}
         self.stack_outputs = {}
-        self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}),
-                az_count=max(network_config.get('public_subnet_count', 2), network_config.get('private_subnet_count',2)))
+        self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network(network_config=network_config)
         self.add_utility_bucket(name=template_config.get('s3_utility_bucket', 'demo'))
@@ -62,7 +63,7 @@ class NetworkBase(EnvironmentBase):
                         IpProtocol='tcp',
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
 
-        for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
+        for x in range(0, az_count):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def create_action(self):
@@ -154,32 +155,32 @@ class NetworkBase(EnvironmentBase):
                 ConstraintDescription=res.get_str('valid_instance_type_message'),
                 Description='Instance type to use when launching NAT instances.'))
 
-        for x in range(0, max(int(network_config.get('public_subnet_count', 2)), int(network_config.get('private_subnet_count', 2)))):
-            for y in network_config.get('subnet_types', ['public', 'private']):
-                if y in self.template.mappings['networkAddresses']['subnet' + str(x)]:
-                    if y not in self.local_subnets:
-                        self.local_subnets[y] = {}
-                    self.local_subnets[y][str(x)] = self.template.add_resource(ec2.Subnet(y + 'Subnet' + str(x),
-                            AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'),
+        subnet_types = network_config.get('subnet_types',['public','private'])
+
+        for index in range(0, int(network_config.get('az_count', 2))):
+            for subnet_type in subnet_types:
+                if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
+                    if subnet_type not in self.local_subnets:
+                        self.local_subnets[subnet_type] = {}
+
+                    self.local_subnets[subnet_type][str(index)] = self.template.add_resource(ec2.Subnet(subnet_type + 'Subnet' + str(index),
+                            AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
                             VpcId=Ref(self.vpc),
-                            CidrBlock=FindInMap('networkAddresses', 'subnet' + str(x), y)))
-                    route_table = self.template.add_resource(ec2.RouteTable(y + 'Subnet' + str(x) + 'RouteTable',
+                            CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type)))
+
+                    route_table = self.template.add_resource(ec2.RouteTable(subnet_type + 'Subnet' + str(index) + 'RouteTable',
                             VpcId=Ref(self.vpc)))
-                    if y == 'public':
-                        self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute',
-                                DependsOn=[igw_title],
-                                DestinationCidrBlock='0.0.0.0/0',
-                                GatewayId=Ref(self.igw),
-                                RouteTableId=Ref(route_table)))
-                    elif y == 'private':
-                        nat_instance = self.create_nat_instance(x, nat_instance_type, 'public')
-                        self.template.add_resource(ec2.Route(y + 'Subnet' + str(x) + 'EgressRoute',
-                                DestinationCidrBlock='0.0.0.0/0',
-                                InstanceId=Ref(nat_instance),
-                                RouteTableId=Ref(route_table)))
-                    self.template.add_resource(ec2.SubnetRouteTableAssociation(y + 'Subnet' + str(x) + 'EgressRouteTableAssociation',
+
+                    if subnet_type == 'public':
+                        self.egress_via_igw(index, route_table, igw_title, subnet_type)
+                    elif subnet_type == 'private':
+                        self.egress_via_nat(index, route_table, nat_instance_type, subnet_type)
+                    else:
+                        self.custom_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
+
+                    self.template.add_resource(ec2.SubnetRouteTableAssociation(subnet_type + 'Subnet' + str(index) + 'EgressRouteTableAssociation',
                             RouteTableId=Ref(route_table),
-                            SubnetId=Ref(self.local_subnets[y][str(x)])))
+                            SubnetId=Ref(self.local_subnets[subnet_type][str(index)])))
 
         self.manual_parameter_bindings['vpcCidr'] = FindInMap('networkAddresses', 'vpcBase', 'cidr')
         self.manual_parameter_bindings['vpcId'] = Ref(self.vpc)
@@ -189,6 +190,40 @@ class NetworkBase(EnvironmentBase):
                 self.subnets[x] = []
             for y in self.local_subnets[x]:
                 self.subnets[x].append(Ref(self.local_subnets[x][y]))
+
+    def custom_egress(self,
+                      index,
+                      route_table,
+                      igw_title,
+                      nat_instance_type,
+                      subnet_type):
+        '''
+        Override to implement egress for custom subnet types.  The igw and NAT instance type for the
+        VPC are provided in case they're needed. 
+        '''
+        pass
+
+    def egress_via_igw(self, 
+                      index, 
+                      route_table,
+                      igw_title,
+                      subnet_type):
+        self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
+            DependsOn=[igw_title],
+            DestinationCidrBlock='0.0.0.0/0',
+            GatewayId=Ref(self.igw),
+            RouteTableId=Ref(route_table)))
+
+    def egress_via_nat(self,
+                      index,
+                      route_table,
+                      nat_instance_type,
+                      subnet_type):
+        nat_instance = self.create_nat_instance(index, nat_instance_type, subnet_type)
+        self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
+            DestinationCidrBlock='0.0.0.0/0',
+            InstanceId=Ref(nat_instance),
+            RouteTableId=Ref(route_table)))
 
     def create_nat_instance(self,
                             nat_subnet_number,
@@ -246,10 +281,7 @@ class NetworkBase(EnvironmentBase):
         Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.  Calculated based on CIDR block sizes and additionally checks to ensure all network segments fit inside of the specified overall VPC CIDR
         @param network_config [dict] dictionary of values containing data for creating
         '''
-        public_subnet_count = int(network_config.get('public_subnet_count', 2))
-        private_subnet_count = int(network_config.get('private_subnet_count', 2))
-        public_subnet_size = str(network_config.get('public_subnet_size', '24'))
-        private_subnet_size = str(network_config.get('private_subnet_size', '22'))
+        az_count = int(network_config.get('az_count','2'))
         network_cidr_base = str(network_config.get('network_cidr_base', '172.16.0.0'))
         network_cidr_size = str(network_config.get('network_cidr_size', '20'))
         first_network_address_block = str(network_config.get('first_network_address_block', network_cidr_base))
@@ -259,27 +291,29 @@ class NetworkBase(EnvironmentBase):
         base_cidr = cidr_info.network().to_tuple()[0] + '/' + str(cidr_info.to_tuple()[1])
         ret_val['vpcBase'] = {'cidr': base_cidr}
         current_base_address = first_network_address_block
-        for public_subnet_id in range(0, public_subnet_count):
-            if not cidr_info.check_collision(current_base_address):
-                raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(public_subnet_id + 1) + ' when creating public subnet cidrs')
-            ip_info = Network(current_base_address + '/' + str(public_subnet_size))
-            range_info = ip_info.network().to_tuple()
-            if 'subnet' + str(public_subnet_id) not in ret_val:
-                ret_val['subnet' + str(public_subnet_id)] = dict()
-            ret_val['subnet' + str(public_subnet_id)]['public'] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
-            current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
-        range_reset = Network(current_base_address + '/' + str(private_subnet_size))
-        current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
-        for private_subnet_id in range(0, private_subnet_count):
-            if not cidr_info.check_collision(current_base_address):
-                raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(private_subnet_id + 1) + ' when creating private subnet cidrs')
-            ip_info = Network(current_base_address + '/' + str(private_subnet_size))
-            range_info = ip_info.network().to_tuple()
-            if 'subnet' + str(private_subnet_id) not in ret_val:
-                ret_val['subnet' + str(private_subnet_id)] = dict()
-            ret_val['subnet' + str(private_subnet_id)]['private'] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
-            current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
+
+        subnet_types = network_config.get('subnet_types',['public','private'])
+
+        for index in range(0, len(subnet_types)):
+            subnet_type = subnet_types[index]
+            subnet_size = network_config.get(subnet_type + '_subnet_size','22')
+
+            if index != 0:
+                range_reset = Network(current_base_address + '/' + str(subnet_size))
+                current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
+
+            for subnet_id in range(0, az_count):
+                if not cidr_info.check_collision(current_base_address):
+                    raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(index + 1) + ' when creating ' + subnet_type + ' subnet cidrs')
+                ip_info = Network(current_base_address + '/' + str(subnet_size))
+                range_info = ip_info.network().to_tuple()
+                if 'subnet' + str(subnet_id) not in ret_val:
+                    ret_val['subnet' + str(subnet_id)] = dict()
+                ret_val['subnet' + str(subnet_id)][subnet_type] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
+                current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
+
         return self.template.add_mapping('networkAddresses', ret_val)
+
 
     def add_vpn_gateway(self,
                         vpn_conf):

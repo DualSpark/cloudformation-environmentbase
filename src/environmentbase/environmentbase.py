@@ -40,6 +40,7 @@ class EnvironmentBase(object):
     manual_parameter_bindings = {}
     subnets = {}
     ignore_outputs = ['templateValidationHash', 'dateGenerated']
+    stack_outputs = {}
 
     def __init__(self, view=None, create_missing_files=True, config_filename=res.DEFAULT_CONFIG_FILENAME):
         """

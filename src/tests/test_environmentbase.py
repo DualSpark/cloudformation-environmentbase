@@ -7,7 +7,7 @@ import json
 import sys
 import copy
 from tempfile import mkdtemp
-from environmentbase import cli, environmentbase as eb
+from environmentbase import cli, resources as res, environmentbase as eb
 from troposphere import ec2
 
 
@@ -38,7 +38,7 @@ class EnvironmentBaseTestCase(TestCase):
         dummy_bool = False
 
         config = {}
-        for (section, keys) in eb.TEMPLATE_REQUIREMENTS.iteritems():
+        for (section, keys) in eb.CONFIG_REQUIREMENTS.iteritems():
             config[section] = {}
             for (key, key_type) in keys:
                 if key_type == basestring:
@@ -99,7 +99,7 @@ class EnvironmentBaseTestCase(TestCase):
 
         # We don't care about the AMI cache for this test,
         # but the file has to exist and to contain valid json
-        self._create_local_file(eb.DEFAULT_AMI_CACHE_FILENAME, '{}')
+        self._create_local_file(res.DEFAULT_AMI_CACHE_FILENAME, '{}')
 
         fake_cli = self.fake_cli(['create'])
 
@@ -108,10 +108,10 @@ class EnvironmentBaseTestCase(TestCase):
         with self.assertRaises(IOError):
             eb.EnvironmentBase(fake_cli, create_missing_files=False)
 
-        assert not os.path.isfile(eb.DEFAULT_CONFIG_FILENAME)
+        assert not os.path.isfile(res.DEFAULT_CONFIG_FILENAME)
 
         # 2) If the file exists but is not valid json we fail out
-        with open(eb.DEFAULT_CONFIG_FILENAME, 'w') as f:
+        with open(res.DEFAULT_CONFIG_FILENAME, 'w') as f:
             f.write("{}")
             with self.assertRaises(ValueError):
                 eb.EnvironmentBase(fake_cli, create_missing_files=False)
@@ -122,7 +122,7 @@ class EnvironmentBaseTestCase(TestCase):
         # Change one of the values
         original_value = config['global']['print_debug']
         config['global']['print_debug'] = not original_value
-        with open(eb.DEFAULT_CONFIG_FILENAME, 'w') as f:
+        with open(res.DEFAULT_CONFIG_FILENAME, 'w') as f:
             f.write(json.dumps(config))
             f.flush()
             base = eb.EnvironmentBase(fake_cli)
@@ -137,8 +137,8 @@ class EnvironmentBaseTestCase(TestCase):
             eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]))
 
         # remove config.json and create the alternate config file
-        os.remove(eb.DEFAULT_CONFIG_FILENAME)
-        self.assertFalse(os.path.isfile(eb.DEFAULT_CONFIG_FILENAME))
+        os.remove(res.DEFAULT_CONFIG_FILENAME)
+        self.assertFalse(os.path.isfile(res.DEFAULT_CONFIG_FILENAME))
 
         with open(config_filename, 'w') as f:
             f.write(json.dumps(config))
@@ -189,9 +189,9 @@ class EnvironmentBaseTestCase(TestCase):
         # Verify that debug and output are set to the factory default
         base = eb.EnvironmentBase(self.fake_cli(['create']))
         self.assertEqual(base.config['global']['print_debug'],
-                         eb.FACTORY_DEFAULT_CONFIG['global']['print_debug'])
+                         res.FACTORY_DEFAULT_CONFIG['global']['print_debug'])
         self.assertEqual(base.config['global']['output'],
-                         eb.FACTORY_DEFAULT_CONFIG['global']['output'])
+                         res.FACTORY_DEFAULT_CONFIG['global']['output'])
 
         # verify that the the debug cli flag changes the config value
         base = eb.EnvironmentBase(self.fake_cli(['create', '--debug']))
@@ -207,8 +207,8 @@ class EnvironmentBaseTestCase(TestCase):
             eb.EnvironmentBase(self.fake_cli(['create']), create_missing_files=False)
 
         # Create refs to files that should be created and make sure they don't already exists
-        config_file = os.path.join(self.temp_dir, eb.DEFAULT_CONFIG_FILENAME)
-        ami_cache_file = os.path.join(self.temp_dir, eb.DEFAULT_AMI_CACHE_FILENAME)
+        config_file = os.path.join(self.temp_dir, res.DEFAULT_CONFIG_FILENAME)
+        ami_cache_file = os.path.join(self.temp_dir, res.DEFAULT_AMI_CACHE_FILENAME)
         self.assertFalse(os.path.isfile(config_file))
         self.assertFalse(os.path.isfile(ami_cache_file))
 

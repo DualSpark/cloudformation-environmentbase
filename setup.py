@@ -71,13 +71,14 @@ setup(
         'setuptools>=17.1',
         'boto3',
         'lxml',
-        'cssselect'
+        'cssselect',
+        "commentjson"
     ],
 
     # Optional dependencies
-    # extras_require={
-    #     # eg: 'rst': ["docutils>=0.11"],
-    # },
+    extras_require={
+        'rst': ["commentjson"],
+    },
 
     # This section is required for setuptools to auto-gen the cross platform wrapper script
     # i.e. 'environmentbase --version' instead of 'python -m environmentbase --version'

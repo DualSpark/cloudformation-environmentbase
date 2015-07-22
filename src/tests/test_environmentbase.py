@@ -10,6 +10,14 @@ from tempfile import mkdtemp
 from environmentbase import cli, resources as res, environmentbase as eb
 from troposphere import ec2
 
+# commentjson is optional, parsing invalid json throws commonjson.JSONLibraryException
+# if not present parsing invalid json throws __builtin__.ValueError.
+# Make them the same and don't worry about it
+try:
+    from commentjson import JSONLibraryException as ValueError
+except ImportError:
+    pass
+
 
 class EnvironmentBaseTestCase(TestCase):
 
@@ -38,12 +46,12 @@ class EnvironmentBaseTestCase(TestCase):
         dummy_bool = False
 
         config = {}
-        for (section, keys) in eb.CONFIG_REQUIREMENTS.iteritems():
+        for (section, keys) in res.CONFIG_REQUIREMENTS.iteritems():
             config[section] = {}
-            for (key, key_type) in keys:
-                if key_type == basestring:
+            for (key, key_type) in keys.iteritems():
+                if key_type == basestring.__name__:
                     config[section][key] = dummy_string
-                elif key_type == bool:
+                elif key_type == bool.__name__:
                     config[section][key] = dummy_bool
         return config
 

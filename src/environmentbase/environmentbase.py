@@ -1,4 +1,4 @@
-import os,os.path,hashlib,json,time,copy,sys
+import os,os.path,hashlib,time,copy,sys
 import boto, boto.s3, botocore.exceptions, boto3
 import troposphere.iam as iam
 import troposphere.ec2 as ec2
@@ -13,25 +13,14 @@ import cli
 import warnings
 import resources as res
 
-TIMEOUT = 60
+# Allow comments in json if you can but at least parse regular json if not
+try:
+    import commentjson as json
+except ImportError:
+    import json
 
-CONFIG_REQUIREMENTS = {
-    "global": [
-        # External template name: *output* filename when running create, *input* filename when running deploy
-        ('output', basestring),
-        # Name of top-level stack when deploying template
-        ('environment_name', basestring),
-        # Prints extra information useful for debugging
-        ('print_debug', bool)
-    ],
-    "template": [
-        # Name of json file containing mapping labels to AMI ids
-        ('ami_map_file', basestring),
-        ('mock_upload', bool),
-        ('s3_canned_acl', basestring),
-        ('s3_bucket', basestring)
-    ]
-}
+
+TIMEOUT = 60
 
 
 class ValidationError(Exception):
@@ -180,18 +169,19 @@ class EnvironmentBase(object):
         and that the required types match. Throws ValidationError if not valid.
         :param config: dict to be validated
         """
-        for (section, key_reqs) in CONFIG_REQUIREMENTS.iteritems():
+        for (section, key_reqs) in res.CONFIG_REQUIREMENTS.iteritems():
             if section not in config:
                 message = "Config file missing section: ", section
                 raise ValidationError(message)
 
             keys = config[section]
-            for (required_key , key_type) in key_reqs:
+            for (required_key, key_typename) in key_reqs.iteritems():
                 if required_key not in keys:
                     message = "Config file missing required key %s::%s" % (section, required_key)
                     raise ValidationError(message)
 
                 # required_keys
+                key_type = res.get_type(key_typename)
                 if not isinstance(keys[required_key], key_type):
                     message = "Type mismatch in config file key %s::%s should be of type %s, not %s" % \
                               (section, required_key, key_type.__name__, type(keys[required_key]).__name__)

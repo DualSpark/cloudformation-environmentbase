@@ -160,8 +160,10 @@ class EnvironmentBaseTestCase(TestCase):
         environmentbase.TEMPLATE_REQUIREMENTS defines the required sections and keys for a valid input config file
         This test ensures that EnvironmentBase._validate_config() enforces the TEMPLATE_REQUIREMENTS contract
         """
+        cntrl = eb.EnvironmentBase(self.fake_cli(['create']))
+
         valid_config = self._create_dummy_config()
-        eb.EnvironmentBase._validate_config(valid_config)
+        cntrl._validate_config(valid_config)
 
         # Find a section with at least one required key
         section = ''
@@ -176,20 +178,20 @@ class EnvironmentBaseTestCase(TestCase):
         with self.assertRaises(eb.ValidationError):
             invalid_config = copy.deepcopy(valid_config)
             invalid_config['global']['print_debug'] = "dfhkjdshf"
-            eb.EnvironmentBase._validate_config(invalid_config)
+            cntrl._validate_config(invalid_config)
 
         # Check missing key validation
         (key, value) = keys.items()[0]
         del valid_config[section][key]
 
         with self.assertRaises(eb.ValidationError):
-            eb.EnvironmentBase._validate_config(valid_config)
+            cntrl._validate_config(valid_config)
 
         # Check missing section validation
         del valid_config[section]
 
         with self.assertRaises(eb.ValidationError):
-            eb.EnvironmentBase._validate_config(valid_config)
+            cntrl._validate_config(valid_config)
 
     def test_extending_config(self):
         class SubController(eb.EnvironmentBase):
@@ -199,7 +201,7 @@ class EnvironmentBaseTestCase(TestCase):
 
             @staticmethod
             def get_config_schema_hook():
-                return {'new_section': {'new_key': 'basestring'}}
+                return {'new_section': {'new_key': 'str'}}
 
         cli = self.fake_cli(['create'])
         sub_ctlr = SubController(cli)

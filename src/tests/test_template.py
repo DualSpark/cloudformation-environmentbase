@@ -63,5 +63,46 @@ class TemplateTestCase(TestCase):
             InstanceType="m3.medium",
             ImageId="ami-951945d0"))
 
+    def test_build_bootstrap(self):
+        file1_name = 'arbitrary_file.txt'
+        file1_content = 'line1\nline2\nline3'
+        self._create_local_file(file1_name, file1_content)
+
+        # Basic test
+        template_snippet = template.Template.build_bootstrap([file1_name], prepend_line='')
+        generated_json = json.loads(template.tropo_to_string(template_snippet))
+        expected_json_1 = {"Fn::Base64": {"Fn::Join": ["\n", ["line1", "line2", "line3"]]}}
+        self.assertEqual(generated_json, expected_json_1)
+
+        # Advanced test
+
+        # resources can't be accessed as files directly
+        # lines starting with #~ are removed automatically
+        file2_content = '#~this_line_should_be_stripped_out\nline4\nline5\nline6'
+
+        # you can provided multiple files or content (mix and match) in the specified order
+        # you can set the shabang to whatever you want
+        # you can reference variables in the file content and set there values using variable_declarations
+        # finally to can do any append cleanup commands to the bottom of the file with cleanup_commands
+        template_snippet = template.Template.build_bootstrap(
+            [file1_name, file2_content],
+            prepend_line='#!/bin/fakesh',
+            variable_declarations=['var_dec_line_1', 'var_dec_line_2'],
+            cleanup_commands=['cleanup_line_1', 'cleanup_line_2'])
+
+        generated_json = json.loads(template.tropo_to_string(template_snippet))
+        expected_json_2 = {
+            "Fn::Base64": {"Fn::Join": [
+                "\n", [
+                    "#!/bin/fakesh",
+                    'var_dec_line_1', 'var_dec_line_2',
+                    "line1", "line2", "line3",
+                    "line4", "line5", "line6",
+                    'cleanup_line_1', 'cleanup_line_2'
+                ]
+            ]}}
+
+        self.assertEqual(generated_json, expected_json_2)
+
 if __name__ == '__main__':
     main()

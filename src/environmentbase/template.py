@@ -216,7 +216,7 @@ class Template(t.Template):
             self.azs.append(Ref(az_param))
 
     @staticmethod
-    def build_bootstrap(bootstrap_files,
+    def build_bootstrap(bootstrap_files=None,
                         variable_declarations=None,
                         cleanup_commands=None,
                         prepend_line='#!/bin/bash'):
@@ -235,8 +235,8 @@ class Template(t.Template):
         if variable_declarations is not None:
             for line in variable_declarations:
                 ret_val.append(line)
-        for bootstrap_file in bootstrap_files:
-            for line in Template.get_file_contents(bootstrap_file):
+        for file_name_or_content in bootstrap_files:
+            for line in Template.get_file_contents(file_name_or_content):
                 ret_val.append(line)
         if cleanup_commands is not None:
             for line in cleanup_commands:
@@ -244,14 +244,19 @@ class Template(t.Template):
         return Base64(Join("\n", ret_val))
 
     @staticmethod
-    def get_file_contents(file_name):
+    def get_file_contents(file_name_or_content):
         """
-        Method encpsulates reading a file into a list while removing newline characters
-        @param file_name [string] path to file to read
+        Method encpsulates reading a file into a list while removing newline characters.
+        If file is not found the variable is interpreted as the file content itself.
+        @param file_name_or_content [string] path to file to read or content itself
         """
         ret_val = []
-        with open(file_name) as f:
-            content = f.readlines()
+        if not os.path.isfile(file_name_or_content):
+            content = file_name_or_content.split('\n')
+        else:
+            with open(file_name_or_content) as f:
+                content = f.readlines()
+
         for line in content:
             if not line.startswith('#~'):
                 ret_val.append(line.replace("\n", ""))

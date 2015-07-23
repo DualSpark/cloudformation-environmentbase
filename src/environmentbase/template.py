@@ -1,6 +1,8 @@
-from troposphere import Output, Ref, Join, Parameter, Base64
-from troposphere import iam
+from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap
+from troposphere import iam,ec2,autoscaling
 import troposphere as t
+import troposphere.constants as tpc
+import troposphere.elasticloadbalancing as elb
 import boto.s3
 from boto.s3.key import Key
 import hashlib
@@ -316,3 +318,310 @@ class Template(t.Template):
         for region_name in region_list:
             if region_name not in self.mappings['RegionMap']:
                 self.mappings['RegionMap'][region_name] = {}
+
+    def add_asg(self,
+                layer_name,
+                instance_profile=None,
+                instance_type='t2.micro',
+                ami_name='amazonLinuxAmiId',
+                ec2_key=None,
+                user_data=None,
+                security_groups=None,
+                min_size=1,
+                max_size=1,
+                root_volume_size=None,
+                root_volume_type=None,
+                include_ephemerals=True,
+                number_ephemeral_vols=2,
+                ebs_data_volumes=None,  # [{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
+                custom_tags=None,
+                load_balancer=None,
+                instance_monitoring=False,
+                subnet_type='private',
+                launch_config_metadata=None,
+                creation_policy=None,
+                update_policy=None,
+                depends_on=[]):
+        """
+        Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
+        @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
+        @param instance_profile [Troposphere.iam.InstanceProfile] IAM Instance Profile object to be applied to instances launched within this Auto Scaling group
+        @param instance_type [Troposphere.Parameter | string] Reference to the AWS EC2 Instance Type to deploy.
+        @param ami_name [string] Name of the AMI to deploy as defined within the RegionMap lookup for the deployed region
+        @param ec2_key [Troposphere.Parameter | Troposphere.Ref(Troposphere.Parameter)] Input parameter used to gather the name of the EC2 key to use to secure access to instances launched within this Auto Scaling group
+        @param user_data [string[]] Array of strings (lines of bash script) to be set as the user data as a bootstrap script for instances launched within this Auto Scaling group
+        @param security_groups [Troposphere.ec2.SecurityGroup[]] array of security groups to be applied to instances within this Auto Scaling group
+        @param min_size [int] value to set as the minimum number of instances for the Auto Scaling group
+        @param max_size [int] value to set as the maximum number of instances for the Auto Scaling group
+        @param root_volume_size [int] size (in GiB) to assign to the root volume of the launched instance
+        @param include_ephemerals [Boolean] indicates that ephemeral volumes should be included in the block device mapping of the Launch Configuration
+        @param number_ephemeral_vols [int] number of ephemeral volumes to attach within the block device mapping Launch Configuration
+        @param ebs_data_volumes [list] dictionary pair of size and type data properties in a list used to create ebs volume attachments
+        @param custom_tags [Troposphere.autoscaling.Tag[]] Collection of Auto Scaling tags to be assigned to the Auto Scaling Group
+        @param load_balancer [Troposphere.elasticloadbalancing.LoadBalancer] Object reference to an ELB to be assigned to this auto scaling group
+        @param instance_monitoring [Boolean] indicates that detailed monitoring should be turned on for all instnaces launched within this Auto Scaling group
+        @param subnet_type [string {'public', 'private'}] string indicating which type of subnet (public or private) instances should be launched into
+        """
+
+        if subnet_type not in ['public', 'private']:
+            raise RuntimeError('Unable to determine which type of subnet instances should be launched into. ' + str(subnet_type) + ' is not one of ["public", "private"].')
+
+        if ec2_key and type(ec2_key) != Ref:
+            ec2_key = Ref(ec2_key)
+        elif ec2_key is None:
+            ec2_key = Ref(self.parameters['ec2Key'])
+
+        if type(instance_type) != str:
+            instance_type = Ref(instance_type)
+
+        sg_list = []
+        for sg in security_groups:
+            if isinstance(sg, Ref):
+                sg_list.append(sg)
+            else:
+                sg_list.append(Ref(sg))
+
+        if not instance_profile:
+            instance_profile = self.add_instance_profile(layer_name, [self.get_cfn_policy()], self.name)
+
+        launch_config_obj = autoscaling.LaunchConfiguration(
+            layer_name + 'LaunchConfiguration',
+            IamInstanceProfile=Ref(instance_profile),
+            ImageId=FindInMap('RegionMap', Ref('AWS::Region'), ami_name),
+            InstanceType=instance_type,
+            SecurityGroups=sg_list,
+            KeyName=ec2_key,
+            AssociatePublicIpAddress=True if subnet_type == 'public' else False,
+            InstanceMonitoring=instance_monitoring)
+
+        if launch_config_metadata:
+            launch_config_obj.Metadata = launch_config_metadata
+
+        if user_data:
+            launch_config_obj.UserData = user_data
+
+        block_devices = []
+        if root_volume_type and root_volume_size:
+            ebs_device = ec2.EBSBlockDevice(
+                VolumeSize=root_volume_size)
+
+            if root_volume_type:
+                ebs_device.VolumeType = root_volume_type
+
+            block_devices.append(ec2.BlockDeviceMapping(
+                    DeviceName='/dev/sda1',
+                    Ebs=ebs_device))
+
+        device_names = ['/dev/sd%s' % c for c in 'bcdefghijklmnopqrstuvwxyz']
+
+        if ebs_data_volumes is not None and len(ebs_data_volumes) > 0:
+            for ebs_volume in ebs_data_volumes:
+                # Respect names provided by AMI when available
+                if 'name' in ebs_volume:
+                    device_name = ebs_volume.get('name')
+                    device_names.remove(device_name)
+                else:
+                    device_name = device_names.pop()
+
+                ebs_block_device = ec2.EBSBlockDevice(
+                                DeleteOnTermination=ebs_volume.get('delete_on_termination', True),
+                                VolumeSize=ebs_volume.get('size', '100'),
+                                VolumeType=ebs_volume.get('type', 'gp2'))
+
+                if 'iops' in ebs_volume:
+                    ebs_block_device.Iops = int(ebs_volume.get('iops'))
+                if 'snapshot_id' in ebs_volume:
+                    ebs_block_device.SnapshotId = ebs_volume.get('snapshot_id')
+
+                block_devices.append(ec2.BlockDeviceMapping(
+                        DeviceName = device_name,
+                        Ebs = ebs_block_device))
+
+        if include_ephemerals and number_ephemeral_vols > 0:
+            device_names.reverse()
+            for x in range(0, number_ephemeral_vols):
+                device_name = device_names.pop()
+                block_devices.append(ec2.BlockDeviceMapping(
+                            DeviceName= device_name,
+                            VirtualName= 'ephemeral' + str(x)))
+
+        if len(block_devices) > 0:
+            launch_config_obj.BlockDeviceMappings = block_devices
+
+        launch_config = self.add_resource(launch_config_obj)
+
+        auto_scaling_obj = autoscaling.AutoScalingGroup(
+            layer_name + 'AutoScalingGroup',
+            AvailabilityZones=self.azs,
+            LaunchConfigurationName=Ref(launch_config),
+            MaxSize=max_size,
+            MinSize=min_size,
+            DesiredCapacity=min(min_size, max_size),
+            VPCZoneIdentifier=self.subnets[subnet_type.lower()],
+            TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
+            DependsOn=depends_on)
+
+        lb_tmp = []
+
+        if load_balancer is not None:
+            try:
+                if type(load_balancer) is dict:
+                    for lb in load_balancer:
+                        lb_tmp.append(Ref(load_balancer[lb]))
+                elif type(load_balancer) is not Ref:
+                    for lb in load_balancer:
+                        lb_tmp.append(Ref(lb))
+                else:
+                    lb_tmp.append(load_balancer)
+            except TypeError:
+                lb_tmp.append(Ref(load_balancer))
+        else:
+            lb_tmp = None
+
+        if lb_tmp is not None and len(lb_tmp) > 0:
+            auto_scaling_obj.LoadBalancerNames = lb_tmp
+
+        if creation_policy is not None:
+            auto_scaling_obj.resource['CreationPolicy'] = creation_policy
+
+        if update_policy is not None:
+            auto_scaling_obj.resource['UpdatePolicy'] = update_policy
+
+        if custom_tags is not None and len(custom_tags) > 0:
+            if type(custom_tags) != list:
+                custom_tags = [custom_tags]
+            auto_scaling_obj.Tags = custom_tags
+        else:
+            auto_scaling_obj.Tags = []
+
+        auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
+        return self.add_resource(auto_scaling_obj)
+
+
+    # Creates an ELB and attaches it to your template
+    # Ports should be a dictionary of ELB ports to Instance ports
+    # SSL cert name must be included if using ELB port 443
+    # TODO: Parameterize more stuff
+    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[]):
+
+        stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
+        stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
+        
+        listeners = []
+        for elb_port in ports:
+            if elb_port == tpc.HTTP_PORT:
+                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTP', InstanceProtocol='HTTP',
+                                 PolicyNames=[stickiness_policy_name]))
+            elif elb_port == tpc.HTTPS_PORT:
+                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTPS', InstanceProtocol='HTTPS',
+                                 SSLCertificateId=Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name]),
+                                 PolicyNames=[stickiness_policy_name]))
+            else:
+                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
+
+        if tpc.HTTPS_PORT in ports:
+            health_check_port = ports[tpc.HTTPS_PORT]
+        elif tpc.HTTP_PORT in ports:
+            health_check_port = ports[tpc.HTTP_PORT]
+        else:
+            health_check_port = ports.values()[0]
+
+        elb_obj = elb.LoadBalancer(
+            '%sElb' % resource_name,
+            Subnets=self.subnets['public'],
+            SecurityGroups=[Ref(sg) for sg in security_groups],
+            CrossZone=True,
+            LBCookieStickinessPolicy=[stickiness_policy],
+            HealthCheck=elb.HealthCheck(
+                HealthyThreshold=3,
+                UnhealthyThreshold=5,
+                Interval=30,
+                Target='TCP:%s' % health_check_port,
+                Timeout=5),
+            Listeners=listeners,
+            Instances=instances,
+            Scheme='internet-facing',
+            DependsOn=depends_on
+        )
+
+        if utility_bucket is not None:
+            elb_obj.AccessLoggingPolicy = elb.AccessLoggingPolicy(
+                EmitInterval=5,
+                Enabled=True,
+                S3BucketName=Ref(utility_bucket))
+
+        return self.add_resource(elb_obj)
+
+    def create_reciprocal_sg(self,
+                             source_group,
+                             source_group_name,
+                             destination_group,
+                             destination_group_name,
+                             from_port,
+                             to_port=None,
+                             ip_protocol='tcp'):
+        """
+        Helper method creates reciprocal ingress and egress rules given two existing security groups and a set of ports
+        @param source_group [Troposphere.ec2.SecurityGroup] Object reference to the source security group
+        @param source_group_name [string] friendly name of the source security group used for labels
+        @param destination_group [Troposphere.ec2.SecurityGroup] Object reference to the destination security group
+        @param destination_group_name [string] friendly name of the destination security group used for labels
+        @param from_port [string] lower boundary of the port range to set for the secuirty group rules
+        @param to_port [string] upper boundary of the port range to set for the security group rules
+        @param ip_protocol [string] name of the IP protocol to set this rule for
+        """
+        if to_port == None:
+            to_port = from_port
+        if isinstance(from_port, unicode):
+            from_port = from_port.encode('ascii', 'ignore')
+        if isinstance(to_port, unicode):
+            to_port = to_port.encode('ascii', 'ignore')
+        if from_port == to_port:
+            if isinstance(from_port, str):
+                label_suffix = ip_protocol.capitalize() + from_port
+            else:
+                label_suffix = ip_protocol.capitalize() + 'Mapped'
+        else:
+            if isinstance(from_port, str) and isinstance(to_port, str):
+                label_suffix = ip_protocol.capitalize() + from_port + 'To' + to_port
+            else:
+                label_suffix = ip_protocol.capitalize() + 'MappedPorts'
+
+        CFN_TYPES = [GetAtt]
+
+        if type(source_group) not in CFN_TYPES:
+            source_group = Ref(source_group)
+
+        if type(destination_group) not in CFN_TYPES:
+            destination_group = Ref(destination_group)
+
+        self.add_resource(ec2.SecurityGroupIngress(destination_group_name + 'Ingress' + source_group_name + label_suffix,
+            SourceSecurityGroupId=source_group,
+            GroupId=destination_group,
+            FromPort=from_port,
+            ToPort=to_port,
+            IpProtocol=ip_protocol))
+
+        self.add_resource(ec2.SecurityGroupEgress(source_group_name + 'Egress' + destination_group_name + label_suffix,
+            DestinationSecurityGroupId=destination_group,
+            GroupId=source_group,
+            FromPort=from_port,
+            ToPort=to_port,
+            IpProtocol=ip_protocol))
+
+    def get_cfn_policy(self):
+        return iam.Policy(
+            PolicyName='cloudformationRead',
+            PolicyDocument={
+                "Statement": [{
+                    "Effect": "Allow",
+                        "Action": [
+                            "cloudformation:DescribeStackEvents",
+                            "cloudformation:DescribeStackResource",
+                            "cloudformation:DescribeStackResources",
+                            "cloudformation:DescribeStacks",
+                            "cloudformation:ListStacks",
+                            "cloudformation:ListStackResources"],
+                        "Resource": "*"}]
+            })
+

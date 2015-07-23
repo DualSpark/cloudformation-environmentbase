@@ -14,7 +14,7 @@ class Bastion(Template):
 
         super(Bastion, self).__init__(template_name=name)
 
-    def build(self):
+    def build_hook(self):
 
         security_groups = self.add_security_groups()
 

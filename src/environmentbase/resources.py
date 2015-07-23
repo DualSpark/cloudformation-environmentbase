@@ -6,25 +6,29 @@ except ImportError:
     import json
 
 
-def _get_internal_resource(resource_name):
+def get_json_resource(resource_name, relative_to_module_name=__name__):
+    return json.loads(get_resource(resource_name, relative_to_module_name))
+
+
+def get_resource(resource_name, relative_to_module_name=__name__):
     """Retrieves resource embedded in the package (even if installed as a zipped archive)."""
-    return json.loads(resource_string(__name__, 'data/' + resource_name))
+    return resource_string(relative_to_module_name, 'data/' + resource_name)
 
 
 DEFAULT_CONFIG_FILENAME = 'config.json'
-FACTORY_DEFAULT_CONFIG = _get_internal_resource(DEFAULT_CONFIG_FILENAME)
+FACTORY_DEFAULT_CONFIG = get_json_resource(DEFAULT_CONFIG_FILENAME)
 
 
 DEFAULT_AMI_CACHE_FILENAME = 'ami_cache.json'
-FACTORY_DEFAULT_AMI_CACHE = _get_internal_resource(DEFAULT_AMI_CACHE_FILENAME)
+FACTORY_DEFAULT_AMI_CACHE = get_json_resource(DEFAULT_AMI_CACHE_FILENAME)
 
 
 CONFIG_REQUIREMENTS_FILENAME = 'config_schema.json'
-CONFIG_REQUIREMENTS = _get_internal_resource(CONFIG_REQUIREMENTS_FILENAME)
+CONFIG_REQUIREMENTS = get_json_resource(CONFIG_REQUIREMENTS_FILENAME)
 
 
 COMMON_STRINGS_FILENAME = 'common_strings.json'
-COMMON_STRINGS = _get_internal_resource(COMMON_STRINGS_FILENAME)
+COMMON_STRINGS = get_json_resource(COMMON_STRINGS_FILENAME)
 
 
 def get_str(key, default=None):

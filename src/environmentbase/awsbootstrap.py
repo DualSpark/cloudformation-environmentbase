@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''awsbootstrap.py
+"""awsbootstrap.py
 
 This script handles overall AWS Account setup and structure for globally-enabled, non-deployment environment assets (such as CloudTrail).
 
@@ -20,7 +20,7 @@ Options:
   --region <REGION>                    Comma separated list of regions to apply this setup to [default: all].
   --stack_name <STACK_NAME>            User-definable value for the CloudFormation stack being deployed [default: accountBootstrapStack].
   --third_party_auth_ids               Command-line switch indicating whether an API credential will be generated or not [default: 0].
-'''
+"""
 
 from docopt import docopt
 import logging

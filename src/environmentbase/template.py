@@ -32,18 +32,18 @@ class Template(t.Template):
     }
 
     def __init__(self, template_name):
-        '''
+        """
         Init method for environmentbase.Template class
         @param template_name [string] - name of this template, used when identifying this template when uploading, etc.
-        '''
+        """
         t.Template.__init__(self)
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
 
     def __get_template_hash(self):
-        '''
+        """
         Private method holds process for hashing this template for future validation.
-        '''
+        """
         m = hashlib.sha256()
         m.update(self.__validation_formatter())
         return m.hexdigest()
@@ -56,9 +56,9 @@ class Template(t.Template):
         pass
 
     def to_template_json(self):
-        '''
+        """
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
-        '''
+        """
         # strip existing values
         for output_key in ['dateGenerated', 'templateValidationHash']:
             if output_key in self.outputs:
@@ -79,9 +79,9 @@ class Template(t.Template):
         return self.to_json()
 
     def validate_template(self):
-        '''
+        """
         Centralized method for validating this templates' templateValidationHash value
-        '''
+        """
         if 'templateValidationHash' not in self.outputs:
             raise ValueError('This template does not contain a templateValidationHash output value')
         else:
@@ -93,17 +93,17 @@ class Template(t.Template):
                 return True
 
     def __validation_formatter(self):
-        '''
+        """
         Validation formatter helps to ensure consistent formatting for hash validation workflow
-        '''
+        """
         return json.dumps(json.loads(self.to_json()), separators=(',',':'))
 
     def add_parameter_idempotent(self,
                                  troposphere_parameter):
-        '''
+        """
         Idempotent add (add only if not exists) for parameters within the template
         @param [Troposphere.Parameter] Troposphere Parameter to add to this template
-        '''
+        """
         if troposphere_parameter.title not in self.parameters:
             return self.add_parameter(troposphere_parameter)
         else:
@@ -115,14 +115,14 @@ class Template(t.Template):
                         s3_key_prefix=None,
                         s3_canned_acl='public-read',
                         mock_upload=False):
-        '''
+        """
         Upload helper to upload this template to S3 for consumption by other templates or end users.
         @param s3_bucket [string] name of the AWS S3 bucket to upload this template to.
         @param upload_key_name [string] direct manner of setting the name of the uploaded template
         @param s3_key_prefix [string] key name prefix to prepend to the key name for the upload of this template.
         @param s3_canned_acl [string] S3 canned ACL string value to use when setting permissions on uploaded key.
         @param mock_upload [boolean] boolean indicating if the upload of this template should be mocked or actually performed.
-        '''
+        """
         key_serial = str(int(time.time()))
 
         if upload_key_name == None:

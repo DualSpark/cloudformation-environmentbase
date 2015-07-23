@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''environmentutil.py
+"""environmentutil.py
 Utility tool helps to manage mappings and gathering data from across multiple AWS Availability zones.
 
 Usage:
@@ -15,7 +15,7 @@ Options:
   -v --version                 Show version.
   --aws_region <AWS_REGION>    Region to start queries to AWS API from [default: us-east-1].
   --config_file <CONFIG_FILE>  JSON Config file holding the extended configuration for this toolset [default: config_args.json].
-'''
+"""
 from docopt import docopt
 import boto
 import json
@@ -25,26 +25,26 @@ import time
 
 
 class EnvironmentUtil(object):
-    '''
+    """
     EnvironmentUtil class holds common task methods for deploying, managing or
     building CloudFormation templates with the environmenbase toolset.
-    '''
+    """
 
     def __init__(self,
                  config_args):
-        '''
+        """
         Init for EnvironmentUtil class which persists config args as a dictionary
         @param config_args [dict] - dictionary of configuration values
-        '''
+        """
         self.configuration = config_args
 
     def get_ami_map(self,
                     aws_region=None, image_names=None):
-        '''
+        """
         Method iterates on all AWS regions for a given set of AMI names to gather AMI IDs and
         to create a regionmap for CloudFormation templates.
         @param aws_region [string] - optionally provides the region to start querying when gathering the list of regions globally.
-        '''
+        """
         if aws_region == None:
             aws_region = self.configuration.get('boto', {}).get('default_aws_region', 'us-east-1')
             logging.debug('Setting default AWS Region for API access from overall configuration [' + aws_region + ']')
@@ -73,12 +73,12 @@ class EnvironmentUtil(object):
     def write_ami_map(self,
                       aws_region,
                       output_file):
-        '''
+        """
         Utility and convenience method for wrapping the get_ami_map method and subsequently
         writing the output to a file for use as an ami id cache.
         @param aws_region [string] - AWS-specific region name to start when querying the AWS APIs
         @param output_file [string] - file location where the ami cache is to be saved locally
-        '''
+        """
         with open(output_file, 'w') as f:
             logging.debug('Writing ami cache file to [' + output_file + ']')
             f.write(json.dumps(self.get_ami_map(aws_region)))
@@ -86,11 +86,11 @@ class EnvironmentUtil(object):
     def get_stack_status(self,
                          cf_conn,
                          stack_name):
-        '''
+        """
         Helper method handles edge cases when stack status doesn't exist yet or any more.
         @param cf_conn [Boto.CloudFormation.Connection] - Connection object to CloudFormation via Boto
         @param stack_name [string] - Name of the stack to check status on
-        '''
+        """
         api_result = cf_conn.describe_stacks(stack_name_or_id=stack_name)
         if len(api_result) == 0:
             return 'NOT_CREATED'
@@ -101,14 +101,14 @@ class EnvironmentUtil(object):
                        cf_conn,
                        stack_name,
                        sleep_time=20):
-        '''
+        """
         Method handles a wait loop for stack deploys to AWS. Sleep time should be ramped up (longer polls)
         when deploying multiple sets of stacks at the same time.
         Returns true when deploy is successful, false when errors occur.
         @param cf_conn [Boto.CloudFormation.Connection] - Connection object to CloudFormation via Boto
         @param stack_name [string] - Name of the stack to check status on
         @param sleep_time [int] - number of seconds to wait between polls of the AWS API for status on the specified CloudFormation stack
-        '''
+        """
         stack_status = self.get_stack_status(cf_conn, stack_name)
         loop_id = 0
         while 'IN_PROGRESS' in stack_status:
@@ -131,7 +131,7 @@ class EnvironmentUtil(object):
                      parameters=None,
                      aws_region=None,
                      wait_for_complete=True):
-        '''
+        """
         Method takes a CloudFormation template string or S3 url and deploys the stack to the specified AWS region.
         @param stack_name [string] - name to use when deploying the CloudFormation stack.
         @param template_string_or_url [string] - S3 URL or CloudFormation template body to be deployed.
@@ -139,7 +139,7 @@ class EnvironmentUtil(object):
         @param parameters [dict] - dictionary of key value pairs containing overrides to template parameter defaults.
         @param aws_region [string] - AWS-specific region name to start when querying the AWS APIs
         @param wait_for_complete [boolean] - boolean indicating whether to poll for success or failure before completing the deploy process.
-        '''
+        """
         if aws_region == None:
             aws_region = self.configuration.get('boto', {}).get('default_aws_region', 'us-east-1')
             logging.debug('Setting default AWS Region for API access from overall configuration [' + aws_region + ']')

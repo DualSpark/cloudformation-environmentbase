@@ -14,10 +14,10 @@ import resources as res
 
 
 class NetworkBase(EnvironmentBase):
-    '''
+    """
     Class creates all of the base networking infrastructure for a common deployment within AWS
     This is intended to be the 'base' template for deploying child templates
-    '''
+    """
 
     def construct_network(self):
         """
@@ -75,10 +75,10 @@ class NetworkBase(EnvironmentBase):
 
     def add_utility_bucket(self,
                            name='demo'):
-        '''
+        """
         Method adds a bucket to be used for infrastructure utility purposes such as backups
         @param name [str] friendly name to prepend to the CloudFormation asset name
-        '''
+        """
         self.utility_bucket = self.template.add_resource(s3.Bucket(name.lower() + 'UtilityBucket',
             AccessControl=s3.BucketOwnerFullControl,
             DeletionPolicy=Retain))
@@ -95,13 +95,13 @@ class NetworkBase(EnvironmentBase):
     def add_vpc_az_mapping(self,
                            boto_config,
                            az_count=2):
-        '''
+        """
         Method gets the AZs within the given account where subnets can be created/deployed
         This is necessary due to some accounts having 4 subnets available within ec2 classic and only 3 within vpc
         which causes the Select by index method of picking azs unpredictable for all accounts
         @param boto_config [dict] collection of boto configuration values as set by the configuration file
         @param az_count [int] number of AWS availability zones to include in the VPC mapping
-        '''
+        """
         az_dict = {}
         region_list = []
         aws_auth_info = {}
@@ -125,10 +125,10 @@ class NetworkBase(EnvironmentBase):
 
     def create_network(self,
                        network_config=None):
-        '''
+        """
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
         @param network_config [dict] collection of network parameters for creating the VPC network
-        '''
+        """
         if 'network_name' in network_config:
             network_name = network_config.get('network_name')
         else:
@@ -194,12 +194,12 @@ class NetworkBase(EnvironmentBase):
                             nat_subnet_number,
                             nat_instance_type=None,
                             nat_subnet_type='public'):
-        '''
+        """
         Method creates a NAT instance for the private subnet within the specified corresponding subnet
         @param nat_subnet_number [int] ID of the subnet that the NAT instance will be deployed to
         @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
         @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
-        '''
+        """
         if nat_subnet_type == 'public':
             source_name = 'private'
         else:
@@ -242,10 +242,10 @@ class NetworkBase(EnvironmentBase):
 
     def add_network_cidr_mapping(self,
                                  network_config):
-        '''
+        """
         Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.  Calculated based on CIDR block sizes and additionally checks to ensure all network segments fit inside of the specified overall VPC CIDR
         @param network_config [dict] dictionary of values containing data for creating
-        '''
+        """
         public_subnet_count = int(network_config.get('public_subnet_count', 2))
         private_subnet_count = int(network_config.get('private_subnet_count', 2))
         public_subnet_size = str(network_config.get('public_subnet_size', '24'))
@@ -283,10 +283,10 @@ class NetworkBase(EnvironmentBase):
 
     def add_vpn_gateway(self,
                         vpn_conf):
-        '''
+        """
         Not surprisingly, adds a VPN gateway to the network created by this template.
         @param vpn_conf [dict] - collection of vpn-level configuration values.
-        '''
+        """
         if 'vpn_name' in vpn_conf:
             vpn_name = vpn_conf.get('vpn_name')
         else:

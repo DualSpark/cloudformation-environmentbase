@@ -48,6 +48,13 @@ class Template(t.Template):
         m.update(self.__validation_formatter())
         return m.hexdigest()
 
+    def build_hook(self):
+        """
+        Provides template subclasses a place to assemble resources with access to common parameters and mappings.
+        Executed by add_child_template() after add_common_params_to_child_template() and load_ami_cache()
+        """
+        pass
+
     def to_template_json(self):
         '''
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes

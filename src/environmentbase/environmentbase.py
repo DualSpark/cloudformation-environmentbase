@@ -509,6 +509,11 @@ class EnvironmentBase(object):
         """
         name = template.name
 
+        self.add_common_params_to_child_template(template)
+        self.load_ami_cache(template)
+
+        template.build_hook()
+
         if s3_key_prefix == None:
             s3_key_prefix = self.template_args.get('s3_key_name_prefix', '')
         if s3_bucket is None:

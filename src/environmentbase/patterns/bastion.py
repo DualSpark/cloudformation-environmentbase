@@ -3,8 +3,10 @@ from troposphere import Ref, ec2
 
 SSH_PORT = '22'
 
-
 class Bastion(Template):
+    '''
+    Adds a bastion host within a given deployment based on environemntbase.
+    '''
 
     def __init__(self, name='bastion', ingress_port='2222', access_cidr='0.0.0.0/0'):
         '''

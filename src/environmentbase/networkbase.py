@@ -157,6 +157,8 @@ class NetworkBase(EnvironmentBase):
 
         subnet_types = network_config.get('subnet_types',['public','private'])
 
+        self.gateway_hook()
+
         for index in range(0, int(network_config.get('az_count', 2))):
             for subnet_type in subnet_types:
                 if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
@@ -171,12 +173,7 @@ class NetworkBase(EnvironmentBase):
                     route_table = self.template.add_resource(ec2.RouteTable(subnet_type + 'Subnet' + str(index) + 'RouteTable',
                             VpcId=Ref(self.vpc)))
 
-                    if subnet_type == 'public':
-                        self.egress_via_igw(index, route_table, igw_title, subnet_type)
-                    elif subnet_type == 'private':
-                        self.egress_via_nat(index, route_table, nat_instance_type, subnet_type)
-                    else:
-                        self.custom_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
+                    self.create_subnet_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
 
                     self.template.add_resource(ec2.SubnetRouteTableAssociation(subnet_type + 'Subnet' + str(index) + 'EgressRouteTableAssociation',
                             RouteTableId=Ref(route_table),
@@ -191,39 +188,37 @@ class NetworkBase(EnvironmentBase):
             for y in self.local_subnets[x]:
                 self.subnets[x].append(Ref(self.local_subnets[x][y]))
 
-    def custom_egress(self,
+    def create_subnet_egress(self,
                       index,
                       route_table,
                       igw_title,
                       nat_instance_type,
                       subnet_type):
         '''
-        Override to implement egress for custom subnet types.  The igw and NAT instance type for the
-        VPC are provided in case they're needed. 
+        Create an egress route for the a subnet with the given index and type
+        Override to create egress routes for other subnet types
         '''
-        pass
-
-    def egress_via_igw(self, 
-                      index, 
-                      route_table,
-                      igw_title,
-                      subnet_type):
-        self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
-            DependsOn=[igw_title],
-            DestinationCidrBlock='0.0.0.0/0',
-            GatewayId=Ref(self.igw),
-            RouteTableId=Ref(route_table)))
-
-    def egress_via_nat(self,
-                      index,
-                      route_table,
-                      nat_instance_type,
-                      subnet_type):
-        nat_instance = self.create_nat_instance(index, nat_instance_type, subnet_type)
-        self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
+        if subnet_type == 'public':
+            self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
+                DependsOn=[igw_title],
+                DestinationCidrBlock='0.0.0.0/0',
+                GatewayId=Ref(self.igw),
+                RouteTableId=Ref(route_table)))
+        elif subnet_type == 'private':
+           nat_instance = self.create_nat_instance(index, nat_instance_type, subnet_type)
+           self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
             DestinationCidrBlock='0.0.0.0/0',
             InstanceId=Ref(nat_instance),
             RouteTableId=Ref(route_table)))
+        else:
+            self.custom_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
+
+    def gateway_hook(self):
+        '''
+        Override to allow subclasses to create VPGs and similar components during network creation
+        '''
+        pass
+
 
     def create_nat_instance(self,
                             nat_subnet_number,

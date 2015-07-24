@@ -478,9 +478,9 @@ class EnvironmentBase(object):
         return self.template.add_instance_profile(layer_name, iam_policies, path_prefix)
 
     def add_common_params_to_child_template(self, template):
-        pub_subs = self.config['network']['public_subnet_count']
-        priv_subs = self.config['network']['private_subnet_count']
-        template.add_common_parameters(pub_subs, priv_subs)
+        az_count = self.config['network']['az_count']
+        subnet_types = self.config['network']['subnet_types']
+        template.add_common_parameters(subnet_types, az_count)
 
         template.add_parameter_idempotent(Parameter(
             'ec2Key',

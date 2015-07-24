@@ -169,7 +169,7 @@ class Template(t.Template):
                 Path='/' + path_prefix + '/',
                 Roles=[Ref(iam_role)]))
 
-    def add_common_parameters(self, public_subnet_count=2, private_subnet_count=2):
+    def add_common_parameters(self, subnet_types, az_count=2):
         """
         Adds parameters to template for use as a child stack:
             vpcCidr,
@@ -201,22 +201,20 @@ class Template(t.Template):
             Description='Name of the S3 bucket used for infrastructure utility',
             Type='String'))
 
-        largest_subnet_type = max(int(public_subnet_count), int(private_subnet_count))
-
-        for y in ['public', 'private']:
-            if y not in self.subnets:
-                self.subnets[y] = []
-            for x in range(0, largest_subnet_type):
+        for subnet_type in subnet_types:
+            if subnet_type not in self.subnets:
+                self.subnets[subnet_type] = []
+            for index in range(0, az_count):
                 subnet_param = Parameter(
-                    y.lower() + 'Subnet' + str(x),
-                    Description='Private subnet ' + str(x),
+                    subnet_type.lower() + 'Subnet' + str(index),
+                    Description=subnet_type + ' subnet ' + str(index),
                     Type='String')
                 self.add_parameter(subnet_param)
-                self.subnets[y].append(Ref(subnet_param))
+                self.subnets[subnet_type].append(Ref(subnet_param))
 
         self.azs = []
 
-        for x in range(0, largest_subnet_type):
+        for x in range(0, az_count):
             az_param = Parameter(
                 'availabilityZone' + str(x),
                 Description='Availability Zone ' + str(x),

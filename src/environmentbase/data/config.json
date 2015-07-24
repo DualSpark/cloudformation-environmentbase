@@ -31,6 +31,7 @@
     "aws_secret_access_key": null
   },
   "network": {
+    "az_count": 2,
     "public_subnet_count": 2,
     "private_subnet_count": 2,
     "public_subnet_size": "24",

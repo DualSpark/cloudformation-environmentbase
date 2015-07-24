@@ -44,15 +44,18 @@ class EnvironmentBaseTestCase(TestCase):
     def _create_dummy_config(self):
         dummy_string = 'dummy'
         dummy_bool = False
+        dummy_int = 3
 
         config = {}
         for (section, keys) in res.CONFIG_REQUIREMENTS.iteritems():
             config[section] = {}
             for (key, key_type) in keys.iteritems():
-                if key_type == basestring.__name__:
+                if key_type == basestring.__name__ or key_type == str.__name__:
                     config[section][key] = dummy_string
                 elif key_type == bool.__name__:
                     config[section][key] = dummy_bool
+                elif key_type == int.__name__:
+                    config[section][key] = dummy_int
         return config
 
     def _create_local_file(self, name, content):

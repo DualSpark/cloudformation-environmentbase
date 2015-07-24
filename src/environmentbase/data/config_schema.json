@@ -13,5 +13,15 @@
         "mock_upload": "bool",
         "s3_canned_acl": "basestring",
         "s3_bucket": "basestring"
+    },
+    "network": {
+        "az_count": "int",
+        "public_subnet_count": "int",
+        "private_subnet_count": "int",
+        "public_subnet_size": "basestring",
+        "private_subnet_size": "basestring",
+        "network_cidr_base": "basestring",
+        "network_cidr_size": "basestring",
+        "nat_instance_type": "basestring"
     }
 }

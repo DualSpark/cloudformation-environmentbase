@@ -12,7 +12,7 @@ from template import Template
 import cli
 import warnings
 import resources as res
-
+from fnmatch import fnmatch
 
 # Allow comments in json if you can but at least parse regular json if not
 try:
@@ -165,39 +165,63 @@ class EnvironmentBase(object):
                 TimeoutInMinutes=TIMEOUT)
             print "Created new CF stack %s\n" % stack_name
 
-    def _validate_config(self, config):
+    def _validate_config_helper(self, schema, config, path):
+
+        # Check each requirement
+        for (req_key, req_value) in schema.iteritems():
+
+            # Check for key match, usually only one match but parametrized keys can have multiple matches
+            # Uses 'filename' match, similar to regex but only supports '?', '*', [XYZ], [!XYZ]
+            filter_fun = lambda candidate_key: fnmatch(candidate_key, req_key)
+
+            # Find all config keys matching the requirement
+            matches = filter(filter_fun, config.keys())
+            if not matches:
+                message = "Config file missing section " + str(path)
+                raise ValidationError(message)
+
+            # Validate each matching config entry
+            for matching_key in matches:
+                new_path = path + ('.' if path is not '' else '') + matching_key
+
+                # ------------ value check -----------
+                if isinstance(req_value, basestring):
+                    req_type = res.get_type(req_value)
+
+                    if not isinstance(config[matching_key], req_type):
+                        message = "Type mismatch in config, %s should be of type %s, not %s" % \
+                                  (new_path, req_value, type(config[matching_key]).__name__)
+                        raise ValidationError(message)
+                    # else:
+                    #     print "%s validated: %s == %s" % (new_path, req_value, type(config[matching_key]).__name__)
+
+                # if the schema is nested another level .. we must go deeper
+                elif isinstance(req_value, dict):
+                    matching_value = config[matching_key]
+                    if not isinstance(matching_value, dict):
+                        message = "Type mismatch in config, %s should be a dict, not %s" % \
+                                  (new_path, type(matching_value).__name__)
+                        raise ValidationError(message)
+
+                    self._validate_config_helper(req_value, matching_value, new_path)
+
+    def _validate_config(self, config, factory_schema=res.CONFIG_REQUIREMENTS):
         """
         Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present
         and that the required types match. Throws ValidationError if not valid.
         :param config: dict to be validated
         """
         # Merge in any requirements provided by subclass's
-        config_reqs_copy = copy.deepcopy(res.CONFIG_REQUIREMENTS)
+        config_reqs_copy = copy.deepcopy(factory_schema)
         config_reqs_copy.update(self.get_config_schema_hook())
 
-        for (section, key_reqs) in config_reqs_copy.iteritems():
-            if section not in config:
-                message = "Config file missing section: ", section
-                raise ValidationError(message)
-
-            keys = config[section]
-            for (required_key, key_typename) in key_reqs.iteritems():
-                if required_key not in keys:
-                    message = "Config file missing required key %s::%s" % (section, required_key)
-                    raise ValidationError(message)
-
-                # required_keys
-                key_type = res.get_type(key_typename)
-                if not isinstance(keys[required_key], key_type):
-                    message = "Type mismatch in config file key %s::%s should be of type %s, not %s" % \
-                              (section, required_key, key_type.__name__, type(keys[required_key]).__name__)
-                    raise ValidationError(message)
+        self._validate_config_helper(config_reqs_copy, config, '')
 
     @staticmethod
     def get_config_schema_hook():
         """
         This method is provided for subclasses to update config requirements with additional required keys and their types.
-        The format is a 2-level dictionary with key values being one of bool/int/float/basestring.
+        The format is a dictionary with key values being one of bool/int/float/str/list.
         Example (yes comments are allowed):
         {
             "template": {
@@ -214,7 +238,7 @@ class EnvironmentBase(object):
     def get_factory_defaults_hook():
         """
         This method is provided for subclasses to update factory default config file with additional sections.
-        The format is basic json (with comment support).  Currently restricted to 2-level dictionaries.
+        The format is basic json (with comment support).
         {
             "template": {
                 // Name of json file containing mapping labels to AMI ids

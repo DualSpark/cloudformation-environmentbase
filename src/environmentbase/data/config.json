@@ -41,7 +41,8 @@
     "network_cidr_base": "10.0.0.0",
     "network_cidr_size": "16",
     "nat_instance_type": "t2.micro"
-  },  "bastion": {
+  },
+  "bastion": {
     "instance_type_default": "t2.micro"
   }
 }

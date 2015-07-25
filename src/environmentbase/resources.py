@@ -47,6 +47,7 @@ def get_type(typename):
         'float': float,
         # avoid all the python unicode weirdness by making all the strings basestrings
         'str': basestring,
-        'basestring': basestring
+        'basestring': basestring,
+        'list': list
     }
     return types.get(typename, None)

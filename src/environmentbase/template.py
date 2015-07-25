@@ -1,5 +1,5 @@
 from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap
-from troposphere import iam,ec2,autoscaling
+from troposphere import iam, ec2, rds, autoscaling
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
@@ -12,7 +12,6 @@ import time
 import os
 from datetime import datetime
 import resources as res
-
 
 def tropo_to_string(snippet, indent=4, sort_keys=True, separators=(',', ': ')):
     return json.dumps(snippet, cls=t.awsencode, indent=indent, sort_keys=sort_keys, separators=separators)
@@ -629,4 +628,3 @@ class Template(t.Template):
                             "cloudformation:ListStackResources"],
                         "Resource": "*"}]
             })
-

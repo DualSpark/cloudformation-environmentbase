@@ -45,6 +45,7 @@ class EnvironmentBaseTestCase(TestCase):
         dummy_string = 'dummy'
         dummy_bool = False
         dummy_int = 3
+        dummy_list = ['A', 'B', 'C']
 
         config = {}
         for (section, keys) in res.CONFIG_REQUIREMENTS.iteritems():
@@ -56,6 +57,8 @@ class EnvironmentBaseTestCase(TestCase):
                     config[section][key] = dummy_bool
                 elif key_type == int.__name__:
                     config[section][key] = dummy_int
+                elif key_type == list.__name__:
+                    config[section][key] = dummy_list
         return config
 
     def _create_local_file(self, name, content):
@@ -195,6 +198,31 @@ class EnvironmentBaseTestCase(TestCase):
 
         with self.assertRaises(eb.ValidationError):
             cntrl._validate_config(valid_config)
+
+        # Check wildcard sections
+        extra_reqs = {'*-db': {'host': 'str', 'port': 'int'}}
+        extra_reqs.update(res.CONFIG_REQUIREMENTS)
+
+        valid_config.update({
+            'my-db': {'host': 'localhost', 'port': 3306},
+            'my-other-db': {'host': 'localhost', 'port': 3306}
+        })
+
+        # Check deep nested sections
+        extra_reqs = {
+            'lets': {
+                'go': {
+                    'deeper': {
+                        'key': 'str'
+                    }}}}
+        extra_reqs.update(res.CONFIG_REQUIREMENTS)
+
+        valid_config.update({
+            'lets': {
+                'go': {
+                    'deeper': {
+                        'key': 'super_secret_value'
+                    }}}})
 
     def test_extending_config(self):
         class SubController(eb.EnvironmentBase):

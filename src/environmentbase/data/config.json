@@ -31,16 +31,17 @@
     "aws_secret_access_key": null
   },
   "network": {
-    "az_count": 2,
+    "az_count": 3,
+    "subnet_types": ["private","protected","public"],
     "public_subnet_count": 2,
     "private_subnet_count": 2,
-    "public_subnet_size": "24",
-    "private_subnet_size": "22",
-    "network_cidr_base": "172.16.0.0",
-    "network_cidr_size": "20",
+    "public_subnet_size": "21",
+    "protected_subnet_size": "20",
+    "private_subnet_size": "19",
+    "network_cidr_base": "10.0.0.0",
+    "network_cidr_size": "16",
     "nat_instance_type": "t2.micro"
-  },
-  "bastion": {
+  },  "bastion": {
     "instance_type_default": "t2.micro"
   }
 }

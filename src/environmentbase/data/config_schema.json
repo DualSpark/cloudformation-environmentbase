@@ -16,6 +16,7 @@
     },
     "network": {
         "az_count": "int",
+        "subnet_types": "list",
         "public_subnet_count": "int",
         "private_subnet_count": "int",
         "public_subnet_size": "basestring",

@@ -3,7 +3,6 @@ from troposphere import iam, ec2, autoscaling, route53 as r53
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
-import boto.s3
 from boto.s3.key import Key
 import hashlib
 import json
@@ -12,6 +11,7 @@ import time
 import os
 from datetime import datetime
 import resources as res
+
 
 def tropo_to_string(snippet, indent=4, sort_keys=True, separators=(',', ': ')):
     return json.dumps(snippet, cls=t.awsencode, indent=indent, sort_keys=sort_keys, separators=separators)

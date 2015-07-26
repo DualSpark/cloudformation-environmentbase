@@ -1,16 +1,13 @@
-import os,os.path,hashlib,time,copy,sys
-import boto, boto.s3, botocore.exceptions, boto3
-import troposphere.iam as iam
-import troposphere.ec2 as ec2
-import troposphere.elasticloadbalancing as elb
-import troposphere.autoscaling as autoscaling
+import os
+import os.path
+import copy
+import sys
+import botocore.exceptions
+import boto3
 import troposphere.cloudformation as cf
-import troposphere.route53 as r53
-import troposphere.constants as tpc
-from troposphere import Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt
+from troposphere import Ref, Parameter, GetAtt
 from template import Template
 import cli
-import warnings
 import resources as res
 from fnmatch import fnmatch
 

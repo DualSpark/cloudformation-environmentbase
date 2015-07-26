@@ -4,11 +4,11 @@ from environmentbase.patterns import rds
 
 class MyRootTemplate(NetworkBase):
     """
-    Class creates a VPC and common network components for the environment
+    Example class showing how to use the RDS pattern file to generate an RDS database as a child stack
     """
 
     # When no config.json file exists a new one is created using the 'factory default' file.  This function
-    # augments the factory default before it is written to file with the config values required by an ElkTemplate
+    # augments the factory default before it is written to file with the config values required
     @staticmethod
     def get_factory_defaults_hook():
         return rds.RDS.DEFAULT_CONFIG
@@ -38,16 +38,17 @@ class MyRootTemplate(NetworkBase):
 
         # After attaching the db as a child template you can access the created resources
         # {
-        #     'rds': <troposphere.rds.DBInstance object at 0x102dc90d0>,
-        #     'endpoint_address': <troposphere.GetAtt object at 0x102dc9150>,
-        #     'masterpassword': <troposphere.Ref object at 0x102dc9210>,
-        #     'securitygroups': [],
-        #     'masteruser': <troposphere.Ref object at 0x102dc91d0>,
-        #     'endpoint_port': <troposphere.GetAtt object at 0x102dc9190>,
-        #     'dbname': <troposphere.Ref object at 0x102dc9110>
+        #     'rds': DBInstance
+        #     'endpoint_address':GetAtt
+        #     'masterpassword': Ref
+        #     'securitygroups': [SecurityGroups],
+        #     'masteruser': Ref
+        #     'endpoint_port': GetAtt
+        #     'dbname': Ref
         # }
         print my_db.data
 
+        # Our template is complete output it to file
         self.write_template_to_file()
 
 

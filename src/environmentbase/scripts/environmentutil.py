@@ -20,8 +20,9 @@ from docopt import docopt
 import boto
 import json
 import logging
-from .version import __version__
 import time
+
+__version__ = 0.1
 
 
 class EnvironmentUtil(object):

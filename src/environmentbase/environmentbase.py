@@ -166,7 +166,6 @@ class EnvironmentBase(object):
             print "Created new CF stack %s\n" % stack_name
 
     def _validate_config_helper(self, schema, config, path):
-
         # Check each requirement
         for (req_key, req_value) in schema.iteritems():
 
@@ -177,7 +176,7 @@ class EnvironmentBase(object):
             # Find all config keys matching the requirement
             matches = filter(filter_fun, config.keys())
             if not matches:
-                message = "Config file missing section " + str(path)
+                message = "Config file missing section " + str(path) + ('.' if path is not '' else '') + req_key
                 raise ValidationError(message)
 
             # Validate each matching config entry

@@ -4,17 +4,17 @@ from troposphere import Ref, ec2
 SSH_PORT = '22'
 
 class Bastion(Template):
-    '''
+    """
     Adds a bastion host within a given deployment based on environemntbase.
-    '''
+    """
 
     def __init__(self, name='bastion', ingress_port='2222', access_cidr='0.0.0.0/0'):
-        '''
+        """
         Method initializes bastion host in a given environment deployment
         @param name [string] - name of the tier to assign
         @param ingress_port [number] - port to allow ingress on. Must be a valid ELB ingress port. More info here: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-listener.html
         @param access_cidr [string] - CIDR notation for external access to this tier.
-        '''
+        """
 
         self.name = name
         self.ingress_port = ingress_port
@@ -23,9 +23,9 @@ class Bastion(Template):
         super(Bastion, self).__init__(template_name=name)
 
     def build_hook(self):
-        '''
+        """
         Hook to add tier-specific assets within the build stage of initializing this class.
-        '''
+        """
         security_groups = self.add_security_groups()
 
         bastion_elb = self.add_elb(
@@ -41,9 +41,9 @@ class Bastion(Template):
         )
 
     def add_security_groups(self):
-        '''
+        """
         Wrapper method to encapsulate process of creating security groups for this tier.
-        '''
+        """
 
         elb_sg_ingress_rule = ec2.SecurityGroupRule(FromPort=self.ingress_port, ToPort=self.ingress_port, IpProtocol='tcp', CidrIp=self.access_cidr)
 

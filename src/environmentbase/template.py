@@ -1,5 +1,5 @@
 from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap
-from troposphere import iam, ec2, rds, autoscaling
+from troposphere import iam, ec2, autoscaling, route53 as r53
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
@@ -501,7 +501,6 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-
     # Creates an ELB and attaches it to your template
     # Ports should be a dictionary of ELB ports to Instance ports
     # SSL cert name must be included if using ELB port 443
@@ -510,7 +509,7 @@ class Template(t.Template):
 
         stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
         stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
-        
+
         listeners = []
         for elb_port in ports:
             if elb_port == tpc.HTTP_PORT:
@@ -574,7 +573,7 @@ class Template(t.Template):
         @param to_port [string] upper boundary of the port range to set for the security group rules
         @param ip_protocol [string] name of the IP protocol to set this rule for
         """
-        if to_port == None:
+        if to_port is None:
             to_port = from_port
         if isinstance(from_port, unicode):
             from_port = from_port.encode('ascii', 'ignore')
@@ -599,14 +598,16 @@ class Template(t.Template):
         if type(destination_group) not in CFN_TYPES:
             destination_group = Ref(destination_group)
 
-        self.add_resource(ec2.SecurityGroupIngress(destination_group_name + 'Ingress' + source_group_name + label_suffix,
+        self.add_resource(ec2.SecurityGroupIngress(
+            destination_group_name + 'Ingress' + source_group_name + label_suffix,
             SourceSecurityGroupId=source_group,
             GroupId=destination_group,
             FromPort=from_port,
             ToPort=to_port,
             IpProtocol=ip_protocol))
 
-        self.add_resource(ec2.SecurityGroupEgress(source_group_name + 'Egress' + destination_group_name + label_suffix,
+        self.add_resource(ec2.SecurityGroupEgress(
+            source_group_name + 'Egress' + destination_group_name + label_suffix,
             DestinationSecurityGroupId=destination_group,
             GroupId=source_group,
             FromPort=from_port,
@@ -628,3 +629,120 @@ class Template(t.Template):
                             "cloudformation:ListStackResources"],
                         "Resource": "*"}]
             })
+
+    def register_elb_to_dns(self,
+                            elb,
+                            tier_name,
+                            tier_args):
+        """
+        Method handles the process of uniformly creating CNAME records for ELBs in a given tier
+        @param elb [Troposphere.elasticloadbalancing.LoadBalancer]
+        @param tier_name [str]
+        @param tier_args [dict]
+        """
+        if 'environmentHostedZone' not in self.parameters:
+            hostedzone = self.add_parameter(Parameter(
+                "environmentHostedZone",
+                Description="The DNS name of an existing Amazon Route 53 hosted zone",
+                Default=tier_args.get('base_hosted_zone_name', 'devopsdemo.com'),
+                Type="String"))
+        else:
+            hostedzone = self.parameters.get('environmentHostedZone')
+
+        if tier_name.lower() + 'HostName' not in self.parameters:
+            host_name = self.add_parameter(Parameter(
+                tier_name.lower() + 'HostName',
+                Description="Friendly host name to append to the environmentHostedZone base DNS record",
+                Type="String",
+                Default=tier_args.get('tier_host_name', tier_name.lower())))
+        else:
+            host_name = self.parameters.get(tier_name.lower() + 'HostName')
+
+        self.add_resource(r53.RecordSetType(
+            tier_name.lower() + 'DnsRecord',
+            HostedZoneName=Join('', [Ref(hostedzone), '.']),
+            Comment='CNAME record for ' + tier_name.capitalize() + ' tier',
+            Name=Join('', [Ref(host_name), '.', Ref(hostedzone)]),
+            Type='CNAME',
+            TTL='300',
+            ResourceRecords=[GetAtt(elb, 'DNSName')]))
+
+    def get_logging_bucket_policy_document(self,
+                                           utility_bucket,
+                                           elb_log_prefix='elb_logs',
+                                           cloudtrail_log_prefix='cloudtrail_logs'):
+        """
+        Method builds the S3 bucket policy statements which will allow the proper AWS account ids to write ELB Access Logs to the specified bucket and prefix.
+        Per documentation located at: http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/configure-s3-bucket.html
+        @param utility_bucket [Troposphere.s3.Bucket] object reference of the utility bucket for this tier
+        @param elb_log_prefix [string] prefix for paths used to prefix the path where ELB will place access logs
+        """
+        if elb_log_prefix != None and elb_log_prefix != '':
+            elb_log_prefix = elb_log_prefix + '/'
+        else:
+            elb_log_prefix = ''
+
+        if cloudtrail_log_prefix != None and cloudtrail_log_prefix != '':
+            cloudtrail_log_prefix = cloudtrail_log_prefix + '/'
+        else:
+            cloudtrail_log_prefix = ''
+
+        elb_accts = {'us-west-1': '027434742980',
+                     'us-west-2': '797873946194',
+                     'us-east-1': '127311923021',
+                     'eu-west-1': '156460612806',
+                     'ap-northeast-1': '582318560864',
+                     'ap-southeast-1': '114774131450',
+                     'ap-southeast-2': '783225319266',
+                     'sa-east-1': '507241528517',
+                     'us-gov-west-1': '048591011584'}
+
+        for region in elb_accts:
+            self.add_region_map_value(region, 'elbAccountId', elb_accts[region])
+
+        statements = [{
+            "Action": ["s3:PutObject"],
+            "Effect": "Allow",
+            "Resource": Join('', ['arn:aws:s3:::', Ref(utility_bucket), '/', elb_log_prefix + 'AWSLogs/', Ref('AWS::AccountId'), '/*']),
+            "Principal": {"AWS": [FindInMap('RegionMap', Ref('AWS::Region'), 'elbAccountId')]}},
+            {
+                "Action": ["s3:GetBucketAcl"],
+                "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket)]),
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": [
+                        "arn:aws:iam::903692715234:root",
+                        "arn:aws:iam::859597730677:root",
+                        "arn:aws:iam::814480443879:root",
+                        "arn:aws:iam::216624486486:root",
+                        "arn:aws:iam::086441151436:root",
+                        "arn:aws:iam::388731089494:root",
+                        "arn:aws:iam::284668455005:root",
+                        "arn:aws:iam::113285607260:root"]}},
+            {
+                "Action": ["s3:PutObject"],
+                "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket), '/', cloudtrail_log_prefix + "AWSLogs/", Ref("AWS::AccountId"), '/*']),
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": [
+                        "arn:aws:iam::903692715234:root",
+                        "arn:aws:iam::859597730677:root",
+                        "arn:aws:iam::814480443879:root",
+                        "arn:aws:iam::216624486486:root",
+                        "arn:aws:iam::086441151436:root",
+                        "arn:aws:iam::388731089494:root",
+                        "arn:aws:iam::284668455005:root",
+                        "arn:aws:iam::113285607260:root"]},
+                    "Condition": {"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}}]
+
+        self.add_output(Output(
+            'elbAccessLoggingBucketAndPath',
+            Value=Join('', ['arn:aws:s3:::', Ref(utility_bucket), elb_log_prefix]),
+            Description='S3 bucket and key name prefix to use when configuring elb access logs to aggregate to S3'))
+
+        self.add_output(Output(
+            'cloudTrailLoggingBucketAndPath',
+            Value=Join('', ['arn:aws:s3:::', Ref(utility_bucket), cloudtrail_log_prefix]),
+            Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
+
+        return {"Statement": statements}

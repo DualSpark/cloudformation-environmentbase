@@ -323,42 +323,6 @@ class EnvironmentBase(object):
 
         template.add_ami_mapping(json_data)
 
-    def register_elb_to_dns(self,
-                            elb,
-                            tier_name,
-                            tier_args):
-        """
-        Method handles the process of uniformly creating CNAME records for ELBs in a given tier
-        @param elb [Troposphere.elasticloadbalancing.LoadBalancer]
-        @param tier_name [str]
-        @param tier_args [dict]
-        """
-        if 'environmentHostedZone' not in self.template.parameters:
-            hostedzone = self.template.add_parameter(Parameter(
-                "environmentHostedZone",
-                Description="The DNS name of an existing Amazon Route 53 hosted zone",
-                Default=tier_args.get('base_hosted_zone_name', 'devopsdemo.com'),
-                Type="String"))
-        else:
-            hostedzone = self.template.parameters.get('environmentHostedZone')
-
-        if tier_name.lower() + 'HostName' not in self.template.parameters:
-            host_name = self.template.add_parameter(Parameter(
-                tier_name.lower() + 'HostName',
-                Description="Friendly host name to append to the environmentHostedZone base DNS record",
-                Type="String",
-                Default=tier_args.get('tier_host_name', tier_name.lower())))
-        else:
-            host_name = self.template.parameters.get(tier_name.lower() + 'HostName')
-
-        self.template.add_resource(r53.RecordSetType(tier_name.lower() + 'DnsRecord',
-            HostedZoneName=Join('', [Ref(hostedzone), '.']),
-            Comment='CNAME record for ' + tier_name.capitalize() + ' tier',
-            Name=Join('', [Ref(host_name), '.', Ref(hostedzone)]),
-            Type='CNAME',
-            TTL='300',
-            ResourceRecords=[GetAtt(elb, 'DNSName')]))
-
     def add_common_parameters(self,
                               template_config):
         """
@@ -383,122 +347,11 @@ class EnvironmentBase(object):
                 AllowedPattern=res.get_str('cidr_regex'),
                 ConstraintDescription=res.get_str('cidr_regex_message')))
 
-    def get_logging_bucket_policy_document(self,
-                                           utility_bucket,
-                                           elb_log_prefix='elb_logs',
-                                           cloudtrail_log_prefix='cloudtrail_logs'):
-        """
-        Method builds the S3 bucket policy statements which will allow the proper AWS account ids to write ELB Access Logs to the specified bucket and prefix.
-        Per documentation located at: http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/configure-s3-bucket.html
-        @param utility_bucket [Troposphere.s3.Bucket] object reference of the utility bucket for this tier
-        @param elb_log_prefix [string] prefix for paths used to prefix the path where ELB will place access logs
-        """
-        if elb_log_prefix != None and elb_log_prefix != '':
-            elb_log_prefix = elb_log_prefix + '/'
-        else:
-            elb_log_prefix = ''
-
-        if cloudtrail_log_prefix != None and cloudtrail_log_prefix != '':
-            cloudtrail_log_prefix = cloudtrail_log_prefix + '/'
-        else:
-            cloudtrail_log_prefix = ''
-
-        elb_accts = {'us-west-1': '027434742980',
-                     'us-west-2': '797873946194',
-                     'us-east-1': '127311923021',
-                     'eu-west-1': '156460612806',
-                     'ap-northeast-1': '582318560864',
-                     'ap-southeast-1': '114774131450',
-                     'ap-southeast-2': '783225319266',
-                     'sa-east-1': '507241528517',
-                     'us-gov-west-1': '048591011584'}
-
-        for region in elb_accts:
-            self.template.add_region_map_value(region, 'elbAccountId', elb_accts[region])
-
-        statements = [{"Action" : ["s3:PutObject"],
-                       "Effect" : "Allow",
-                       "Resource" : Join('', ['arn:aws:s3:::', Ref(utility_bucket), '/', elb_log_prefix + 'AWSLogs/', Ref('AWS::AccountId'), '/*']),
-                       "Principal" : {"AWS": [FindInMap('RegionMap', Ref('AWS::Region'), 'elbAccountId')]}},
-                       {"Action" : ["s3:GetBucketAcl"],
-                        "Resource" : Join('', ["arn:aws:s3:::", Ref(utility_bucket)]),
-                        "Effect" : "Allow",
-                            "Principal": {
-                                "AWS": [
-                                  "arn:aws:iam::903692715234:root",
-                                  "arn:aws:iam::859597730677:root",
-                                  "arn:aws:iam::814480443879:root",
-                                  "arn:aws:iam::216624486486:root",
-                                  "arn:aws:iam::086441151436:root",
-                                  "arn:aws:iam::388731089494:root",
-                                  "arn:aws:iam::284668455005:root",
-                                  "arn:aws:iam::113285607260:root"]}},
-                      {"Action" : ["s3:PutObject"],
-                        "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket), '/', cloudtrail_log_prefix + "AWSLogs/", Ref("AWS::AccountId"), '/*']),
-                        "Effect" : "Allow",
-                        "Principal": {
-                            "AWS": [
-                              "arn:aws:iam::903692715234:root",
-                              "arn:aws:iam::859597730677:root",
-                              "arn:aws:iam::814480443879:root",
-                              "arn:aws:iam::216624486486:root",
-                              "arn:aws:iam::086441151436:root",
-                              "arn:aws:iam::388731089494:root",
-                              "arn:aws:iam::284668455005:root",
-                              "arn:aws:iam::113285607260:root"]},
-                        "Condition": {"StringEquals" : {"s3:x-amz-acl": "bucket-owner-full-control"}}}]
-
-        self.template.add_output(Output('elbAccessLoggingBucketAndPath',
-                Value=Join('',['arn:aws:s3:::', Ref(utility_bucket), elb_log_prefix]),
-                Description='S3 bucket and key name prefix to use when configuring elb access logs to aggregate to S3'))
-
-        self.template.add_output(Output('cloudTrailLoggingBucketAndPath',
-                Value=Join('',['arn:aws:s3:::', Ref(utility_bucket), cloudtrail_log_prefix]),
-                Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
-
-        return {"Statement":statements}
-
     def to_json(self):
         """
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
         """
         return self.template.to_template_json()
-
-    @staticmethod
-    def build_bootstrap(bootstrap_files,
-                        variable_declarations=None,
-                        cleanup_commands=None,
-                        prepend_line='#!/bin/bash'):
-        """
-        Method encapsulates process of building out the bootstrap given a set of variables and a bootstrap file to source from
-        Returns base 64-wrapped, joined bootstrap to be applied to an instnace
-        @param bootstrap_files [ string[] ] list of paths to the bash script(s) to read as the source for the bootstrap action to created
-        @param variable_declaration [ list ] list of lines to add to the head of the file - used to inject bash variables into the script
-        @param cleanup_commnds [ string[] ] list of lines to add at the end of the file - used for layer-specific details
-        """
-        warnings.warn("Method moved to environmentbase.Template.build_bootstrap()",
-                      DeprecationWarning, stacklevel=2)
-
-        return Template.build_bootstrap(
-            bootstrap_files,
-            variable_declarations,
-            cleanup_commands,
-            prepend_line)
-
-    def create_instance_profile(self,
-                                layer_name,
-                                iam_policies=None):
-        """
-        Helper method creates an IAM Role and Instance Profile for the optoinally specified IAM policies
-        :param layer_name: [string] friendly name for the Role and Instance Profile used for naming and path organization
-        :param iam_policies: [Troposphere.iam.Policy[]] array of IAM Policies to be associated with the Role and Instance Profile created
-
-        """
-        warnings.warn("Method moved to environmentbase.Template.add_instance_profile()",
-                      DeprecationWarning, stacklevel=2)
-
-        path_prefix = self.globals.get('environment_name', 'environmentbase')
-        return self.template.add_instance_profile(layer_name, iam_policies, path_prefix)
 
     def add_common_params_to_child_template(self, template):
         az_count = self.config['network']['az_count']
@@ -581,7 +434,8 @@ class EnvironmentBase(object):
                 stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
         stack_name = name + 'Stack'
 
-        stack_obj = cf.Stack(stack_name,
+        stack_obj = cf.Stack(
+            stack_name,
             TemplateURL=stack_url,
             Parameters=stack_params,
             TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'),

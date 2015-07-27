@@ -109,7 +109,7 @@ class NetworkBase(EnvironmentBase):
         if 'aws_access_key_id' in boto_config and 'aws_secret_access_key' in boto_config:
             aws_auth_info['aws_access_key_id'] = boto_config.get('aws_access_key_id')
             aws_auth_info['aws_secret_access_key'] = boto_config.get('aws_secret_access_key')
-        conn = boto.vpc.connect_to_region(region_name=boto_config.get('default_aws_region', 'us-east-1'), **aws_auth_info)
+        conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'), **aws_auth_info)
         for region in conn.get_all_regions():
             region_list.append(region.name)
             az_list = boto.vpc.connect_to_region(region.name, **aws_auth_info).get_all_zones()

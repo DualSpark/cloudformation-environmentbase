@@ -47,7 +47,7 @@ class EnvironmentUtil(object):
         @param aws_region [string] - optionally provides the region to start querying when gathering the list of regions globally.
         """
         if aws_region == None:
-            aws_region = self.configuration.get('boto', {}).get('default_aws_region', 'us-east-1')
+            aws_region = self.configuration.get('boto', {}).get('region_name', 'us-east-1')
             logging.debug('Setting default AWS Region for API access from overall configuration [' + aws_region + ']')
         region_map = {}
         vpc_conn = boto.connect_vpc(aws_region)
@@ -142,7 +142,7 @@ class EnvironmentUtil(object):
         @param wait_for_complete [boolean] - boolean indicating whether to poll for success or failure before completing the deploy process.
         """
         if aws_region == None:
-            aws_region = self.configuration.get('boto', {}).get('default_aws_region', 'us-east-1')
+            aws_region = self.configuration.get('boto', {}).get('region_name', 'us-east-1')
             logging.debug('Setting default AWS Region for API access from overall configuration [' + aws_region + ']')
 
         logging.info('Connecting to CloudFormation in region [' + aws_region + ']')

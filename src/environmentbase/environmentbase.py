@@ -5,7 +5,7 @@ import sys
 import botocore.exceptions
 import boto3
 import troposphere.cloudformation as cf
-from troposphere import Ref, Parameter, GetAtt
+from troposphere import Ref, Parameter, GetAtt, Join, Output, FindInMap
 from template import Template
 import cli
 import resources as res
@@ -439,6 +439,86 @@ class EnvironmentBase(object):
             DependsOn=depends_on)
 
         return self.template.add_resource(stack_obj)
+
+    def get_logging_bucket_policy_document(self,
+                                           utility_bucket,
+                                           elb_log_prefix='elb_logs',
+                                           cloudtrail_log_prefix='cloudtrail_logs'):
+        """
+        Method builds the S3 bucket policy statements which will allow the proper AWS account ids to write ELB Access Logs to the specified bucket and prefix.
+        Per documentation located at: http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/configure-s3-bucket.html
+        @param utility_bucket [Troposphere.s3.Bucket] object reference of the utility bucket for this tier
+        @param elb_log_prefix [string] prefix for paths used to prefix the path where ELB will place access logs
+        """
+        if elb_log_prefix != None and elb_log_prefix != '':
+            elb_log_prefix = elb_log_prefix + '/'
+        else:
+            elb_log_prefix = ''
+
+        if cloudtrail_log_prefix != None and cloudtrail_log_prefix != '':
+            cloudtrail_log_prefix = cloudtrail_log_prefix + '/'
+        else:
+            cloudtrail_log_prefix = ''
+
+        elb_accts = {'us-west-1': '027434742980',
+                     'us-west-2': '797873946194',
+                     'us-east-1': '127311923021',
+                     'eu-west-1': '156460612806',
+                     'ap-northeast-1': '582318560864',
+                     'ap-southeast-1': '114774131450',
+                     'ap-southeast-2': '783225319266',
+                     'sa-east-1': '507241528517',
+                     'us-gov-west-1': '048591011584'}
+
+        for region in elb_accts:
+            self.template.add_region_map_value(region, 'elbAccountId', elb_accts[region])
+
+        statements = [{
+            "Action": ["s3:PutObject"],
+            "Effect": "Allow",
+            "Resource": Join('', ['arn:aws:s3:::', Ref(utility_bucket), '/', elb_log_prefix + 'AWSLogs/', Ref('AWS::AccountId'), '/*']),
+            "Principal": {"AWS": [FindInMap('RegionMap', Ref('AWS::Region'), 'elbAccountId')]}},
+            {
+                "Action": ["s3:GetBucketAcl"],
+                "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket)]),
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": [
+                        "arn:aws:iam::903692715234:root",
+                        "arn:aws:iam::859597730677:root",
+                        "arn:aws:iam::814480443879:root",
+                        "arn:aws:iam::216624486486:root",
+                        "arn:aws:iam::086441151436:root",
+                        "arn:aws:iam::388731089494:root",
+                        "arn:aws:iam::284668455005:root",
+                        "arn:aws:iam::113285607260:root"]}},
+            {
+                "Action": ["s3:PutObject"],
+                "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket), '/', cloudtrail_log_prefix + "AWSLogs/", Ref("AWS::AccountId"), '/*']),
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": [
+                        "arn:aws:iam::903692715234:root",
+                        "arn:aws:iam::859597730677:root",
+                        "arn:aws:iam::814480443879:root",
+                        "arn:aws:iam::216624486486:root",
+                        "arn:aws:iam::086441151436:root",
+                        "arn:aws:iam::388731089494:root",
+                        "arn:aws:iam::284668455005:root",
+                        "arn:aws:iam::113285607260:root"]},
+                    "Condition": {"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}}]
+
+        self.template.add_output(Output(
+            'elbAccessLoggingBucketAndPath',
+            Value=Join('', ['arn:aws:s3:::', Ref(utility_bucket), elb_log_prefix]),
+            Description='S3 bucket and key name prefix to use when configuring elb access logs to aggregate to S3'))
+
+        self.template.add_output(Output(
+            'cloudTrailLoggingBucketAndPath',
+            Value=Join('', ['arn:aws:s3:::', Ref(utility_bucket), cloudtrail_log_prefix]),
+            Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
+
+        return {"Statement": statements}
 
 if __name__ == '__main__':
     EnvironmentBase()

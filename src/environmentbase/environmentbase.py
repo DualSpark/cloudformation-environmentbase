@@ -94,7 +94,7 @@ class EnvironmentBase(object):
         """
         self.initialize_template()
 
-        # Do custom troposphere resource creation here ... but in your overridden copy of this method
+        # Do custom troposphere resource creation in your overridden copy of this method
 
 
         self.write_template_to_file()

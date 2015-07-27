@@ -14,6 +14,9 @@ import resources as res
 
 
 def tropo_to_string(snippet, indent=4, sort_keys=True, separators=(',', ': ')):
+    """
+    Returns the json representation of any troposphere object/template
+    """
     return json.dumps(snippet, cls=t.awsencode, indent=indent, sort_keys=sort_keys, separators=separators)
 
 
@@ -370,6 +373,7 @@ class Template(t.Template):
         if subnet_type not in ['public', 'private']:
             raise RuntimeError('Unable to determine which type of subnet instances should be launched into. ' + str(subnet_type) + ' is not one of ["public", "private"].')
 
+        # Ensure that all the passed in parameters are Ref objects
         if ec2_key and type(ec2_key) != Ref:
             ec2_key = Ref(ec2_key)
         elif ec2_key is None:
@@ -385,6 +389,7 @@ class Template(t.Template):
             else:
                 sg_list.append(Ref(sg))
 
+        # If no instance profile was provided, create one with just the cloudformation read policy
         if not instance_profile:
             instance_profile = self.add_instance_profile(layer_name, [self.get_cfn_policy()], self.name)
 
@@ -413,8 +418,8 @@ class Template(t.Template):
                 ebs_device.VolumeType = root_volume_type
 
             block_devices.append(ec2.BlockDeviceMapping(
-                    DeviceName='/dev/sda1',
-                    Ebs=ebs_device))
+                DeviceName='/dev/sda1',
+                Ebs=ebs_device))
 
         device_names = ['/dev/sd%s' % c for c in 'bcdefghijklmnopqrstuvwxyz']
 
@@ -428,9 +433,9 @@ class Template(t.Template):
                     device_name = device_names.pop()
 
                 ebs_block_device = ec2.EBSBlockDevice(
-                                DeleteOnTermination=ebs_volume.get('delete_on_termination', True),
-                                VolumeSize=ebs_volume.get('size', '100'),
-                                VolumeType=ebs_volume.get('type', 'gp2'))
+                    DeleteOnTermination=ebs_volume.get('delete_on_termination', True),
+                    VolumeSize=ebs_volume.get('size', '100'),
+                    VolumeType=ebs_volume.get('type', 'gp2'))
 
                 if 'iops' in ebs_volume:
                     ebs_block_device.Iops = int(ebs_volume.get('iops'))
@@ -438,16 +443,16 @@ class Template(t.Template):
                     ebs_block_device.SnapshotId = ebs_volume.get('snapshot_id')
 
                 block_devices.append(ec2.BlockDeviceMapping(
-                        DeviceName = device_name,
-                        Ebs = ebs_block_device))
+                    DeviceName=device_name,
+                    Ebs=ebs_block_device))
 
         if include_ephemerals and number_ephemeral_vols > 0:
             device_names.reverse()
             for x in range(0, number_ephemeral_vols):
                 device_name = device_names.pop()
                 block_devices.append(ec2.BlockDeviceMapping(
-                            DeviceName= device_name,
-                            VirtualName= 'ephemeral' + str(x)))
+                    DeviceName=device_name,
+                    VirtualName='ephemeral' + str(x)))
 
         if len(block_devices) > 0:
             launch_config_obj.BlockDeviceMappings = block_devices
@@ -501,15 +506,21 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    # Creates an ELB and attaches it to your template
-    # Ports should be a dictionary of ELB ports to Instance ports
-    # SSL cert name must be included if using ELB port 443
-    # TODO: Parameterize more stuff
     def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[]):
+        """
+        Helper function creates an ELB and attaches it to your template
+        Ports should be a dictionary mapping ELB ports to Instance ports
+        SSL cert name must be included if using ELB port 443
+        TODO: Parameterize more stuff
+        """
 
+        # Create default stickiness policy
+        # TODO: this could be parameterized
         stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
         stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
 
+        # Add the listeners, setting the correct protocol based on port number
+        # Also add the SSL cert if using port 443 (assuming it's already been created and uploaded to IAM)
         listeners = []
         for elb_port in ports:
             if elb_port == tpc.HTTP_PORT:
@@ -522,6 +533,8 @@ class Template(t.Template):
             else:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
 
+        # Set the health check port, use highest priority if available (443 > 80 > anything else)
+        # TODO: This could be parameterized
         if tpc.HTTPS_PORT in ports:
             health_check_port = ports[tpc.HTTPS_PORT]
         elif tpc.HTTP_PORT in ports:
@@ -547,6 +560,7 @@ class Template(t.Template):
             DependsOn=depends_on
         )
 
+        # If an S3 utility bucket was passed in, set up the ELB access log
         if utility_bucket is not None:
             elb_obj.AccessLoggingPolicy = elb.AccessLoggingPolicy(
                 EmitInterval=5,
@@ -590,11 +604,11 @@ class Template(t.Template):
             else:
                 label_suffix = ip_protocol.capitalize() + 'MappedPorts'
 
+        # A Ref cannot be created from an object that is already a GetAtt
+        # and possibly some other CFN types, so expand this list if you discover another one
         CFN_TYPES = [GetAtt]
-
         if type(source_group) not in CFN_TYPES:
             source_group = Ref(source_group)
-
         if type(destination_group) not in CFN_TYPES:
             destination_group = Ref(destination_group)
 
@@ -615,19 +629,22 @@ class Template(t.Template):
             IpProtocol=ip_protocol))
 
     def get_cfn_policy(self):
+        """
+        Helper method returns the standard IAM policy to allow cloudformation read actions
+        """
         return iam.Policy(
             PolicyName='cloudformationRead',
             PolicyDocument={
                 "Statement": [{
                     "Effect": "Allow",
-                        "Action": [
-                            "cloudformation:DescribeStackEvents",
-                            "cloudformation:DescribeStackResource",
-                            "cloudformation:DescribeStackResources",
-                            "cloudformation:DescribeStacks",
-                            "cloudformation:ListStacks",
-                            "cloudformation:ListStackResources"],
-                        "Resource": "*"}]
+                    "Action": [
+                        "cloudformation:DescribeStackEvents",
+                        "cloudformation:DescribeStackResource",
+                        "cloudformation:DescribeStackResources",
+                        "cloudformation:DescribeStacks",
+                        "cloudformation:ListStacks",
+                        "cloudformation:ListStackResources"],
+                    "Resource": "*"}]
             })
 
     def register_elb_to_dns(self,
@@ -700,6 +717,8 @@ class Template(t.Template):
         for region in elb_accts:
             self.add_region_map_value(region, 'elbAccountId', elb_accts[region])
 
+        # The principal account IDs in the following statements refer to the AWS CloudTrail account IDs
+        # They explicitly need write permissions in order to upload logs to your bucket
         statements = [{
             "Action": ["s3:PutObject"],
             "Effect": "Allow",

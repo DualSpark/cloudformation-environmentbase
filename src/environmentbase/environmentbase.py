@@ -96,7 +96,6 @@ class EnvironmentBase(object):
 
         # Do custom troposphere resource creation in your overridden copy of this method
 
-
         self.write_template_to_file()
 
     def deploy_action(self):
@@ -105,9 +104,25 @@ class EnvironmentBase(object):
         Attempt to query the status of the stack. If it already exists and is in a ready state, it will issue an
         update-stack command. If the stack does not yet exist, it will issue a create-stack command
         """
-        cfn_conn = boto3.client('cloudformation')
-        cfn_template_filename = self.config['global']['output']
 
+        # If the boto section of config is used, create the session with it
+        # Otherwise, assume boto has been set up another way
+        if self.config['boto']['region_name']:
+            session = boto3.session.Session(region_name=self.config['boto']['region_name'])
+        else:
+            session = boto3.session.Session()
+
+        if self.config['boto']['aws_access_key_id'] and self.config['boto']['aws_secret_access_key']:
+            cfn_conn = session.client(
+                'cloudformation',
+                aws_access_key_id=self.config['boto']['aws_access_key_id'],
+                aws_secret_access_key=self.config['boto']['aws_secret_access_key']
+            )
+        else:
+            cfn_conn = session.client('cloudformation')
+
+        # Validate existence of and read in the template file
+        cfn_template_filename = self.config['global']['output']
         if os.path.isfile(cfn_template_filename):
             with open(self.config['global']['output'], 'r') as cfn_template_file:
                 cfn_template = cfn_template_file.read().replace('\n', '')
@@ -122,6 +137,7 @@ class EnvironmentBase(object):
             'ParameterValue': self.config['template']['ec2_key_default']
         }]
 
+        # First try to do an update-stack... if it doesn't exist, then try create-stack
         try:
             response = cfn_conn.describe_stacks(StackName=stack_name)
 

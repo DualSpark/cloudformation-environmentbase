@@ -36,7 +36,10 @@ class NetworkBase(EnvironmentBase):
         self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network(network_config=network_config)
-        self.add_utility_bucket(name=template_config.get('s3_utility_bucket', 'demo'))
+
+        self.template.add_utility_bucket(
+            name=template_config.get('s3_utility_bucket', 'demo'),
+            param_binding_map=self.manual_parameter_bindings)
 
         self.common_sg = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
@@ -73,25 +76,6 @@ class NetworkBase(EnvironmentBase):
         self.initialize_template()
         self.construct_network()
         self.write_template_to_file()
-
-    def add_utility_bucket(self,
-                           name='demo'):
-        """
-        Method adds a bucket to be used for infrastructure utility purposes such as backups
-        @param name [str] friendly name to prepend to the CloudFormation asset name
-        """
-        self.utility_bucket = self.template.add_resource(s3.Bucket(name.lower() + 'UtilityBucket',
-            AccessControl=s3.BucketOwnerFullControl,
-            DeletionPolicy=Retain))
-
-        bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
-
-        self.template.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketLoggingPolicy',
-                Bucket=Ref(self.utility_bucket),
-                PolicyDocument=bucket_policy_statements))
-
-        self.manual_parameter_bindings['utilityBucket'] = Ref(self.utility_bucket)
-
 
     def add_vpc_az_mapping(self,
                            boto_config,
@@ -308,7 +292,6 @@ class NetworkBase(EnvironmentBase):
                 current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
 
         return self.template.add_mapping('networkAddresses', ret_val)
-
 
     def add_vpn_gateway(self,
                         vpn_conf):

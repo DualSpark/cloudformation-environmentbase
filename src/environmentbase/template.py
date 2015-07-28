@@ -1,5 +1,5 @@
-from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap
-from troposphere import iam, ec2, autoscaling, route53 as r53
+from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain
+from troposphere import iam, ec2, autoscaling, route53 as r53, s3
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
@@ -765,3 +765,22 @@ class Template(t.Template):
             Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
 
         return {"Statement": statements}
+
+    def add_utility_bucket(self,
+                           name='demo',
+                           param_binding_map={}):
+        """
+        Method adds a bucket to be used for infrastructure utility purposes such as backups
+        @param name [str] friendly name to prepend to the CloudFormation asset name
+        """
+        self.utility_bucket = self.add_resource(s3.Bucket(name.lower() + 'UtilityBucket',
+            AccessControl=s3.BucketOwnerFullControl,
+            DeletionPolicy=Retain))
+
+        bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
+
+        self.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketLoggingPolicy',
+                Bucket=Ref(self.utility_bucket),
+                PolicyDocument=bucket_policy_statements))
+
+        param_binding_map['utilityBucket'] = Ref(self.utility_bucket)

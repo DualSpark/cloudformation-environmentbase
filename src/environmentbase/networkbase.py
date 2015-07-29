@@ -185,7 +185,6 @@ class NetworkBase(EnvironmentBase):
         Create an egress route for the a subnet with the given index and type
         Override to create egress routes for other subnet types
         """
-
         if subnet_type == 'public':
             self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
@@ -193,14 +192,11 @@ class NetworkBase(EnvironmentBase):
                 GatewayId=Ref(self.igw),
                 RouteTableId=Ref(route_table)))
         elif subnet_type == 'private':
-            # private subnets need a NAT instance in a public subnet
            nat_instance = self.create_nat_instance(index, nat_instance_type, subnet_type)
            self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
             DestinationCidrBlock='0.0.0.0/0',
             InstanceId=Ref(nat_instance),
             RouteTableId=Ref(route_table)))
-        # else:
-        #     self.custom_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
 
     def gateway_hook(self):
         """
@@ -219,11 +215,6 @@ class NetworkBase(EnvironmentBase):
         @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
         @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
         """
-        # if nat_subnet_type == 'public':
-        #     source_name = 'private'
-        # else:
-        #     source_name = 'public'
-
         if nat_instance_type == None:
             nat_instance_type = 'm1.small'
         elif type(nat_instance_type) == Parameter:

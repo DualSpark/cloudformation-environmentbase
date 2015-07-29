@@ -32,7 +32,7 @@
   },
   "network": {
     "az_count": 3,
-    "subnet_types": ["private","protected","public"],
+    "subnet_types": ["public","private","protected"],
     "public_subnet_count": 2,
     "private_subnet_count": 2,
     "public_subnet_size": "21",

@@ -241,6 +241,9 @@ class NetworkBase(EnvironmentBase):
                             ToPort='-1',
                             CidrIp='0.0.0.0/0')]))
 
+        print "Making an ec2 instance in subnet " + source_name
+        print "Refing " + self.local_subnets[source_name][str(nat_subnet_number)]
+
         return self.template.add_resource(ec2.Instance(nat_subnet_type + str(nat_subnet_number) + 'NATInstance',
                 AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(nat_subnet_number) + 'Name'),
                 ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),

@@ -219,10 +219,10 @@ class NetworkBase(EnvironmentBase):
         @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
         @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
         """
-        if nat_subnet_type == 'public':
-            source_name = 'private'
-        else:
-            source_name = 'public'
+        # if nat_subnet_type == 'public':
+        #     source_name = 'private'
+        # else:
+        #     source_name = 'public'
 
         if nat_instance_type == None:
             nat_instance_type = 'm1.small'
@@ -237,7 +237,7 @@ class NetworkBase(EnvironmentBase):
                             IpProtocol='-1',
                             FromPort='-1',
                             ToPort='-1',
-                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), source_name))],
+                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), nat_subnet_type))],
                 SecurityGroupEgress=[
                     ec2.SecurityGroupRule(
                             IpProtocol='-1',
@@ -256,7 +256,7 @@ class NetworkBase(EnvironmentBase):
                         DeleteOnTermination=True,
                         DeviceIndex='0',
                         GroupSet=[Ref(nat_sg)],
-                        SubnetId=Ref(self.local_subnets[source_name][str(nat_subnet_number)]))],
+                        SubnetId=Ref(self.local_subnets['public'][str(nat_subnet_number)]))],
                 SourceDestCheck=False))
 
     def add_network_cidr_mapping(self,

@@ -241,7 +241,9 @@ class NetworkBase(EnvironmentBase):
                             ToPort='-1',
                             CidrIp='0.0.0.0/0')]))
 
-        print "Making an ec2 instance in subnet " + source_name
+        print "Making an ec2 instance in subnet " + source_name + "\n"
+        print "nat_subnet_number is " + nat_subnet_number + "\n"
+        print "local subnets[sourcename]: " + self.local_subnets[source_name] + "\n"
         print "Refing " + self.local_subnets[source_name][str(nat_subnet_number)]
 
         return self.template.add_resource(ec2.Instance(nat_subnet_type + str(nat_subnet_number) + 'NATInstance',

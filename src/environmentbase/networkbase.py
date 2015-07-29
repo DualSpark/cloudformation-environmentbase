@@ -189,7 +189,8 @@ class NetworkBase(EnvironmentBase):
                 GatewayId=Ref(self.igw),
                 RouteTableId=Ref(route_table)))
         elif subnet_type == 'private':
-           nat_instance = self.create_nat_instance(index, nat_instance_type, subnet_type)
+            # private subnets need a NAT instance in a public subnet
+           nat_instance = self.create_nat_instance(index, nat_instance_type, 'public')
            self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
             DestinationCidrBlock='0.0.0.0/0',
             InstanceId=Ref(nat_instance),

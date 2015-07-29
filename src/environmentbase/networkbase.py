@@ -242,7 +242,8 @@ class NetworkBase(EnvironmentBase):
                             CidrIp='0.0.0.0/0')]))
 
         print "Making an ec2 instance in subnet " + source_name + "\n"
-        print "nat_subnet_number is " + nat_subnet_number + "\n"
+        print "nat_subnet_number is " + str(nat_subnet_number) + "\n"
+        print "Length of self.local_subnets[source_name]: " str(len(self.local_subnets[source_name])) + "\n"
         print "local subnets[sourcename]: " + self.local_subnets[source_name] + "\n"
         print "Refing " + self.local_subnets[source_name][str(nat_subnet_number)]
 

@@ -148,11 +148,14 @@ class NetworkBase(EnvironmentBase):
                 if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
                     if subnet_type not in self.local_subnets:
                         self.local_subnets[subnet_type] = {}
-
                     self.local_subnets[subnet_type][str(index)] = self.template.add_resource(ec2.Subnet(subnet_type + 'Subnet' + str(index),
                             AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
                             VpcId=Ref(self.vpc),
                             CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type)))
+
+        for index in range(0, int(network_config.get('az_count', 2))):
+            for subnet_type in subnet_types:
+                if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
 
                     route_table = self.template.add_resource(ec2.RouteTable(subnet_type + 'Subnet' + str(index) + 'RouteTable',
                             VpcId=Ref(self.vpc)))
@@ -182,6 +185,7 @@ class NetworkBase(EnvironmentBase):
         Create an egress route for the a subnet with the given index and type
         Override to create egress routes for other subnet types
         """
+
         if subnet_type == 'public':
             self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
@@ -240,12 +244,6 @@ class NetworkBase(EnvironmentBase):
                             FromPort='-1',
                             ToPort='-1',
                             CidrIp='0.0.0.0/0')]))
-
-        print "Making an ec2 instance in subnet " + source_name + "\n"
-        print "nat_subnet_number is " + str(nat_subnet_number) + "\n"
-        print "Length of self.local_subnets[source_name]: " str(len(self.local_subnets[source_name])) + "\n"
-        print "local subnets[sourcename]: " + self.local_subnets[source_name] + "\n"
-        print "Refing " + self.local_subnets[source_name][str(nat_subnet_number)]
 
         return self.template.add_resource(ec2.Instance(nat_subnet_type + str(nat_subnet_number) + 'NATInstance',
                 AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(nat_subnet_number) + 'Name'),

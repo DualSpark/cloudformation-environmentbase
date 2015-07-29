@@ -190,7 +190,7 @@ class NetworkBase(EnvironmentBase):
                 RouteTableId=Ref(route_table)))
         elif subnet_type == 'private':
             # private subnets need a NAT instance in a public subnet
-           nat_instance = self.create_nat_instance(index, nat_instance_type, 'public')
+           nat_instance = self.create_nat_instance(index, nat_instance_type, subnet_type)
            self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
             DestinationCidrBlock='0.0.0.0/0',
             InstanceId=Ref(nat_instance),
@@ -252,7 +252,7 @@ class NetworkBase(EnvironmentBase):
                         DeleteOnTermination=True,
                         DeviceIndex='0',
                         GroupSet=[Ref(nat_sg)],
-                        SubnetId=Ref(self.local_subnets[nat_subnet_type][str(nat_subnet_number)]))],
+                        SubnetId=Ref(self.local_subnets[source_name][str(nat_subnet_number)]))],
                 SourceDestCheck=False))
 
     def add_network_cidr_mapping(self,

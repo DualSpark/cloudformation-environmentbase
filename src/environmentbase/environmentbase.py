@@ -17,7 +17,6 @@ try:
 except ImportError:
     import json
 
-
 TIMEOUT = 60
 
 
@@ -263,10 +262,10 @@ class EnvironmentBase(object):
         return {}
 
     def handle_local_config(self):
-        """
+        '''
         Use local file if present, otherwise use factory values and write that to disk
         unless self.create_missing_files == false, in which case throw IOError
-        """
+        '''
 
         # If override config file exists, use it
         if os.path.isfile(self.config_filename):
@@ -296,9 +295,9 @@ class EnvironmentBase(object):
         self.config = config
 
     def initialize_template(self):
-        """
+        '''
         Create new Template instance, set description and common parameters and load AMI cache.
-        """
+        '''
         self.template = Template(self.globals.get('output', 'default_template'))
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
@@ -338,10 +337,10 @@ class EnvironmentBase(object):
 
     def add_common_parameters(self,
                               template_config):
-        """
+        '''
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
-        """
+        '''
         self.template.add_parameter_idempotent(Parameter('ec2Key',
                 Type='String',
                 Default=template_config.get('ec2_key_default','default-key'),
@@ -361,9 +360,9 @@ class EnvironmentBase(object):
                 ConstraintDescription=res.get_str('cidr_regex_message')))
 
     def to_json(self):
-        """
+        '''
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
-        """
+        '''
         return self.template.to_template_json()
 
     def add_common_params_to_child_template(self, template):
@@ -387,7 +386,7 @@ class EnvironmentBase(object):
                            s3_key_prefix=None,
                            s3_canned_acl=None,
                            depends_on=[]):
-        """
+        '''
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
         @param name [str] name of this template for key naming in s3
         @param template [Troposphere.Template] Troposphere Template object to add as a child to this object's template
@@ -395,7 +394,7 @@ class EnvironmentBase(object):
         @param s3_bucket [str] name of the bucket to upload keys to - will default to value in template_args if not present
         @param s3_key_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
         @param s3_canned_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
-        """
+        '''
         name = template.name
 
         self.add_common_params_to_child_template(template)

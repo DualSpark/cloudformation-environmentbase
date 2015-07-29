@@ -68,13 +68,15 @@ class Template(t.Template):
 
         # set the date that this template was generated
         if 'dateGenerated' not in self.outputs:
-            self.add_output(Output('dateGenerated',
+            self.add_output(Output(
+                'dateGenerated',
                 Value=str(datetime.utcnow()),
                 Description='UTC datetime representation of when this template was generated'))
 
         # generate the template validation hash
         if 'templateValidationHash' not in self.outputs:
-            self.add_output(Output('templateValidationHash',
+            self.add_output(Output(
+                'templateValidationHash',
                 Value=self.__get_template_hash(),
                 Description='Hash of this template that can be used as a simple means of validating whether a template has been changed since it was generated.'))
 
@@ -98,7 +100,7 @@ class Template(t.Template):
         """
         Validation formatter helps to ensure consistent formatting for hash validation workflow
         """
-        return json.dumps(json.loads(self.to_json()), separators=(',',':'))
+        return json.dumps(json.loads(self.to_json()), separators=(',', ':'))
 
     def add_parameter_idempotent(self,
                                  troposphere_parameter):
@@ -127,11 +129,11 @@ class Template(t.Template):
         """
         key_serial = str(int(time.time()))
 
-        if upload_key_name == None:
+        if not upload_key_name:
             upload_key_name = self.name
 
-        if s3_key_prefix == None:
-            s3_key_name = '/' +  upload_key_name + '.' + key_serial + '.template'
+        if not s3_key_prefix:
+            s3_key_name = '/' + upload_key_name + '.' + key_serial + '.template'
         else:
             s3_key_name = s3_key_prefix + '/' + upload_key_name + '.' + key_serial + '.template'
 

@@ -1,13 +1,16 @@
 *.pyc
 *.pyo
 *.class
+*.template
 *~
 *#
 /doc/generated/*
 /runpy
 /build
 /dist
-.idea/
 src/cfn_environment_base.egg-info/
+ami_cache.json
+config.json
 .DS_Store
+.idea/
 .eggs

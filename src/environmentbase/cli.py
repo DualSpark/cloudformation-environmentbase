@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-environemntbase
+environmentbase
 
 Tool bundle manages generation, deployment, and feedback of cloudformation resources.
 

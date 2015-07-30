@@ -1,0 +1,19 @@
+# Using this image for now because... I know it's there
+image: dualspark/static-s3-www
+
+git:
+    path: github.com/DualSpark/cloudformation-environmentbase
+
+script:
+    # Fetch project dependencies
+    python setup.py install
+
+    # Run the tests
+    python setup.py test
+
+    # Create the default template
+    environmentbase create
+
+    # Ensure it's a valid template
+    aws cloudformation validate-template --template-body file://./environmentbase.template --capabilities CAPABILITY_IAM
+

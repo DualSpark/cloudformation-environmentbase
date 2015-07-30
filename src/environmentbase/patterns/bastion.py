@@ -40,6 +40,14 @@ class Bastion(Template):
             load_balancer=bastion_elb
         )
 
+    @staticmethod
+    def get_factory_defaults():
+        return {"bastion": {"instance_type_default": "t2.micro"}}
+
+    @staticmethod
+    def get_config_schema():
+        return {"bastion": {"instance_type_default": "str"}}
+
     def add_security_groups(self):
         """
         Wrapper method to encapsulate process of creating security groups for this tier.

@@ -57,6 +57,39 @@ class Template(t.Template):
         """
         pass
 
+    @staticmethod
+    def get_config_schema():
+        """
+        This method is provided for subclasses to update config requirements with additional required keys and their types.
+        The format is a dictionary with key values being one of bool/int/float/str/list.
+        Example (yes comments are allowed):
+        {
+            "template": {
+                // Name of json file containing mapping labels to AMI ids
+                "ami_map_file": "basestring",
+                "mock_upload": "bool",
+            }
+        }
+        :return: dict of config settings to be merged into base config, match existing keys to replace.
+        """
+        return {}
+
+    @staticmethod
+    def get_factory_defaults():
+        """
+        This method is provided for subclasses to update factory default config file with additional sections.
+        The format is basic json (with comment support).
+        {
+            "template": {
+                // Name of json file containing mapping labels to AMI ids
+                "ami_map_file": "ami_cache.json",
+                "mock_upload": false,
+            }
+        }
+        :return: dict of config settings to be merged into base config, match existing keys to replace.
+        """
+        return {}
+
     def to_template_json(self):
         """
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes

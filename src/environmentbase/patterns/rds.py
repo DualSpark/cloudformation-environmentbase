@@ -50,7 +50,7 @@ class RDS(Template):
                  subnet_set='private',
                  rds_args=DEFAULT_CONFIG['db']['mydb']):
         """
-        Method initializes bastion host in a given environment deployment
+        Method initializes host in a given environment deployment
         @param name [string] - name of the tier to assign
         @param ingress_port [number] - port to allow ingress on. Must be a valid ELB ingress port. More info here: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-listener.html
         @param access_cidr [string] - CIDR notation for external access to this tier.

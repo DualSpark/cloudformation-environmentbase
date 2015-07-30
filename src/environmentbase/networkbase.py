@@ -148,11 +148,14 @@ class NetworkBase(EnvironmentBase):
                 if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
                     if subnet_type not in self.local_subnets:
                         self.local_subnets[subnet_type] = {}
-
                     self.local_subnets[subnet_type][str(index)] = self.template.add_resource(ec2.Subnet(subnet_type + 'Subnet' + str(index),
                             AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
                             VpcId=Ref(self.vpc),
                             CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type)))
+
+        for index in range(0, int(network_config.get('az_count', 2))):
+            for subnet_type in subnet_types:
+                if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
 
                     route_table = self.template.add_resource(ec2.RouteTable(subnet_type + 'Subnet' + str(index) + 'RouteTable',
                             VpcId=Ref(self.vpc)))
@@ -194,8 +197,6 @@ class NetworkBase(EnvironmentBase):
             DestinationCidrBlock='0.0.0.0/0',
             InstanceId=Ref(nat_instance),
             RouteTableId=Ref(route_table)))
-        # else:
-        #     self.custom_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
 
     def gateway_hook(self):
         """
@@ -214,11 +215,6 @@ class NetworkBase(EnvironmentBase):
         @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
         @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
         """
-        if nat_subnet_type == 'public':
-            source_name = 'private'
-        else:
-            source_name = 'public'
-
         if nat_instance_type == None:
             nat_instance_type = 'm1.small'
         elif type(nat_instance_type) == Parameter:
@@ -232,7 +228,7 @@ class NetworkBase(EnvironmentBase):
                             IpProtocol='-1',
                             FromPort='-1',
                             ToPort='-1',
-                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), source_name))],
+                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), nat_subnet_type))],
                 SecurityGroupEgress=[
                     ec2.SecurityGroupRule(
                             IpProtocol='-1',
@@ -251,7 +247,7 @@ class NetworkBase(EnvironmentBase):
                         DeleteOnTermination=True,
                         DeviceIndex='0',
                         GroupSet=[Ref(nat_sg)],
-                        SubnetId=Ref(self.local_subnets[nat_subnet_type][str(nat_subnet_number)]))],
+                        SubnetId=Ref(self.local_subnets['public'][str(nat_subnet_number)]))],
                 SourceDestCheck=False))
 
     def add_network_cidr_mapping(self,

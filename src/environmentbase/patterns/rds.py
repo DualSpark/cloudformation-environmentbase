@@ -50,7 +50,7 @@ class RDS(Template):
                  subnet_set='private',
                  rds_args=DEFAULT_CONFIG['db']['mydb']):
         """
-        Method initializes bastion host in a given environment deployment
+        Method initializes host in a given environment deployment
         @param name [string] - name of the tier to assign
         @param ingress_port [number] - port to allow ingress on. Must be a valid ELB ingress port. More info here: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-listener.html
         @param access_cidr [string] - CIDR notation for external access to this tier.
@@ -63,15 +63,20 @@ class RDS(Template):
 
         super(RDS, self).__init__(template_name=db_name+'RDSInstance')
 
-    def build_hook(self):
-        """
-        Method creates centrally used RDS instance based on arguments as defined.
-        @param db_name [string] Name of the DB to create in RDS
-        @param rds_sg [Troposphere.ec2.SecurityGroup] Security Group to be assigned to the RDS instance created
-        @param rds_args [dict] collection of settings for defaults on parameters and for RDS values that are less commonly parameterized
-        @param subnet_set [string] one of the subnet types defined within the config.json file.
-        """
+    # When no config.json file exists a new one is created using the 'factory default' file.  This function
+    # augments the factory default before it is written to file with the config values required
+    @staticmethod
+    def get_factory_defaults():
+        return RDS.DEFAULT_CONFIG
 
+    # When the user request to 'create' a new RDS template the config.json file is read in. This file is checked to
+    # ensure all required values are present. Because RDS has additional requirements beyond that of
+    # EnvironmentBase this function is used to add additional validation checks.
+    @staticmethod
+    def get_config_schema():
+        return RDS.CONFIG_SCHEMA
+
+    def build_hook(self):
         admin_rds_instance_type = self.add_parameter(Parameter(
             self.db_name.lower() + 'RdsInstanceType',
             Default=self.rds_args.get('db_instance_type_default'),

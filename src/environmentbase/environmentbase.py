@@ -38,6 +38,7 @@ class EnvironmentBase(object):
     subnets = {}
     ignore_outputs = ['templateValidationHash', 'dateGenerated']
     stack_outputs = {}
+    config_handlers = []
 
     def __init__(self, view=None, create_missing_files=True, config_filename=res.DEFAULT_CONFIG_FILENAME):
         """
@@ -222,44 +223,26 @@ class EnvironmentBase(object):
         and that the required types match. Throws ValidationError if not valid.
         :param config: dict to be validated
         """
-        # Merge in any requirements provided by subclass's
         config_reqs_copy = copy.deepcopy(factory_schema)
-        config_reqs_copy.update(self.get_config_schema_hook())
+
+        # Merge in any requirements provided by config handlers
+        for handler in self.config_handlers:
+            config_reqs_copy.update(handler.get_config_schema())
 
         self._validate_config_helper(config_reqs_copy, config, '')
 
-    @staticmethod
-    def get_config_schema_hook():
+    def add_config_handler(self, handler):
         """
-        This method is provided for subclasses to update config requirements with additional required keys and their types.
-        The format is a dictionary with key values being one of bool/int/float/str/list.
-        Example (yes comments are allowed):
-        {
-            "template": {
-                // Name of json file containing mapping labels to AMI ids
-                "ami_map_file": "basestring",
-                "mock_upload": "bool",
-            }
-        }
-        :return: dict of config settings to be merged into base config, match existing keys to replace.
+        Register classes that will augment the configuration defaults and/or validation logic here
         """
-        return {}
 
-    @staticmethod
-    def get_factory_defaults_hook():
-        """
-        This method is provided for subclasses to update factory default config file with additional sections.
-        The format is basic json (with comment support).
-        {
-            "template": {
-                // Name of json file containing mapping labels to AMI ids
-                "ami_map_file": "ami_cache.json",
-                "mock_upload": false,
-            }
-        }
-        :return: dict of config settings to be merged into base config, match existing keys to replace.
-        """
-        return {}
+        if not hasattr(handler, 'get_factory_defaults') or not callable(getattr(handler, 'get_factory_defaults')):
+            raise ValidationError('Class %s cannot be a config handler, missing get_factory_defaults()' % type(handler).__name__ )
+
+        if not hasattr(handler, 'get_config_schema') or not callable(getattr(handler, 'get_config_schema')):
+            raise ValidationError('Class %s cannot be a config handler, missing get_config_schema()' % type(handler).__name__ )
+
+        self.config_handlers.append(handler)
 
     def handle_local_config(self):
         '''
@@ -276,9 +259,11 @@ class EnvironmentBase(object):
         # If we are instructed to create fresh override file, do it
         # unless the filename is something other than DEFAULT_CONFIG_FILENAME
         elif self.create_missing_files and self.config_filename == res.DEFAULT_CONFIG_FILENAME:
-            # Merge in any defaults provided by subclass's
             default_config_copy = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
-            default_config_copy.update(self.get_factory_defaults_hook())
+
+            # Merge in any defaults provided by registered config handlers
+            for handler in self.config_handlers:
+                default_config_copy.update(handler.get_factory_defaults())
 
             # Don't want changes to config modifying the FACTORY_DEFAULT
             config = copy.deepcopy(default_config_copy)

@@ -4,12 +4,17 @@ from troposphere import ec2
 
 
 class MyRootTemplate(NetworkBase):
-    '''
+    """
     Class creates a VPC and common network components for the environment
-    '''
+    """
+
+    def __init__(self, *args, **kwargs):
+        # This function allows MyRootTemplate to use MyChildTemplate's particular configuration requirements
+        self.add_config_handler(MyChildTemplate)
+
+        super(MyRootTemplate, self).__init__(*args, **kwargs)
 
     def create_action(self):
-
         self.initialize_template()
         self.construct_network()
 
@@ -17,24 +22,31 @@ class MyRootTemplate(NetworkBase):
 
         self.write_template_to_file()
 
-    def deploy_action(self):
-
-        # Do custom deploy steps here
-
-        super(MyRootTemplate, self).deploy_action()
-
 
 class MyChildTemplate(Template):
-    '''
+    """
     Class creates a VPC and common network components for the environment
-    '''
+    """
 
     def __init__(self, template_name):
-
         super(MyChildTemplate, self).__init__(template_name)
 
+    # Called from add_child_template() after some common parameters are attached to this instance, see docs for details
+    def build_hook(self):
         self.add_resource(ec2.Instance("ec2instance", InstanceType="m3.medium", ImageId="ami-e7527ed7") )
 
+    # When no config.json file exists a new one is created using the 'factory default' file.  This function
+    # augments the factory default before it is written to file with the config values required
+    @staticmethod
+    def get_factory_defaults():
+        return {'my_child_template': {'favorite_color': 'blue'}}
+
+    # When the user request to 'create' a new template the config.json file is read in. This file is checked to
+    # ensure all required values are present. Because MyChildTemplate has additional requirements beyond that of
+    # EnvironmentBase this function is used to add additional validation checks.
+    @staticmethod
+    def get_config_schema():
+        return {'my_child_template': {'favorite_color': 'str'}}
 
 if __name__ == '__main__':
 

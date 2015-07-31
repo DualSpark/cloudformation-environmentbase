@@ -7,18 +7,9 @@ class MyRootTemplate(NetworkBase):
     Example class showing how to use the RDS pattern file to generate an RDS database as a child stack
     """
 
-    # When no config.json file exists a new one is created using the 'factory default' file.  This function
-    # augments the factory default before it is written to file with the config values required
-    @staticmethod
-    def get_factory_defaults_hook():
-        return rds.RDS.DEFAULT_CONFIG
-
-    # When the user request to 'create' a new RDS template the config.json file is read in. This file is checked to
-    # ensure all required values are present. Because RDS has additional requirements beyond that of
-    # EnvironmentBase this function is used to add additional validation checks.
-    @staticmethod
-    def get_config_schema_hook():
-        return rds.RDS.CONFIG_SCHEMA
+    def __init__(self, *args, **kwargs):
+        super(MyRootTemplate, self).__init__(*args, **kwargs)
+        self.add_config_handler(rds.RDS)
 
     def create_action(self):
         self.initialize_template()

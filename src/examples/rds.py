@@ -8,8 +8,8 @@ class MyRootTemplate(NetworkBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(MyRootTemplate, self).__init__(*args, **kwargs)
         self.add_config_handler(rds.RDS)
+        super(MyRootTemplate, self).__init__(*args, **kwargs)
 
     def create_action(self):
         self.initialize_template()

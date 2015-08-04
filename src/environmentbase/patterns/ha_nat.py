@@ -1,4 +1,7 @@
 from environmentbase.template import Template
+from troposphere import Parameter, Ref, Join, Tags, Base64
+from troposphere.ec2 import SecurityGroup, SecurityGroupIngress
+from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration
 
 
 class HaNat(Template):

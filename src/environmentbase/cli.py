@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-"""
-environemntbase
+'''
+environmentbase
 
 Tool bundle manages generation, deployment, and feedback of cloudformation resources.
 
@@ -14,7 +14,7 @@ Options:
   --config-file <CONFIG_FILE>          Name of json configuration file. Default value is config.json
   --stack-name <STACK_NAME>            User-definable value for the CloudFormation stack being deployed.
   --template-file=<TEMPLATE_FILE>      Name of template to be either generated or deployed.
-"""
+'''
 
 from docopt import docopt
 import version
@@ -24,12 +24,12 @@ import json
 class CLI(object):
 
     def __init__(self, quiet=False, doc=__doc__):
-        """
+        '''
         CLI constructor is responsible for parsing sys.argv to collect configuration information.
         If you need to change the config file from the default name set the property 'config_filename'
         from the constructor.
         quiet: is provided to suppress output, primarily for unit testing
-        """
+        '''
         self.quiet = quiet
 
         self.args = docopt(doc, version='environmentbase %s' % version.__version__)
@@ -39,11 +39,11 @@ class CLI(object):
         self.config_filename = self.args.get('--config-file')
 
     def update_config(self, config):
-        """
+        '''
         The controller provides its config object containing settings loaded from file.  Potentially from the filename
         provided in the constructor above.  This function allows the CLI to override any of those values the user may
         have requested.
-        """
+        '''
         if self.args.get('--debug'):
             config['global']['print_debug'] = True
 
@@ -55,10 +55,10 @@ class CLI(object):
             config['global']['output'] = template_file
 
     def process_request(self, controller):
-        """
+        '''
         Controller has finished initializing its config. This function maps user requested action to
         controller.XXX_action().  Currently supported actions: create_action() and deploy_action().
-        """
+        '''
         if not self.quiet:
             print ''
 

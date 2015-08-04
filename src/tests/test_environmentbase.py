@@ -41,13 +41,20 @@ class EnvironmentBaseTestCase(TestCase):
 
         return my_cli
 
-    def _create_dummy_config(self):
+    def _create_dummy_config(self, env_base=None):
         dummy_string = 'dummy'
         dummy_bool = False
         dummy_int = 3
+        dummy_list = ['A', 'B', 'C']
+
+        config_requirements = copy.deepcopy(res.CONFIG_REQUIREMENTS)
+
+        if env_base:
+            for handler in env_base.config_handlers:
+                config_requirements.update(handler.get_config_schema())
 
         config = {}
-        for (section, keys) in res.CONFIG_REQUIREMENTS.iteritems():
+        for (section, keys) in config_requirements.iteritems():
             config[section] = {}
             for (key, key_type) in keys.iteritems():
                 if key_type == basestring.__name__ or key_type == str.__name__:
@@ -56,6 +63,8 @@ class EnvironmentBaseTestCase(TestCase):
                     config[section][key] = dummy_bool
                 elif key_type == int.__name__:
                     config[section][key] = dummy_int
+                elif key_type == list.__name__:
+                    config[section][key] = dummy_list
         return config
 
     def _create_local_file(self, name, content):
@@ -196,34 +205,66 @@ class EnvironmentBaseTestCase(TestCase):
         with self.assertRaises(eb.ValidationError):
             cntrl._validate_config(valid_config)
 
+        # Check wildcard sections
+        extra_reqs = {'*-db': {'host': 'str', 'port': 'int'}}
+        extra_reqs.update(res.CONFIG_REQUIREMENTS)
+
+        valid_config.update({
+            'my-db': {'host': 'localhost', 'port': 3306},
+            'my-other-db': {'host': 'localhost', 'port': 3306}
+        })
+
+        # Check deep nested sections
+        extra_reqs = {
+            'lets': {
+                'go': {
+                    'deeper': {
+                        'key': 'str'
+                    }}}}
+        extra_reqs.update(res.CONFIG_REQUIREMENTS)
+
+        valid_config.update({
+            'lets': {
+                'go': {
+                    'deeper': {
+                        'key': 'super_secret_value'
+                    }}}})
+
     def test_extending_config(self):
-        class SubController(eb.EnvironmentBase):
+
+        # Typically this would subclass eb.Template
+        class MyConfigHandler(object):
             @staticmethod
-            def get_factory_defaults_hook():
+            def get_factory_defaults():
                 return {'new_section': {'new_key': 'value'}}
 
             @staticmethod
-            def get_config_schema_hook():
+            def get_config_schema():
                 return {'new_section': {'new_key': 'str'}}
 
+        class MyEnvBase(eb.EnvironmentBase):
+            def __init__(self, *args, **kwargs):
+                self.add_config_handler(MyConfigHandler)
+                super(MyEnvBase, self).__init__(*args, **kwargs)
+
         cli = self.fake_cli(['create'])
-        sub_ctlr = SubController(cli)
+        ctlr = MyEnvBase(cli)
 
         # Make sure the runtime config and the file saved to disk have the new parameter
-        self.assertEquals(sub_ctlr.config['new_section']['new_key'], 'value')
+        self.assertEquals(ctlr.config['new_section']['new_key'], 'value')
 
         with open(res.DEFAULT_CONFIG_FILENAME, 'r') as f:
             external_config = json.load(f)
             self.assertEquals(external_config['new_section']['new_key'], 'value')
-        os.remove(res.DEFAULT_CONFIG_FILENAME)
 
         # Check extended validation
         # recreate config file without 'new_section' and make sure it fails validation
+        os.remove(res.DEFAULT_CONFIG_FILENAME)
         dummy_config = self._create_dummy_config()
         self._create_local_file(res.DEFAULT_CONFIG_FILENAME, json.dumps(dummy_config, indent=4))
 
         with self.assertRaises(eb.ValidationError):
-            SubController(cli)
+            MyEnvBase(cli)
 
     def test_flags(self):
         """ Verify cli flags update config object """

@@ -2,9 +2,9 @@ from environmentbase.networkbase import NetworkBase
 
 
 class MyEnvClass(NetworkBase):
-    '''
+    """
     Class creates a VPC and common network components for the environment
-    '''
+    """
 
     def create_action(self):
 

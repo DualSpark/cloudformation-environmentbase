@@ -7,11 +7,16 @@ except ImportError:
 
 
 def get_json_resource(resource_name, relative_to_module_name=__name__):
+    """
+    Get package resource as json
+    """
     return json.loads(get_resource(resource_name, relative_to_module_name))
 
 
 def get_resource(resource_name, relative_to_module_name=__name__):
-    """Retrieves resource embedded in the package (even if installed as a zipped archive)."""
+    """
+    Retrieves resource embedded in the package (even if installed as a zipped archive).
+    """
     return resource_string(relative_to_module_name, 'data/' + resource_name)
 
 
@@ -47,6 +52,7 @@ def get_type(typename):
         'float': float,
         # avoid all the python unicode weirdness by making all the strings basestrings
         'str': basestring,
-        'basestring': basestring
+        'basestring': basestring,
+        'list': list
     }
     return types.get(typename, None)

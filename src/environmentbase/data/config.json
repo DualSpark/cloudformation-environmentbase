@@ -26,21 +26,20 @@
     "elb_log_prefix": "elb_logs"
   },
   "boto": {
-    "default_aws_region": "us-west-2",
+    "region_name": "us-west-2",
     "aws_access_key_id": null,
     "aws_secret_access_key": null
   },
   "network": {
-    "az_count": 2,
-    "public_subnet_count": 2,
-    "private_subnet_count": 2,
-    "public_subnet_size": "24",
-    "private_subnet_size": "22",
-    "network_cidr_base": "172.16.0.0",
-    "network_cidr_size": "20",
+    "az_count": 3,
+    "subnet_types": ["public","private","protected"],
+    "public_subnet_count": 3,
+    "private_subnet_count": 3,
+    "public_subnet_size": "21",
+    "protected_subnet_size": "20",
+    "private_subnet_size": "19",
+    "network_cidr_base": "10.0.0.0",
+    "network_cidr_size": "16",
     "nat_instance_type": "t2.micro"
-  },
-  "bastion": {
-    "instance_type_default": "t2.micro"
   }
 }

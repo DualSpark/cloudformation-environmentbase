@@ -20,9 +20,9 @@ class NetworkBase(EnvironmentBase):
     """
 
     def construct_network(self):
-        """
+        '''
         Main function to construct VPC, subnets, security groups, NAT instances, etc
-        """
+        '''
         network_config = self.config.get('network', {})
         template_config = self.config.get('template', {})
 
@@ -36,7 +36,10 @@ class NetworkBase(EnvironmentBase):
         self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network(network_config=network_config)
-        self.add_utility_bucket(name=template_config.get('s3_utility_bucket', 'demo'))
+
+        self.template.add_utility_bucket(
+            name=template_config.get('s3_utility_bucket', 'demo'),
+            param_binding_map=self.manual_parameter_bindings)
 
         self.common_sg = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
@@ -67,31 +70,12 @@ class NetworkBase(EnvironmentBase):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def create_action(self):
-        """
+        '''
         Override EnvironmentBase.create_action() to construct VPC
-        """
+        '''
         self.initialize_template()
         self.construct_network()
         self.write_template_to_file()
-
-    def add_utility_bucket(self,
-                           name='demo'):
-        """
-        Method adds a bucket to be used for infrastructure utility purposes such as backups
-        @param name [str] friendly name to prepend to the CloudFormation asset name
-        """
-        self.utility_bucket = self.template.add_resource(s3.Bucket(name.lower() + 'UtilityBucket',
-            AccessControl=s3.BucketOwnerFullControl,
-            DeletionPolicy=Retain))
-
-        bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
-
-        self.template.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketLoggingPolicy',
-                Bucket=Ref(self.utility_bucket),
-                PolicyDocument=bucket_policy_statements))
-
-        self.manual_parameter_bindings['utilityBucket'] = Ref(self.utility_bucket)
-
 
     def add_vpc_az_mapping(self,
                            boto_config,
@@ -109,7 +93,7 @@ class NetworkBase(EnvironmentBase):
         if 'aws_access_key_id' in boto_config and 'aws_secret_access_key' in boto_config:
             aws_auth_info['aws_access_key_id'] = boto_config.get('aws_access_key_id')
             aws_auth_info['aws_secret_access_key'] = boto_config.get('aws_secret_access_key')
-        conn = boto.vpc.connect_to_region(region_name=boto_config.get('default_aws_region', 'us-east-1'), **aws_auth_info)
+        conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'), **aws_auth_info)
         for region in conn.get_all_regions():
             region_list.append(region.name)
             az_list = boto.vpc.connect_to_region(region.name, **aws_auth_info).get_all_zones()
@@ -164,11 +148,14 @@ class NetworkBase(EnvironmentBase):
                 if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
                     if subnet_type not in self.local_subnets:
                         self.local_subnets[subnet_type] = {}
-
                     self.local_subnets[subnet_type][str(index)] = self.template.add_resource(ec2.Subnet(subnet_type + 'Subnet' + str(index),
                             AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
                             VpcId=Ref(self.vpc),
                             CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type)))
+
+        for index in range(0, int(network_config.get('az_count', 2))):
+            for subnet_type in subnet_types:
+                if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
 
                     route_table = self.template.add_resource(ec2.RouteTable(subnet_type + 'Subnet' + str(index) + 'RouteTable',
                             VpcId=Ref(self.vpc)))
@@ -194,10 +181,10 @@ class NetworkBase(EnvironmentBase):
                       igw_title,
                       nat_instance_type,
                       subnet_type):
-        '''
+        """
         Create an egress route for the a subnet with the given index and type
         Override to create egress routes for other subnet types
-        '''
+        """
         if subnet_type == 'public':
             self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
@@ -210,13 +197,11 @@ class NetworkBase(EnvironmentBase):
             DestinationCidrBlock='0.0.0.0/0',
             InstanceId=Ref(nat_instance),
             RouteTableId=Ref(route_table)))
-        else:
-            self.custom_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
 
     def gateway_hook(self):
-        '''
+        """
         Override to allow subclasses to create VPGs and similar components during network creation
-        '''
+        """
         pass
 
 
@@ -230,11 +215,6 @@ class NetworkBase(EnvironmentBase):
         @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
         @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
         """
-        if nat_subnet_type == 'public':
-            source_name = 'private'
-        else:
-            source_name = 'public'
-
         if nat_instance_type == None:
             nat_instance_type = 'm1.small'
         elif type(nat_instance_type) == Parameter:
@@ -248,7 +228,7 @@ class NetworkBase(EnvironmentBase):
                             IpProtocol='-1',
                             FromPort='-1',
                             ToPort='-1',
-                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), source_name))],
+                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), nat_subnet_type))],
                 SecurityGroupEgress=[
                     ec2.SecurityGroupRule(
                             IpProtocol='-1',
@@ -267,7 +247,7 @@ class NetworkBase(EnvironmentBase):
                         DeleteOnTermination=True,
                         DeviceIndex='0',
                         GroupSet=[Ref(nat_sg)],
-                        SubnetId=Ref(self.local_subnets[nat_subnet_type][str(nat_subnet_number)]))],
+                        SubnetId=Ref(self.local_subnets['public'][str(nat_subnet_number)]))],
                 SourceDestCheck=False))
 
     def add_network_cidr_mapping(self,
@@ -308,7 +288,6 @@ class NetworkBase(EnvironmentBase):
                 current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
 
         return self.template.add_mapping('networkAddresses', ret_val)
-
 
     def add_vpn_gateway(self,
                         vpn_conf):

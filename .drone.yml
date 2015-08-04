@@ -1,0 +1,9 @@
+image: python2.7
+
+git:
+    path: github.com/DualSpark/cloudformation-environmentbase
+
+script:
+    - python setup.py -q install
+    - python setup.py -q test
+    - environmentbase create

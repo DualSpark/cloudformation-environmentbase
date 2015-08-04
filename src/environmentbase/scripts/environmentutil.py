@@ -16,6 +16,7 @@ Options:
   --aws_region <AWS_REGION>    Region to start queries to AWS API from [default: us-east-1].
   --config_file <CONFIG_FILE>  JSON Config file holding the extended configuration for this toolset [default: config_args.json].
 """
+
 from docopt import docopt
 import boto
 import json
@@ -45,8 +46,8 @@ class EnvironmentUtil(object):
         to create a regionmap for CloudFormation templates.
         @param aws_region [string] - optionally provides the region to start querying when gathering the list of regions globally.
         """
-        if aws_region == None:
-            aws_region = self.configuration.get('boto', {}).get('default_aws_region', 'us-east-1')
+        if aws_region is None:
+            aws_region = self.configuration.get('boto', {}).get('region_name', 'us-east-1')
             logging.debug('Setting default AWS Region for API access from overall configuration [' + aws_region + ']')
         region_map = {}
         vpc_conn = boto.connect_vpc(aws_region)
@@ -140,8 +141,8 @@ class EnvironmentUtil(object):
         @param aws_region [string] - AWS-specific region name to start when querying the AWS APIs
         @param wait_for_complete [boolean] - boolean indicating whether to poll for success or failure before completing the deploy process.
         """
-        if aws_region == None:
-            aws_region = self.configuration.get('boto', {}).get('default_aws_region', 'us-east-1')
+        if aws_region is None:
+            aws_region = self.configuration.get('boto', {}).get('region_name', 'us-east-1')
             logging.debug('Setting default AWS Region for API access from overall configuration [' + aws_region + ']')
 
         logging.info('Connecting to CloudFormation in region [' + aws_region + ']')

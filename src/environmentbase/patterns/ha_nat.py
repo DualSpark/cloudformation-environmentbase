@@ -104,7 +104,7 @@ class HaNat(Template):
         NatAsgLaunchConfiguration = self.add_resource(LaunchConfiguration(
             "NatAsgLaunchConfiguration",
             UserData=Base64(Join("", [
-"#!/bin/bash"\n",
+"#!/bin/bash -v\n",
 "function log { logger -t "vpc" -- $1; }\n",
 "function die {\n",
 "  [ -n "$1" ] && log "$1"\n",
@@ -218,6 +218,11 @@ class HaNat(Template):
 "log "Source Destination check disabled for $INSTANCE_ID."\n",
 
 "log "Configuration of HA NAT complete."\n",
+"yum update -y aws*\n",
+". /etc/profile.d/aws-apitools-common.sh\n",
+"# Configure iptables\n",
+"/sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE\n",
+"/sbin/iptables-save > /etc/sysconfig/iptables\n",
 "exit 0\n"
 
 ])),

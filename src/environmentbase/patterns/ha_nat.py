@@ -26,8 +26,8 @@ class HaNat(Template):
         '''
         Hook to add tier-specific assets within the build stage of initializing this class.
         '''
-        
-        NatImage = t.add_parameter(Parameter(
+
+        NatImage = self.add_parameter(Parameter(
             "NatImage",
             Type="String",
             Description="AMI to use for the NAT instance",
@@ -37,73 +37,73 @@ class HaNat(Template):
             ConstraintDescription="must be a valid AMI ID of the form ami-abcd1234",
             Default="ami-7850793d"
         ))
-        
+
         NatDNSIngress = self.add_resource(SecurityGroupIngress(
             "NatDNSIngress",
             ToPort="53",
             FromPort="53",
             IpProtocol="udp",
             GroupId=Ref("NatSG"),
-            CidrIp=Join(".", [Ref(VpcCidrBlock), "0", "0/24"])
+            CidrIp=Ref(self.vpc_cidr)
         ))
-        
+
         NatHTTPSIngress = self.add_resource(SecurityGroupIngress(
             "NatHTTPSIngress",
             ToPort="443",
             FromPort="443",
             IpProtocol="tcp",
             GroupId=Ref("NatSG"),
-            CidrIp=Join(".", [Ref(VpcCidrBlock), "0", "0/24"])
+            CidrIp=Ref(self.vpc_cidr)
         ))
-        
+
         NatASG = self.add_resource(AutoScalingGroup(
             "NatASG",
             AvailabilityZones=["us-west-1a", "us-west-1b", "us-west-1c"],
             DesiredCapacity="3",
             Tags=Tags(
-                Name=Join("-", [Ref(VpcName), "NAT"]),
+                Name=Join("-", [Ref(self.vpc_id), "NAT"]),
             ),
             MinSize="3",
             MaxSize="3",
             Cooldown="30",
             LaunchConfigurationName=Ref("NatAsgLaunchConfiguration"),
-            HealthCheckGracePeriod="30",
+            HealthCheckGracePeriod=30,
             HealthCheckType="EC2"
         ))
-        
+
         NatHTTPIngress = self.add_resource(SecurityGroupIngress(
             "NatHTTPIngress",
             ToPort="80",
             FromPort="80",
             IpProtocol="tcp",
             GroupId=Ref("NatSG"),
-            CidrIp=Join(".", [Ref(VpcCidrBlock), "0", "0/24"])
+            CidrIp=Ref(self.vpc_cidr)
         ))
-        
+
         NatNTPIngress = self.add_resource(SecurityGroupIngress(
             "NatNTPIngress",
             ToPort="123",
             FromPort="123",
             IpProtocol="udp",
             GroupId=Ref("NatSG"),
-            CidrIp=Join(".", [Ref(VpcCidrBlock), "0", "0/24"])
+            CidrIp=Ref(self.vpc_cidr)
         ))
-        
+
         NatSG = self.add_resource(SecurityGroup(
             "NatSG",
-            VpcId=Ref(Vpc),
+            VpcId=Ref(self.vpc_id),
             GroupDescription="Security group for NAT host."
         ))
-        
+
         NatICMPIngress = self.add_resource(SecurityGroupIngress(
             "NatICMPIngress",
             ToPort="-1",
             FromPort="-1",
             IpProtocol="icmp",
             GroupId=Ref(NatSG),
-            CidrIp=Join(".", [Ref(VpcCidrBlock), "0", "0/24"])
+            CidrIp=Ref(self.vpc_cidr)
         ))
-        
+
         NatAsgLaunchConfiguration = self.add_resource(LaunchConfiguration(
             "NatAsgLaunchConfiguration",
             UserData=Base64(Join("", [
@@ -230,7 +230,7 @@ class HaNat(Template):
 
 ])),
             ImageId=Ref(NatImage),
-            KeyName=Ref(KeyName),
+            KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(NatSG)],
             EbsOptimized=False,
             IamInstanceProfile="arn:aws:iam::012345678901:instance-profile/NAT",
@@ -238,5 +238,3 @@ class HaNat(Template):
             AssociatePublicIpAddress=True,
             DependsOn="VPCGatewayAttachment"
         ))
-        
-     

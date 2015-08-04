@@ -236,6 +236,5 @@ class HaNat(Template):
             EbsOptimized=False,
             IamInstanceProfile="arn:aws:iam::012345678901:instance-profile/NAT",
             InstanceType="t2.small",
-            AssociatePublicIpAddress=True,
-            DependsOn="VPCGatewayAttachment"
+            AssociatePublicIpAddress=True
         ))

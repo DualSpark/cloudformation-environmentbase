@@ -13,13 +13,15 @@ class HaNat(Template):
     def __init__(self, asg_min=1, asg_max=1, instance_type='t2.micro', install_ntp=False):
         '''
         Method initializes HA NAT in a given environment deployment
-        @param asg_size [number] - Number of instances in the autoscaling group
+        @param asg_min [number] - Lower bound of number of instances in the autoscaling group
+        @param asg_max [number] - Upper bound of number of instances in the autoscaling group
         @param instance_type [string] - Type of instances in the autoscaling group
         @param install_ntp [boolean] - Toggle for installing NTP on the NAT instances
         '''
         self.asg_min = asg_min
         self.asg_max = asg_max
         self.instance_type = instance_type
+        # TODO: Use this parameter to toggle NTP on or off
         self.install_ntp = install_ntp
 
         super(HaNat, self).__init__(template_name='HaNat')
@@ -49,12 +51,12 @@ class HaNat(Template):
 
         NatASG = self.add_resource(AutoScalingGroup(
             "NatASG",
-            DesiredCapacity="3",
+            DesiredCapacity=self.asg_min,
             Tags=Tags(
                 Name=Join("-", [Ref(self.vpc_id), "NAT"]),
             ),
-            MinSize="3",
-            MaxSize="3",
+            MinSize=self.asg_min,
+            MaxSize=self.asg_max,
             Cooldown="30",
             LaunchConfigurationName=Ref("NatAsgLaunchConfiguration"),
             HealthCheckGracePeriod=30,
@@ -262,6 +264,6 @@ class HaNat(Template):
             SecurityGroups=[Ref(NatSG)],
             EbsOptimized=False,
             IamInstanceProfile=Ref(NatInstanceProfile),
-            InstanceType="t2.small",
+            InstanceType=self.instance_type,
             AssociatePublicIpAddress=True
         ))

@@ -49,7 +49,6 @@ class HaNat(Template):
 
         NatASG = self.add_resource(AutoScalingGroup(
             "NatASG",
-            AvailabilityZones=["us-west-1a", "us-west-1b", "us-west-1c"],
             DesiredCapacity="3",
             Tags=Tags(
                 Name=Join("-", [Ref(self.vpc_id), "NAT"]),
@@ -59,7 +58,8 @@ class HaNat(Template):
             Cooldown="30",
             LaunchConfigurationName=Ref("NatAsgLaunchConfiguration"),
             HealthCheckGracePeriod=30,
-            HealthCheckType="EC2"
+            HealthCheckType="EC2",
+            VPCZoneIdentifier=self.subnets['public']
         ))
 
         NatHTTPIngress = self.add_resource(SecurityGroupIngress(
@@ -127,9 +127,9 @@ class HaNat(Template):
         ))
 
         NatInstanceProfile = self.add_resource(InstanceProfile(
-                "NatInstanceProfile",
-                Path="/",
-                Roles=[Ref(NatRole)]
+            "NatInstanceProfile",
+            Path="/",
+            Roles=[Ref(NatRole)]
         ))
 
         NatAsgLaunchConfiguration = self.add_resource(LaunchConfiguration(

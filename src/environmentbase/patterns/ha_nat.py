@@ -2,6 +2,7 @@ from environmentbase.template import Template
 from troposphere import Parameter, Ref, Join, Tags, Base64
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress
 from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration
+from troposphere.iam import Policy, Role, InstanceProfile
 
 
 class HaNat(Template):
@@ -103,6 +104,43 @@ class HaNat(Template):
             IpProtocol="icmp",
             GroupId=Ref(NatSG),
             CidrIp=Ref(self.vpc_cidr)
+        ))
+
+        NatRole = self.add_resource(Role(
+            "NatRole",
+            AssumeRolePolicyDocument={
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": ["ec2.amazonaws.com"]
+                    },
+                    "Action": ["sts:AssumeRole"]
+                 }]
+            },
+            Path="/",
+            Policies=[Policy(
+                PolicyName="NATPolicy",
+                PolicyDocument={
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                            "ec2:DescribeInstances",
+                            "ec2:DescribeRouteTables",
+                            "ec2:CreateRoute",
+                            "ec2:ReplaceRoute",
+                            "ec2:StartInstances",
+                            "ec2:StopInstances"
+                        ],
+                        "Resource": "*"
+                    }]
+                }
+            )]
+        ))
+
+        NatInstanceProfile = self.add_resource(InstanceProfile(
+                "NatInstanceProfile",
+                Path="/",
+                Roles=[Ref(NatRole)]
         ))
 
         NatAsgLaunchConfiguration = self.add_resource(LaunchConfiguration(
@@ -234,7 +272,7 @@ class HaNat(Template):
             KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(NatSG)],
             EbsOptimized=False,
-            IamInstanceProfile="arn:aws:iam::012345678901:instance-profile/NAT",
+            IamInstanceProfile=Ref(NatInstanceProfile),
             InstanceType="t2.small",
             AssociatePublicIpAddress=True
         ))

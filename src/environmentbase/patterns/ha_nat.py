@@ -1,7 +1,7 @@
 from environmentbase.template import Template
-from troposphere import Parameter, Ref, Join, Tags, Base64, FindInMap
+from troposphere import Parameter, Ref, Join, Base64, FindInMap
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress
-from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration
+from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tags
 from troposphere.iam import Policy, Role, InstanceProfile
 
 

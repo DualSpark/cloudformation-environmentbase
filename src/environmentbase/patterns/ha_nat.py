@@ -1,5 +1,5 @@
 from environmentbase.template import Template
-from troposphere import Parameter, Ref, Join, Tags, Base64
+from troposphere import Parameter, Ref, Join, Tags, Base64, FindInMap
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress
 from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration
 from troposphere.iam import Policy, Role, InstanceProfile
@@ -28,17 +28,6 @@ class HaNat(Template):
         '''
         Hook to add tier-specific assets within the build stage of initializing this class.
         '''
-
-        NatImage = self.add_parameter(Parameter(
-            "NatImage",
-            Type="String",
-            Description="AMI to use for the NAT instance",
-            MinLength="12",
-            AllowedPattern="ami-(\\w{8})",
-            MaxLength="12",
-            ConstraintDescription="must be a valid AMI ID of the form ami-abcd1234",
-            Default="ami-7850793d"
-        ))
 
         NatDNSIngress = self.add_resource(SecurityGroupIngress(
             "NatDNSIngress",
@@ -268,7 +257,7 @@ class HaNat(Template):
                 "exit 0\n"
 
             ])),
-            ImageId=Ref(NatImage),
+            ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'amazonLinuxAmiId'),
             KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(NatSG)],
             EbsOptimized=False,

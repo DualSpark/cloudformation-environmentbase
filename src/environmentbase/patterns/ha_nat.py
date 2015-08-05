@@ -31,12 +31,18 @@ class HaNat(Template):
         Hook to add tier-specific assets within the build stage of initializing this class.
         '''
 
+        NatSG = self.add_resource(SecurityGroup(
+            "NatSG",
+            VpcId=Ref(self.vpc_id),
+            GroupDescription="Security group for NAT host."
+        ))
+
         NatDNSIngress = self.add_resource(SecurityGroupIngress(
             "NatDNSIngress",
             ToPort="53",
             FromPort="53",
             IpProtocol="udp",
-            GroupId=Ref("NatSG"),
+            GroupId=Ref(NatSG),
             CidrIp=Ref(self.vpc_cidr)
         ))
 
@@ -45,23 +51,8 @@ class HaNat(Template):
             ToPort="443",
             FromPort="443",
             IpProtocol="tcp",
-            GroupId=Ref("NatSG"),
+            GroupId=Ref(NatSG),
             CidrIp=Ref(self.vpc_cidr)
-        ))
-
-        NatASG = self.add_resource(AutoScalingGroup(
-            "NatASG",
-            DesiredCapacity=self.asg_min,
-            Tags=Tags(
-                Name=Join("-", [Ref(self.vpc_id), "NAT"]),
-            ),
-            MinSize=self.asg_min,
-            MaxSize=self.asg_max,
-            Cooldown="30",
-            LaunchConfigurationName=Ref("NatAsgLaunchConfiguration"),
-            HealthCheckGracePeriod=30,
-            HealthCheckType="EC2",
-            VPCZoneIdentifier=self.subnets['public']
         ))
 
         NatHTTPIngress = self.add_resource(SecurityGroupIngress(
@@ -69,7 +60,7 @@ class HaNat(Template):
             ToPort="80",
             FromPort="80",
             IpProtocol="tcp",
-            GroupId=Ref("NatSG"),
+            GroupId=Ref(NatSG),
             CidrIp=Ref(self.vpc_cidr)
         ))
 
@@ -78,14 +69,8 @@ class HaNat(Template):
             ToPort="123",
             FromPort="123",
             IpProtocol="udp",
-            GroupId=Ref("NatSG"),
+            GroupId=Ref(NatSG),
             CidrIp=Ref(self.vpc_cidr)
-        ))
-
-        NatSG = self.add_resource(SecurityGroup(
-            "NatSG",
-            VpcId=Ref(self.vpc_id),
-            GroupDescription="Security group for NAT host."
         ))
 
         NatICMPIngress = self.add_resource(SecurityGroupIngress(
@@ -266,4 +251,19 @@ class HaNat(Template):
             IamInstanceProfile=Ref(NatInstanceProfile),
             InstanceType=self.instance_type,
             AssociatePublicIpAddress=True
+        ))
+
+        NatASG = self.add_resource(AutoScalingGroup(
+            "NatASG",
+            DesiredCapacity=self.asg_min,
+            Tags=Tags(
+                Name=Join("-", [Ref(self.vpc_id), "NAT"]),
+            ),
+            MinSize=self.asg_min,
+            MaxSize=self.asg_max,
+            Cooldown="30",
+            LaunchConfigurationName=Ref(NatAsgLaunchConfiguration),
+            HealthCheckGracePeriod=30,
+            HealthCheckType="EC2",
+            VPCZoneIdentifier=self.subnets['public']
         ))

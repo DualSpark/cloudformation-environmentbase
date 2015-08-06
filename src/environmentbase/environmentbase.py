@@ -226,11 +226,10 @@ class EnvironmentBase(object):
                     pass
 
                 if self.config['global']['print_debug']:
-                    print "--------------\n", \
+                    print "New Stack Event --------------\n", \
                         data['status'], data['type'], data['name'], '\n', \
                         data['reason'], '\n', \
-                        json.dumps(data['props'], indent=4), '\n', \
-                        "--------------"
+                        json.dumps(data['props'], indent=4)
                 else:
                     pass
 
@@ -337,7 +336,6 @@ class EnvironmentBase(object):
             print 'KeyboardInterrupt: calling cleanup'
             self.cleanup_stack_monitor(topic, queue)
             raise
-        print 'calling cleanup'
         self.cleanup_stack_monitor(topic, queue)
 
     def _validate_config_helper(self, schema, config, path):
@@ -538,7 +536,7 @@ class EnvironmentBase(object):
     # - vpcId: resource id of VPC
     # - commonSecurityGroup: sg identifier for common allowed ports (22 in from VPC)
     # - utilityBucket: S3 bucket name used to send logs to
-    # - availabilityZone[0-3]: Indexed names of AZs VPC is deployed to
+    # - availabilityZone[1-3]: Indexed names of AZs VPC is deployed to
     # - [public|private]Subnet[0-9]: indexed and classified subnet identifiers
     #
     # and some instance attributes referencing the attached parameters:

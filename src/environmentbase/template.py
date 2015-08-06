@@ -813,6 +813,7 @@ class Template(t.Template):
                     Resource=['*'],
                     Action=[awacs_logs.CreateLogGroup,
                             awacs_logs.CreateLogStream,
+                            awacs_logs.PutLogEvents,
                             awacs_logs.DescribeLogGroups,
                             awacs_logs.DescribeLogStreams],
                 )

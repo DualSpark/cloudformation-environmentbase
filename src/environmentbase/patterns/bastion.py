@@ -1,7 +1,8 @@
 from environmentbase.template import Template
-from troposphere import Ref, ec2
+from troposphere import Ref, Output, GetAtt, ec2
 
 SSH_PORT = '22'
+
 
 class Bastion(Template):
     """
@@ -39,6 +40,11 @@ class Bastion(Template):
             security_groups=[security_groups['bastion']],
             load_balancer=bastion_elb
         )
+
+        self.add_output(Output(
+            'BastionELBDNSName',
+            Value=GetAtt(bastion_elb, 'DNSName')
+        ))
 
     @staticmethod
     def get_factory_defaults():

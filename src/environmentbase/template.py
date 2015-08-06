@@ -1,5 +1,7 @@
 from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain
-from troposphere import iam, ec2, autoscaling, route53 as r53, s3
+from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs
+from awacs import logs as awacs_logs, aws
+from awacs.helpers.trust import make_simple_assume_statement
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
@@ -801,6 +803,37 @@ class Template(t.Template):
 
         return {"Statement": statements}
 
+    def create_vpcflowlogs_role(self):
+        flowlogs_policy = aws.Policy(
+            Version="2012-10-17",
+            Statement=[
+                aws.Statement(
+                    Sid="",
+                    Effect=aws.Allow,
+                    Resource=['*'],
+                    Action=[awacs_logs.CreateLogGroup,
+                            awacs_logs.CreateLogStream,
+                            awacs_logs.DescribeLogGroups,
+                            awacs_logs.DescribeLogStreams],
+                )
+            ]
+        )
+
+        flowlogs_trust_policy = aws.Policy(
+            Version="2012-10-17",
+            Statement=[make_simple_assume_statement("vpc-flow-logs.amazonaws.com")]
+        )
+
+        vpcflowlogs_role = iam.Role(
+            'VPCFlowLogsIAMRole',
+            AssumeRolePolicyDocument=flowlogs_trust_policy,
+            Path='/',
+            Policies=[
+                iam.Policy(PolicyName='vpcflowlogs_policy', PolicyDocument=flowlogs_policy)
+            ])
+
+        return vpcflowlogs_role
+
     def add_utility_bucket(self,
                            name='demo',
                            param_binding_map={}):
@@ -814,8 +847,16 @@ class Template(t.Template):
 
         bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
 
-        self.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketLoggingPolicy',
+        self.add_resource(s3.BucketPolicy(name.lower() + 'UtilityBucketLoggingPolicy',
                 Bucket=Ref(self.utility_bucket),
                 PolicyDocument=bucket_policy_statements))
 
         param_binding_map['utilityBucket'] = Ref(self.utility_bucket)
+
+        log_group_name = 'DefaultLogGroup'
+        self.add_resource(logs.LogGroup(
+            log_group_name,
+            RetentionInDays=7
+        ))
+
+        self.add_resource(self.create_vpcflowlogs_role())

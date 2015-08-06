@@ -2,6 +2,10 @@ import os
 import os.path
 import copy
 import sys
+import time
+import re
+import string
+import random
 import botocore.exceptions
 import boto3
 import troposphere.cloudformation as cf
@@ -14,6 +18,7 @@ from fnmatch import fnmatch
 # Allow comments in json if you can but at least parse regular json if not
 try:
     import commentjson as json
+    from commentjson import JSONLibraryException as ValueError
 except ImportError:
     import json
 
@@ -22,6 +27,10 @@ TIMEOUT = 60
 
 class ValidationError(Exception):
     pass
+
+
+def random_string(size=5):
+    return ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(size))
 
 
 class EnvironmentBase(object):
@@ -39,6 +48,10 @@ class EnvironmentBase(object):
     ignore_outputs = ['templateValidationHash', 'dateGenerated']
     stack_outputs = {}
     config_handlers = []
+
+    boto_session = None
+
+    stack_event_handlers = []
 
     def __init__(self, view=None, create_missing_files=True, config_filename=res.DEFAULT_CONFIG_FILENAME):
         """
@@ -98,6 +111,156 @@ class EnvironmentBase(object):
 
         self.write_template_to_file()
 
+    def _get_boto_resource(self, service_name):
+        if not self.boto_session:
+            self.boto_session = boto3.session.Session(region_name=self.config['boto']['region_name'])
+
+        resource = self.boto_session.resource(
+            service_name,
+            aws_access_key_id=self.config['boto']['aws_access_key_id'],
+            aws_secret_access_key=self.config['boto']['aws_secret_access_key']
+        )
+
+        return resource
+
+    def _get_boto_client(self, service_name):
+        if not self.boto_session:
+            self.boto_session = boto3.session.Session(region_name=self.config['boto']['region_name'])
+
+        client = self.boto_session.client(
+            service_name,
+            aws_access_key_id=self.config['boto']['aws_access_key_id'],
+            aws_secret_access_key=self.config['boto']['aws_secret_access_key']
+        )
+
+        return client
+
+    def setup_stack_monitor(self):
+        # Topic and queue names are randomly generated so there's no chance of picking up messages from a previous runs
+        name = self.config['global']['environment_name'] + '_' + time.strftime("%Y%m%d-%H%M%S") + '_' + random_string(5)
+
+        # Creating a topic is idempotent, so if it already exists then we will just get the topic returned.
+        sns = self._get_boto_resource('sns')
+        topic_arn = sns.create_topic(Name=name).arn
+
+        # Creating a queue is idempotent, so if it already exists then we will just get the queue returned.
+        sqs = self._get_boto_resource('sqs')
+        queue = sqs.create_queue(QueueName=name)
+
+        queue_arn = queue.attributes['QueueArn']
+
+        # Ensure that we are subscribed to the SNS topic
+        subscribed = False
+        topic = sns.Topic(topic_arn)
+        for subscription in topic.subscriptions.all():
+            if subscription.attributes['Endpoint'] == queue_arn:
+                subscribed = True
+                break
+
+        if not subscribed:
+            topic.subscribe(Protocol='sqs', Endpoint=queue_arn)
+
+        # Set up a policy to allow SNS access to the queue
+        if 'Policy' in queue.attributes:
+            policy = json.loads(queue.attributes['Policy'])
+        else:
+            policy = {'Version': '2008-10-17'}
+
+        if 'Statement' not in policy:
+            statement = {
+                "Sid": "sqs-access",
+                "Effect": "Allow",
+                "Principal": {"AWS": "*"},
+                "Action": "SQS:SendMessage",
+                "Resource": "<SQS QUEUE ARN>",
+                "Condition": {"StringLike": {"aws:SourceArn": "<SNS TOPIC ARN>"}}
+            }
+            statement['Resource'] = queue_arn
+            statement['Condition']['StringLike']['aws:SourceArn'] = topic_arn
+            policy['Statement'] = [statement]
+
+            queue.set_attributes(Attributes={
+                'Policy': json.dumps(policy)
+            })
+
+        return topic, queue
+
+    def start_stack_monitor(self, queue, stack_name):
+        # Process messages by printing out body and optional author name
+        poll_timeout = 3600  # an hour
+        poll_interval = 5
+        start_time = time.time()
+        time.clock()
+        elapsed = 0
+        is_stack_running = True
+
+        print "# event handlers:", len(self.stack_event_handlers)
+
+        while elapsed < poll_timeout and is_stack_running and len(self.stack_event_handlers) > 0:
+
+            elapsed = time.time() - start_time
+
+            msgs = queue.receive_messages(WaitTimeSeconds=poll_interval, MaxNumberOfMessages=10)
+            # print 'grabbed batch of %s' % len(msgs)
+
+            for raw_msg in msgs:
+                parsed_msg = json.loads(raw_msg.body)
+                msg_body = parsed_msg['Message']
+
+                # parse k='val' into a dict
+                parsed_msg = {k: v.strip("'") for k, v in re.findall(r"(\S+)=('.*?'|\S+)", msg_body)}
+
+                # remember the most interesting outputs
+                data = {
+                    "status": parsed_msg.get('ResourceStatus'),
+                    "type": parsed_msg.get('ResourceType'),
+                    "name": parsed_msg.get('LogicalResourceId'),
+                    "reason": parsed_msg.get('ResourceStatusReason'),
+                    "props": parsed_msg.get('ResourceProperties')
+                }
+
+                # attempt to parse the properties
+                try:
+                    data['props'] = json.loads(data['props'])
+                except ValueError:
+                    pass
+
+                if self.config['global']['print_debug']:
+                    print "--------------\n", \
+                        data['status'], data['type'], data['name'], '\n', \
+                        data['reason'], '\n', \
+                        json.dumps(data['props'], indent=4), '\n', \
+                        "--------------"
+                else:
+                    pass
+
+                # clear the message
+                raw_msg.delete()
+
+                # process handlers
+                handlers_to_remove = []
+                for handler in self.stack_event_handlers:
+                    if handler.handle_stack_event(data):
+                        handlers_to_remove.append(handler)
+
+                # once a handlers job is done no need to keep checking for more events
+                for handler in handlers_to_remove:
+                    self.stack_event_handlers.remove(handler)
+
+                # Finally test for the termination condition
+                if data['type'] == "AWS::CloudFormation::Stack" \
+                        and data['name'] == stack_name \
+                        and data['status'] in ['UPDATE_COMPLETE', 'CREATE_COMPLETE']:
+                    is_stack_running = False
+                    # print 'termination condition found!'
+
+    def cleanup_stack_monitor(self, topic, queue):
+        topic.delete()
+        queue.delete()
+
+    def add_stack_event_handler(self, handler):
+        self.stack_event_handlers.append(handler)
+
     def deploy_action(self):
         """
         Default deploy_action invoked by the CLI
@@ -105,21 +268,8 @@ class EnvironmentBase(object):
         update-stack command. If the stack does not yet exist, it will issue a create-stack command
         """
 
-        # If the boto section of config is used, create the session with it
-        # Otherwise, assume boto has been set up another way
-        if self.config['boto']['region_name']:
-            session = boto3.session.Session(region_name=self.config['boto']['region_name'])
-        else:
-            session = boto3.session.Session()
-
-        if self.config['boto']['aws_access_key_id'] and self.config['boto']['aws_secret_access_key']:
-            cfn_conn = session.client(
-                'cloudformation',
-                aws_access_key_id=self.config['boto']['aws_access_key_id'],
-                aws_secret_access_key=self.config['boto']['aws_secret_access_key']
-            )
-        else:
-            cfn_conn = session.client('cloudformation')
+        (topic, queue) = self.setup_stack_monitor()
+        cfn_conn = self._get_boto_client('cloudformation')
 
         # Validate existence of and read in the template file
         cfn_template_filename = self.config['global']['output']
@@ -164,19 +314,31 @@ class EnvironmentBase(object):
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
+                NotificationARNs=[topic.arn],
                 Capabilities=['CAPABILITY_IAM'])
             print "Updated existing stack %s\n" % stack_name
 
+        # Else stack doesn't currently exist, create a new stack
         except botocore.exceptions.ClientError:
             # Load template to string
             cfn_conn.create_stack(
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
+                NotificationARNs=[topic.arn],
                 Capabilities=['CAPABILITY_IAM'],
                 DisableRollback=True,
                 TimeoutInMinutes=TIMEOUT)
             print "Created new CF stack %s\n" % stack_name
+
+        try:
+            self.start_stack_monitor(queue, stack_name)
+        except KeyboardInterrupt:
+            print 'KeyboardInterrupt: calling cleanup'
+            self.cleanup_stack_monitor(topic, queue)
+            raise
+        print 'calling cleanup'
+        self.cleanup_stack_monitor(topic, queue)
 
     def _validate_config_helper(self, schema, config, path):
         # Check each requirement
@@ -286,7 +448,7 @@ class EnvironmentBase(object):
         self.template = Template(self.globals.get('output', 'default_template'))
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
-        self.add_common_parameters(self.template_args)
+        self.init_root_template(self.template_args)
         EnvironmentBase.load_ami_cache(self.template, self.create_missing_files)
 
     @staticmethod
@@ -320,7 +482,7 @@ class EnvironmentBase(object):
 
         template.add_ami_mapping(json_data)
 
-    def add_common_parameters(self,
+    def init_root_template(self,
                               template_config):
         '''
         Adds common parameters for instance creation to the CloudFormation template
@@ -344,6 +506,10 @@ class EnvironmentBase(object):
                 AllowedPattern=res.get_str('cidr_regex'),
                 ConstraintDescription=res.get_str('cidr_regex_message')))
 
+        self.template.add_utility_bucket(
+            name=template_config.get('s3_utility_bucket', 'demo'),
+            param_binding_map=self.manual_parameter_bindings)
+
     def to_json(self):
         '''
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
@@ -365,6 +531,23 @@ class EnvironmentBase(object):
             MaxLength=255,
             ConstraintDescription=res.get_str('ec2_key_message')))
 
+    # Called after add_child_template() has attached common parameters and some instance attributes:
+    # - RegionMap: Region to AMI map, allows template to be deployed in different regions without updating AMI ids
+    # - ec2Key: keyname to use for ssh authentication
+    # - vpcCidr: IP block claimed by whole VPC
+    # - vpcId: resource id of VPC
+    # - commonSecurityGroup: sg identifier for common allowed ports (22 in from VPC)
+    # - utilityBucket: S3 bucket name used to send logs to
+    # - availabilityZone[0-3]: Indexed names of AZs VPC is deployed to
+    # - [public|private]Subnet[0-9]: indexed and classified subnet identifiers
+    #
+    # and some instance attributes referencing the attached parameters:
+    # - self.vpc_cidr
+    # - self.vpc_id
+    # - self.common_security_group
+    # - self.utility_bucket
+    # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
+    # - self.azs: List of parameter references
     def add_child_template(self,
                            template,
                            s3_bucket=None,

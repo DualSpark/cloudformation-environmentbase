@@ -37,10 +37,6 @@ class NetworkBase(EnvironmentBase):
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network(network_config=network_config)
 
-        self.template.add_utility_bucket(
-            name=template_config.get('s3_utility_bucket', 'demo'),
-            param_binding_map=self.manual_parameter_bindings)
-
         self.common_sg = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
             VpcId=Ref(self.vpc),

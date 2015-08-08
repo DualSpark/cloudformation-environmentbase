@@ -46,7 +46,7 @@ class RDS(Template):
 
     def __init__(self,
                  db_name='mydb',
-                 security_groups=[],
+                 security_groups=list(),
                  subnet_set='private',
                  rds_args=DEFAULT_CONFIG['db']['mydb']):
         """
@@ -76,7 +76,25 @@ class RDS(Template):
     def get_config_schema():
         return RDS.CONFIG_SCHEMA
 
+    # Called after add_child_template() has attached common parameters and some instance attributes:
+    # - RegionMap: Region to AMI map, allows template to be deployed in different regions without updating AMI ids
+    # - ec2Key: keyname to use for ssh authentication
+    # - vpcCidr: IP block claimed by whole VPC
+    # - vpcId: resource id of VPC
+    # - commonSecurityGroup: sg identifier for common allowed ports (22 in from VPC)
+    # - utilityBucket: S3 bucket name used to send logs to
+    # - availabilityZone[0-3]: Indexed names of AZs VPC is deployed to
+    # - [public|private]Subnet[0-9]: indexed and classified subnet identifiers
+    #
+    # and some instance attributes referencing the attached parameters:
+    # - self.vpc_cidr
+    # - self.vpc_id
+    # - self.common_security_group
+    # - self.utility_bucket
+    # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
+    # - self.azs: List of parameter references
     def build_hook(self):
+
         admin_rds_instance_type = self.add_parameter(Parameter(
             self.db_name.lower() + 'RdsInstanceType',
             Default=self.rds_args.get('db_instance_type_default'),
@@ -114,7 +132,7 @@ class RDS(Template):
 
         admin_rds_db_subnet_group = self.add_resource(rds.DBSubnetGroup(
             self.db_name.lower() + 'RdsSubnetGroup',
-            DBSubnetGroupDescription='Subnet group for artifactory RDS instance',
+            DBSubnetGroupDescription='Subnet group for RDS instance',
             SubnetIds=self.subnets[self.subnet_set]))
 
         admin_rds = self.add_resource(rds.DBInstance(

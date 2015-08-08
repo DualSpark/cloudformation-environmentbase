@@ -54,7 +54,7 @@ class Bastion(Template):
 
         bastion_asg = self.add_asg(
             layer_name=self.name,
-            security_groups=[security_groups['bastion']],
+            security_groups=[security_groups['bastion'], self.common_security_group],
             load_balancer=bastion_elb
         )
 

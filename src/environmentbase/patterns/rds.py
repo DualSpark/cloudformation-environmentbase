@@ -1,7 +1,7 @@
 from environmentbase.template import Template
 import environmentbase.resources as res
 from environmentbase.networkbase import NetworkBase
-from troposphere import Ref, Parameter, GetAtt, rds
+from troposphere import Ref, Parameter, GetAtt, Output, Join, rds, ec2
 
 
 class RDS(Template):
@@ -23,7 +23,8 @@ class RDS(Template):
                 # 5.6.19 is no longer supported
                 'rds_engine_version': '5.6.22',
                 'preferred_backup_window': '02:00-02:30',
-                'preferred_maintenance_window': 'sun:03:00-sun:04:00'
+                'preferred_maintenance_window': 'sun:03:00-sun:04:00',
+                'snapshot_id': ''
             }
         }
     }
@@ -40,7 +41,8 @@ class RDS(Template):
                 'rds_engine': 'str',
                 'rds_engine_version': 'str',
                 'preferred_backup_window': 'str',
-                'preferred_maintenance_window': 'str'
+                'preferred_maintenance_window': 'str',
+                'snapshot_id': 'str'
             }
         }
     }
@@ -136,7 +138,17 @@ class RDS(Template):
             DBSubnetGroupDescription='Subnet group for RDS instance',
             SubnetIds=self.subnets[self.subnet_set]))
 
-        admin_rds = self.add_resource(rds.DBInstance(
+        default_sg = None
+        if not self.security_groups:
+            default_sg = self.add_resource(
+                ec2.SecurityGroup(
+                    self.db_name.lower() + 'RdsSg',
+                    GroupDescription='Security group for %s RDS' % self.db_name.lower(),
+                    VpcId=Ref(self.vpc_id))
+            )
+            self.security_groups = [Ref(default_sg)]
+
+        rds_instance = self.add_resource(rds.DBInstance(
             self.db_name.lower() + 'RdsInstance',
             AllocatedStorage=self.rds_args.get('volume_size', '100'),
             BackupRetentionPeriod=self.rds_args.get('backup_retention_period', '30'),
@@ -152,13 +164,37 @@ class RDS(Template):
             PreferredMaintenanceWindow=self.rds_args.get('preferred_maintenance_window', 'sun:03:00-sun:04:00'),
             MultiAZ=True))
 
-        self.data = {'rds': admin_rds,
-                'dbname': Ref(admin_rds_db_name),
-                'endpoint_address': GetAtt(admin_rds, 'Endpoint.Address'),
-                'endpoint_port': GetAtt(admin_rds, 'Endpoint.Port'),
-                'masteruser': Ref(admin_rds_user_name),
-                'masterpassword': Ref(admin_rds_password),
-                'securitygroups': self.security_groups}
+        if self.rds_args['snapshot_id']:
+            rds_instance.DBSnapshotIdentifier = self.rds_args['snapshot_id']
+            # DBName must be null when restoring from snapshot
+            rds_instance.DBName = ''
+
+        if default_sg:
+            self.add_resource(ec2.SecurityGroupIngress(
+                self.db_name.lower() + 'RdsIngressRule',
+                FromPort=GetAtt(rds_instance, "Endpoint.Port"),
+                ToPort=GetAtt(rds_instance, "Endpoint.Port"),
+                IpProtocol='tcp',
+                GroupId=Ref(default_sg),
+                CidrIp=Ref(self.vpc_cidr)))
+
+        self.add_output(Output(
+            self.db_name.lower() + 'RDSEndpoint',
+            Value=Join('', [
+                Ref(admin_rds_user_name), '@',
+                GetAtt(rds_instance, "Endpoint.Address"), ':',
+                GetAtt(rds_instance, "Endpoint.Port")])
+        ))
+
+        self.data = {
+            'rds': rds_instance,
+            'dbname': Ref(admin_rds_db_name),
+            'endpoint_address': GetAtt(rds_instance, 'Endpoint.Address'),
+            'endpoint_port': GetAtt(rds_instance, 'Endpoint.Port'),
+            'masteruser': Ref(admin_rds_user_name),
+            'masterpassword': Ref(admin_rds_password),
+            'securitygroups': self.security_groups
+        }
 
 class Controller(NetworkBase):
     """
@@ -206,5 +242,4 @@ class Controller(NetworkBase):
 
 
 if __name__ == '__main__':
-
     Controller()

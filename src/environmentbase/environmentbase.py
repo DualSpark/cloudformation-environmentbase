@@ -414,7 +414,11 @@ class EnvironmentBase(object):
         if os.path.isfile(self.config_filename):
             with open(self.config_filename, 'r') as f:
                 content = f.read()
-                config = json.loads(content)
+                try:
+                    config = json.loads(content)
+                except ValueError:
+                    print '%s could not be parsed' % self.config_filename
+                    sys.exit(1)
 
         # If we are instructed to create fresh override file, do it
         # unless the filename is something other than DEFAULT_CONFIG_FILENAME

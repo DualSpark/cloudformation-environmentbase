@@ -1,14 +1,8 @@
-from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt, Retain
-import troposphere.iam as iam
+from troposphere import Ref, Parameter, FindInMap
 import troposphere.ec2 as ec2
-import troposphere.s3 as s3
-import troposphere.elasticloadbalancing as elb
 import boto.vpc
 import boto
-import hashlib
-import json
 from environmentbase import EnvironmentBase
-from datetime import datetime
 from ipcalc import IP, Network
 import resources as res
 
@@ -20,9 +14,9 @@ class NetworkBase(EnvironmentBase):
     """
 
     def construct_network(self):
-        '''
+        """
         Main function to construct VPC, subnets, security groups, NAT instances, etc
-        '''
+        """
         network_config = self.config.get('network', {})
         template_config = self.config.get('template', {})
 
@@ -66,9 +60,9 @@ class NetworkBase(EnvironmentBase):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def create_action(self):
-        '''
+        """
         Override EnvironmentBase.create_action() to construct VPC
-        '''
+        """
         self.initialize_template()
         self.construct_network()
         self.write_template_to_file()

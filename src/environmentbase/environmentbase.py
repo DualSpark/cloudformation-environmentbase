@@ -143,8 +143,28 @@ class EnvironmentBase(object):
 
     def _update_config_from_env(self, section_label, config_key):
         """
-        Update database passwords with values from the environment variables. Using naming convention <db_label>_PASSWORD
-        (in all caps). Passwords provided in config file will only be replaced if environment variable is empty.
+        Update config value with values from the environment variables. For each subsection below the 'section_label'
+        containing the 'config_key' the environment is scanned to find an environment variable matching the name
+        <subsection_label>_<config_key> (in all caps). If thais variable exists the config value is replaced.
+
+        For example: self._update_config_from_env('db', 'password') for the config file:
+        {
+            ...
+            'db': {
+                'label1': {
+                    ...
+                    'password': 'changeme'
+                },
+                'label2': {
+                    ...
+                    'password': 'changeme]'
+                }
+            }
+        }
+
+        Would replace those two database passwords if the following is run from the shell:
+        > export LABEL1_PASSWORD=myvoiceismypassword12345
+        > export LABEL2_PASSWORD=myvoiceismyotherpassword12345
         """
         config_section = self.config.get(section_label)
         if config_section is None:
@@ -166,11 +186,12 @@ class EnvironmentBase(object):
             update_set[subsection_label] = env_value if env_value else default_value
 
             if self.config['global']['print_debug']:
+                print "%s.%s.%s = '%s'" % (section_label, subsection_label, config_key, default_value)
                 if env_value:
-                    print env_name, "=", env_value
+                    print "* Value updated to", "'{}'".format(env_value), "({})".format(env_name)
                 else:
-                    print env_name, "NOT FOUND"
-                print "%s.%s=%s" % (section_label, config_key, default_value)
+                    print "* Value NOT updated since '%s' not found" % env_name
+                print
 
         # process the map of updates and make the actual changes
         for subsection_label, updated_value in update_set.iteritems():
@@ -360,7 +381,6 @@ class EnvironmentBase(object):
                 NotificationARNs=[topic.arn],
                 Capabilities=['CAPABILITY_IAM'])
 
-
         # Else stack doesn't currently exist, create a new stack
         except botocore.exceptions.ClientError:
             print "Creating new CF stack %s\n" % stack_name
@@ -374,14 +394,13 @@ class EnvironmentBase(object):
                 DisableRollback=True,
                 TimeoutInMinutes=TIMEOUT)
 
-
-
         try:
             self.start_stack_monitor(queue, stack_name)
         except KeyboardInterrupt:
             print 'KeyboardInterrupt: calling cleanup'
             self.cleanup_stack_monitor(topic, queue)
             raise
+
         self.cleanup_stack_monitor(topic, queue)
 
     def _validate_config_helper(self, schema, config, path):

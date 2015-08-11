@@ -53,7 +53,11 @@ class EnvironmentBase(object):
 
     stack_event_handlers = []
 
-    def __init__(self, view=None, create_missing_files=True, config_filename=res.DEFAULT_CONFIG_FILENAME):
+    def __init__(self,
+                 view=None,
+                 create_missing_files=True,
+                 config_filename=res.DEFAULT_CONFIG_FILENAME,
+                 config=None):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
@@ -61,6 +65,7 @@ class EnvironmentBase(object):
         :param view: View object to use.
         :param create_missing_files: Specifies policy to use when local files are missing.  When disabled missing files will cause an IOException
         :param config_filename: The name of the config file to load by default.  Note: User can still override this value from the CLI with '--config-file'.
+        :param config: Override loading config values from file by providing config setting directly to the constructor
         """
 
         # Load the user interface
@@ -75,7 +80,7 @@ class EnvironmentBase(object):
 
         # Config location override
         self.create_missing_files = create_missing_files
-        self.handle_local_config()
+        self.handle_local_config(config)
 
         # Process any global flags here before letting the view execute any requested user actions
         view.update_config(self.config)
@@ -402,40 +407,42 @@ class EnvironmentBase(object):
 
         self.config_handlers.append(handler)
 
-    def handle_local_config(self):
+    def handle_local_config(self, config=None):
         """
         Use local file if present, otherwise use factory values and write that to disk
         unless self.create_missing_files == false, in which case throw IOError
         """
 
-        # If override config file exists, use it
-        if os.path.isfile(self.config_filename):
-            with open(self.config_filename, 'r') as f:
-                content = f.read()
-                try:
-                    config = json.loads(content)
-                except ValueError:
-                    print '%s could not be parsed' % self.config_filename
-                    sys.exit(1)
+        if not config:
 
-        # If we are instructed to create fresh override file, do it
-        # unless the filename is something other than DEFAULT_CONFIG_FILENAME
-        elif self.create_missing_files and self.config_filename == res.DEFAULT_CONFIG_FILENAME:
-            default_config_copy = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
+            # If override config file exists, use it
+            if os.path.isfile(self.config_filename):
+                with open(self.config_filename, 'r') as f:
+                    content = f.read()
+                    try:
+                        config = json.loads(content)
+                    except ValueError:
+                        print '%s could not be parsed' % self.config_filename
+                        raise
 
-            # Merge in any defaults provided by registered config handlers
-            for handler in self.config_handlers:
-                default_config_copy.update(handler.get_factory_defaults())
+            # If we are instructed to create fresh override file, do it
+            # unless the filename is something other than DEFAULT_CONFIG_FILENAME
+            elif self.create_missing_files and self.config_filename == res.DEFAULT_CONFIG_FILENAME:
+                default_config_copy = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
 
-            # Don't want changes to config modifying the FACTORY_DEFAULT
-            config = copy.deepcopy(default_config_copy)
+                # Merge in any defaults provided by registered config handlers
+                for handler in self.config_handlers:
+                    default_config_copy.update(handler.get_factory_defaults())
 
-            with open(self.config_filename, 'w') as f:
-                f.write(json.dumps(default_config_copy, indent=4, separators=(',', ': ')))
+                # Don't want changes to config modifying the FACTORY_DEFAULT
+                config = copy.deepcopy(default_config_copy)
 
-        # Otherwise complain
-        else:
-            raise IOError(self.config_filename + ' could not be found')
+                with open(self.config_filename, 'w') as f:
+                    f.write(json.dumps(default_config_copy, indent=4, separators=(',', ': ')))
+
+            # Otherwise complain
+            else:
+                raise IOError(self.config_filename + ' could not be found')
 
         # Validate and save results
         self._validate_config(config)

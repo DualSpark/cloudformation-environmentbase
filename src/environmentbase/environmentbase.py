@@ -329,7 +329,6 @@ class EnvironmentBase(object):
 
         (topic, queue) = self.setup_stack_monitor()
 
-
         # First try to do an update-stack... if it doesn't exist, then try create-stack
         try:
             response = cfn_conn.describe_stacks(StackName=stack_name)
@@ -353,16 +352,18 @@ class EnvironmentBase(object):
             if not status.endswith('_COMPLETE'):
                 raise Exception('Cannot update, current state: %s' % status)
 
+            print "Updating new CF stack %s\n" % stack_name
             cfn_conn.update_stack(
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
                 NotificationARNs=[topic.arn],
                 Capabilities=['CAPABILITY_IAM'])
-            print "Updated existing stack %s\n" % stack_name
+
 
         # Else stack doesn't currently exist, create a new stack
         except botocore.exceptions.ClientError:
+            print "Creating new CF stack %s\n" % stack_name
             # Load template to string
             cfn_conn.create_stack(
                 StackName=stack_name,
@@ -372,7 +373,8 @@ class EnvironmentBase(object):
                 Capabilities=['CAPABILITY_IAM'],
                 DisableRollback=True,
                 TimeoutInMinutes=TIMEOUT)
-            print "Created new CF stack %s\n" % stack_name
+
+
 
         try:
             self.start_stack_monitor(queue, stack_name)

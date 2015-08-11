@@ -251,6 +251,14 @@ class EnvironmentBase(object):
         return topic, queue
 
     def start_stack_monitor(self, queue, stack_name):
+        TERMINAL_STATES = [
+            'CREATE_COMPLETE',
+            'UPDATE_COMPLETE',
+            'UPDATE_ROLLBACK_COMPLETE',
+            'CREATE_FAILED',
+            'UPDATE_FAILED',
+            'UPDATE_ROLLBACK_FAILED',
+        ]
         # Process messages by printing out body and optional author name
         poll_timeout = 3600  # an hour
         poll_interval = 5
@@ -312,7 +320,7 @@ class EnvironmentBase(object):
                 # Finally test for the termination condition
                 if data['type'] == "AWS::CloudFormation::Stack" \
                         and data['name'] == stack_name \
-                        and data['status'] in ['UPDATE_COMPLETE', 'CREATE_COMPLETE']:
+                        and data['status'] in TERMINAL_STATES:
                     is_stack_running = False
                     # print 'termination condition found!'
 
@@ -348,7 +356,10 @@ class EnvironmentBase(object):
         if self.deploy_parameter_bindings:
             stack_params.extend(self.deploy_parameter_bindings)
 
-        (topic, queue) = self.setup_stack_monitor()
+        topic = None
+        queue = None
+        if len(self.stack_event_handlers) > 0:
+            (topic, queue) = self.setup_stack_monitor()
 
         # First try to do an update-stack... if it doesn't exist, then try create-stack
         try:

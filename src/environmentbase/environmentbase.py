@@ -197,7 +197,7 @@ class EnvironmentBase(object):
         for subsection_label, updated_value in update_set.iteritems():
             config_section[subsection_label][config_key] = updated_value
 
-    def _load_db_passwords_from_env(self):
+    def load_db_passwords_from_env(self):
         self._update_config_from_env('db', 'password')
 
     def setup_stack_monitor(self):

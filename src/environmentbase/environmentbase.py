@@ -141,6 +141,44 @@ class EnvironmentBase(object):
 
         return client
 
+    def _update_config_from_env(self, section_label, config_key):
+        """
+        Update database passwords with values from the environment variables. Using naming convention <db_label>_PASSWORD
+        (in all caps). Passwords provided in config file will only be replaced if environment variable is empty.
+        """
+        config_section = self.config.get(section_label)
+        if config_section is None:
+            raise ValueError('No config section %s found' % config_key)
+
+        # TODO: handle direct change in case where we don't need subsections
+
+        update_set = {}
+        for subsection_label, subsection in config_section.iteritems():
+
+            # Look for env var: <subsection_label> '_' <config key> (e.g. proddb, password --> PRODDB_PASSWORD)
+            env_name = ("%s_%s" % (subsection_label, config_key)).upper()
+
+            # Save the old value and the new value
+            env_value = os.environ.get(env_name)
+            default_value = subsection.get(config_key)
+
+            # If an env var was found override old value in a separate map
+            update_set[subsection_label] = env_value if env_value else default_value
+
+            if self.config['global']['print_debug']:
+                if env_value:
+                    print env_name, "=", env_value
+                else:
+                    print env_name, "NOT FOUND"
+                print "%s.%s=%s" % (section_label, config_key, default_value)
+
+        # process the map of updates and make the actual changes
+        for subsection_label, updated_value in update_set.iteritems():
+            config_section[subsection_label][config_key] = updated_value
+
+    def _load_db_passwords_from_env(self):
+        self._update_config_from_env('db', 'password')
+
     def setup_stack_monitor(self):
         # Topic and queue names are randomly generated so there's no chance of picking up messages from a previous runs
         name = self.config['global']['environment_name'] + '_' + time.strftime("%Y%m%d-%H%M%S") + '_' + random_string(5)

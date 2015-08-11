@@ -44,6 +44,7 @@ class EnvironmentBase(object):
     template_args = {}
     template = None
     manual_parameter_bindings = {}
+    deploy_parameter_bindings = []
     subnets = {}
     ignore_outputs = ['templateValidationHash', 'dateGenerated']
     stack_outputs = {}
@@ -270,7 +271,6 @@ class EnvironmentBase(object):
         update-stack command. If the stack does not yet exist, it will issue a create-stack command
         """
 
-        (topic, queue) = self.setup_stack_monitor()
         cfn_conn = self._get_boto_client('cloudformation')
 
         # Validate existence of and read in the template file
@@ -284,10 +284,13 @@ class EnvironmentBase(object):
             sys.exit(1)
 
         stack_name = self.config['global']['environment_name']
-        stack_params = [{
-            'ParameterKey': 'ec2Key',
-            'ParameterValue': self.config['template']['ec2_key_default']
-        }]
+        stack_params = []
+
+        if self.deploy_parameter_bindings:
+            stack_params.extend(self.deploy_parameter_bindings)
+
+        (topic, queue) = self.setup_stack_monitor()
+
 
         # First try to do an update-stack... if it doesn't exist, then try create-stack
         try:

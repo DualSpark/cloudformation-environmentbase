@@ -511,7 +511,7 @@ class EnvironmentBase(object):
                 config = copy.deepcopy(default_config_copy)
 
                 with open(self.config_filename, 'w') as f:
-                    f.write(json.dumps(default_config_copy, indent=4, separators=(',', ': ')))
+                    f.write(json.dumps(default_config_copy, indent=4, sort_keys=True, separators=(',', ': ')))
 
             # Otherwise complain
             else:

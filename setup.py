@@ -70,8 +70,6 @@ setup(
         "docopt==0.6.2",
         'setuptools>=17.1',
         'boto3',
-        'lxml',
-        'cssselect',
         "commentjson"
     ],
 

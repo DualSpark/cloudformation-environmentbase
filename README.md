@@ -1,5 +1,5 @@
 # Base Environment Generator
-![Build Status](https://ci.dualspark.com/api/badge/github.com/DualSpark/cloudformation-environmentbase/status.svg?branch=master)
+[![Build Status](https://ci.dualspark.com/api/badge/github.com/DualSpark/cloudformation-environmentbase/status.svg?branch=master)](https://ci.dualspark.com/github.com/DualSpark/cloudformation-environmentbase)
 
 This package is intended to provide a common and consistent environment design
 for building out complex demo environments. It may be used as a Python module

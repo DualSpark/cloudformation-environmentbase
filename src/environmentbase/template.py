@@ -57,6 +57,44 @@ class Template(t.Template):
         m.update(self.__validation_formatter())
         return m.hexdigest()
 
+    def merge(self, other_template):
+        '''
+        Experimental merge function
+        1. This passes all the initialized attributes to the other template
+        2. Calls the other template's build_hook()
+        3. Copies the generated troposphere attributes back into this template
+        '''
+        other_template.copy_attributes_from(self)
+
+        other_template.build_hook()
+
+        self.metadata.update(other_template.metadata)
+        self.conditions.update(other_template.conditions)
+        self.mappings.update(other_template.mappings)
+        self.outputs.update(other_template.outputs)
+        self.parameters.update(other_template.parameters)
+        self.resources.update(other_template.resources)
+
+    def copy_attributes_from(self, other_template):
+        '''
+        Copies all attributes from the other template into this one
+        These typically get initialized for a template when add_child_template is called
+        from the controller, but that never happens when merging two templates
+        '''
+        self.vpc_cidr              = other_template.vpc_cidr
+        self.vpc_id                = other_template.vpc_id
+        self.common_security_group = other_template.common_security_group
+        self.utility_bucket        = other_template.utility_bucket
+        
+        self.azs        = list(other_template.azs)
+        self.subnets    = other_template.subnets.copy()
+        self.parameters = other_template.parameters.copy()
+        self.mappings   = other_template.mappings.copy()
+        self.metadata   = other_template.metadata.copy()
+        self.conditions = other_template.conditions.copy()
+        self.outputs    = other_template.outputs.copy()
+        self.resources  = other_template.resources.copy()
+
     def build_hook(self):
         """
         Provides template subclasses a place to assemble resources with access to common parameters and mappings.

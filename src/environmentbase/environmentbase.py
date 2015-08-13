@@ -324,8 +324,10 @@ class EnvironmentBase(object):
                     # print 'termination condition found!'
 
     def cleanup_stack_monitor(self, topic, queue):
-        topic.delete()
-        queue.delete()
+        if topic:
+            topic.delete()
+        if queue:
+            queue.delete()
 
     def add_stack_event_handler(self, handler):
         self.stack_event_handlers.append(handler)

@@ -359,8 +359,10 @@ class EnvironmentBase(object):
 
         topic = None
         queue = None
+        notification_arns = []
         if len(self.stack_event_handlers) > 0:
             (topic, queue) = self.setup_stack_monitor()
+            notification_arns = [topic.arn]
 
         # First try to do an update-stack... if it doesn't exist, then try create-stack
         try:
@@ -390,7 +392,7 @@ class EnvironmentBase(object):
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
-                NotificationARNs=[topic.arn],
+                NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'])
 
         # Else stack doesn't currently exist, create a new stack
@@ -401,7 +403,7 @@ class EnvironmentBase(object):
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
-                NotificationARNs=[topic.arn],
+                NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'],
                 DisableRollback=True,
                 TimeoutInMinutes=TIMEOUT)

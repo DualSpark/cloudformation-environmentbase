@@ -262,7 +262,7 @@ class Controller(NetworkBase):
         self.write_template_to_file()
 
     def deploy_action(self):
-        self._load_db_passwords_from_env()
+        self.load_db_passwords_from_env()
 
         for db_label, db_config in self.config['db'].iteritems():
             self.deploy_parameter_bindings.append({

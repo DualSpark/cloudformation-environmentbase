@@ -7,13 +7,13 @@
   "template": {
     "ami_map_file": "ami_cache.json",
     "description": "Environment Generator Base deployment.",
+    "utility_bucket": "dualspark",
+    "template_bucket": "dualspark",
+    "s3_template_prefix": "templates",
+    "template_upload_acl": "public-read",
+
     "ec2_key_default": "dualspark_rsa",
-    "remote_access_cidr": "0.0.0.0/0",
-    "s3_utility_bucket": "dualspark",
-    "s3_bucket": "dualspark",
-    "s3_key_name_prefix": "/devtools/cloudformation",
-    "s3_canned_acl": "public-read",
-    "mock_upload": false
+    "remote_access_cidr": "0.0.0.0/0"
   },
   "logging": {
     "cloudtrail_log_prefix": "cloudtrail_logs",

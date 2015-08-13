@@ -23,6 +23,7 @@ except ImportError:
     import json
 
 TIMEOUT = 60
+TEMPLATES_PATH = 'templates'
 
 
 class ValidationError(Exception):
@@ -98,8 +99,9 @@ class EnvironmentBase(object):
         Serializes self.template to string and writes it to the file named in config['global']['output']
         """
         indent = 0 if not self.config['global']['print_debug'] else 4
+        local_path = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
 
-        with open(self.config['global']['output'], 'w') as output_file:
+        with open(local_path, 'w') as output_file:
             # Here to_json() loads child templates into S3
             raw_json = self.template.to_template_json()
 
@@ -341,9 +343,9 @@ class EnvironmentBase(object):
         cfn_conn = self._get_boto_client('cloudformation')
 
         # Validate existence of and read in the template file
-        cfn_template_filename = self.config['global']['output']
+        cfn_template_filename = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
         if os.path.isfile(cfn_template_filename):
-            with open(self.config['global']['output'], 'r') as cfn_template_file:
+            with open(cfn_template_filename, 'r') as cfn_template_file:
                 cfn_template = cfn_template_file.read().replace('\n', '')
 
         else:
@@ -562,8 +564,7 @@ class EnvironmentBase(object):
 
         template.add_ami_mapping(json_data)
 
-    def init_root_template(self,
-                              template_config):
+    def init_root_template(self, template_config):
         """
         Adds common parameters for instance creation to the CloudFormation template
         @param template_config [dict] collection of template-level configuration values to drive the setup of this method
@@ -587,7 +588,7 @@ class EnvironmentBase(object):
                 ConstraintDescription=res.get_str('cidr_regex_message')))
 
         self.template.add_utility_bucket(
-            name=template_config.get('s3_utility_bucket', 'demo'),
+            name=template_config.get('utility_bucket'),
             param_binding_map=self.manual_parameter_bindings)
 
     def to_json(self):
@@ -630,18 +631,16 @@ class EnvironmentBase(object):
     # - self.azs: List of parameter references
     def add_child_template(self,
                            template,
-                           s3_bucket=None,
-                           s3_key_prefix=None,
-                           s3_canned_acl=None,
+                           template_bucket=None,
+                           s3_template_prefix=None,
+                           template_upload_acl=None,
                            depends_on=[]):
         """
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
-        @param name [str] name of this template for key naming in s3
         @param template [Troposphere.Template] Troposphere Template object to add as a child to this object's template
-        @param template_args [dict] key-value pair of configuration values for templates to apply to this operation
-        @param s3_bucket [str] name of the bucket to upload keys to - will default to value in template_args if not present
-        @param s3_key_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
-        @param s3_canned_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
+        @param template_bucket [str] name of the bucket to upload keys to - will default to value in template_args if not present
+        @param s3_template_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
+        @param template_upload_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
         """
         name = template.name
 
@@ -650,30 +649,25 @@ class EnvironmentBase(object):
 
         template.build_hook()
 
-        if s3_key_prefix == None:
-            s3_key_prefix = self.template_args.get('s3_key_name_prefix', '')
-        if s3_bucket is None:
-            s3_bucket = self.template_args.get('s3_bucket')
-        stack_url = template.upload_template(
-                     s3_bucket,
-                     upload_key_name=name,
-                     s3_key_prefix=s3_key_prefix,
-                     s3_canned_acl=self.template_args.get('s3_canned_acl', 'public-read'),
-                     mock_upload=self.template_args.get('mock_upload', False))
+        stack_url = self.upload_template(
+            template,
+            template_bucket=template_bucket,
+            s3_template_prefix=s3_template_prefix,
+            template_upload_acl=template_upload_acl)
 
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []
 
         stack_params = {}
-        for parameter in template.parameters.keys():
 
+        for parameter in template.parameters.keys():
             # Manual parameter bindings single-namespace
             if parameter in self.manual_parameter_bindings:
                 stack_params[parameter] = self.manual_parameter_bindings[parameter]
 
             # Naming scheme for identifying the AZ of a subnet (not sure if this is even used anywhere)
             elif parameter.startswith('availabilityZone'):
-                stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone',''), 'AvailabilityZone')
+                stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone', ''), 'AvailabilityZone')
 
             # Match any child stack parameters that have the same name as this stacks **parameters**
             elif parameter in self.template.parameters.keys():
@@ -702,6 +696,52 @@ class EnvironmentBase(object):
             DependsOn=depends_on)
 
         return self.template.add_resource(stack_obj)
+
+    def upload_template(self,
+                        template,
+                        template_bucket=None,
+                        s3_template_prefix=None,
+                        template_upload_acl=None):
+        """
+        Upload helper to upload this template to S3 for consumption by other templates or end users.
+        @param template [Template] object to be uploaded to s3.
+        @param template_bucket [string] name of the AWS S3 bucket to upload this template to.
+        @param s3_template_prefix [string] key name prefix to prepend to the key name for the upload of this template.
+        @param template_upload_acl [string] S3 canned ACL string value to use when setting permissions on uploaded key.
+        """
+        key_serial = str(int(time.time()))
+
+        if s3_template_prefix is None:
+            s3_template_prefix = self.template_args.get("s3_template_prefix")
+
+        if template_bucket is None:
+            template_bucket = self.template_args.get('template_bucket')
+
+        if template_upload_acl is None:
+            template_upload_acl = self.template_args.get('template_upload_acl')
+
+        template_name = "%s.%s.template" % (template.name, key_serial)
+        s3_path = "%s/%s" % (s3_template_prefix, template_name)
+        local_path = os.path.join(TEMPLATES_PATH, template_name)
+
+        if self.config['global']['print_debug']:
+            parent_dir = os.path.dirname(local_path)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
+
+            with open(local_path, 'w') as f:
+                f.write(self.to_json())
+
+        s3 = self._get_boto_resource('s3')
+
+        s3.Bucket(template_bucket).put_object(
+            Key=s3_path,
+            Body=template.to_json(),
+            ACL=template_upload_acl
+        )
+
+        stack_url = 'https://%s.s3.amazonaws.com/%s' % (template_bucket, s3_path)
+        return stack_url
 
 if __name__ == '__main__':
     EnvironmentBase()

@@ -148,47 +148,6 @@ class Template(t.Template):
         else:
             return None
 
-    def upload_template(self,
-                        s3_bucket,
-                        upload_key_name=None,
-                        s3_key_prefix=None,
-                        s3_canned_acl='public-read',
-                        mock_upload=False):
-        """
-        Upload helper to upload this template to S3 for consumption by other templates or end users.
-        @param s3_bucket [string] name of the AWS S3 bucket to upload this template to.
-        @param upload_key_name [string] direct manner of setting the name of the uploaded template
-        @param s3_key_prefix [string] key name prefix to prepend to the key name for the upload of this template.
-        @param s3_canned_acl [string] S3 canned ACL string value to use when setting permissions on uploaded key.
-        @param mock_upload [boolean] boolean indicating if the upload of this template should be mocked or actually performed.
-        """
-        key_serial = str(int(time.time()))
-
-        if not upload_key_name:
-            upload_key_name = self.name
-
-        if not s3_key_prefix:
-            s3_key_name = '/' + upload_key_name + '.' + key_serial + '.template'
-        else:
-            s3_key_name = s3_key_prefix + '/' + upload_key_name + '.' + key_serial + '.template'
-
-        if mock_upload:
-            # return dummy url
-            stack_url = 's3://www.dualspark.com' + s3_key_name
-        else:
-            conn = boto.connect_s3()
-            bucket = conn.get_bucket(s3_bucket)
-            key = Key(bucket)
-            # upload contents
-            key.key = s3_key_name
-            key.set_contents_from_string(self.to_json())
-            key.set_acl(s3_canned_acl)
-            # get stack url
-            stack_url = key.generate_url(expires_in=0, query_auth=False)
-            stack_url = stack_url.split('?')[0]
-
-        return stack_url
-
     def add_instance_profile(self, layer_name, iam_policies, path_prefix):
         iam_role_obj = iam.Role(layer_name + 'IAMRole',
                 AssumeRolePolicyDocument={
@@ -835,24 +794,28 @@ class Template(t.Template):
 
         return vpcflowlogs_role
 
-    def add_utility_bucket(self,
-                           name='demo',
-                           param_binding_map={}):
+    def add_utility_bucket(self, name=None, param_binding_map={}):
         """
         Method adds a bucket to be used for infrastructure utility purposes such as backups
         @param name [str] friendly name to prepend to the CloudFormation asset name
         """
-        self.utility_bucket = self.add_resource(s3.Bucket(name.lower() + 'UtilityBucket',
-            AccessControl=s3.BucketOwnerFullControl,
-            DeletionPolicy=Retain))
+        if name:
+            self.utility_bucket = name
+            param_binding_map['utilityBucket'] = Join('.', [self.utility_bucket, 's3.amazonaws.com'])
 
-        bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
+        else:
+            self.utility_bucket = self.add_resource(s3.Bucket(
+                name.lower() + 'UtilityBucket',
+                AccessControl=s3.BucketOwnerFullControl,
+                DeletionPolicy=Retain))
 
-        self.add_resource(s3.BucketPolicy(name.lower() + 'UtilityBucketLoggingPolicy',
-                Bucket=Ref(self.utility_bucket),
-                PolicyDocument=bucket_policy_statements))
+            bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
 
-        param_binding_map['utilityBucket'] = Ref(self.utility_bucket)
+            self.add_resource(s3.BucketPolicy(name.lower() + 'UtilityBucketLoggingPolicy',
+                    Bucket=Ref(self.utility_bucket),
+                    PolicyDocument=bucket_policy_statements))
+
+            param_binding_map['utilityBucket'] = Ref(self.utility_bucket)
 
         log_group_name = 'DefaultLogGroup'
         self.add_resource(logs.LogGroup(

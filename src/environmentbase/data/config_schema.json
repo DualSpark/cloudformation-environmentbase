@@ -10,9 +10,20 @@
     "template": {
         // Name of json file containing mapping labels to AMI ids
         "ami_map_file": "basestring",
-        "mock_upload": "bool",
-        "s3_canned_acl": "basestring",
-        "s3_bucket": "basestring"
+        // Canned ACL permissions for the template file upload
+        // Legal values: private, public-read, public-read-write, authenticated-read, bucket-owner-read, bucket-owner-full-control
+        "template_upload_acl": "basestring",
+        // Name of the bucket to use to upload child templates to
+        "template_bucket": "basestring",
+        // Prefix (subdirectories) to use when storing child templates
+        "s3_template_prefix": "basestring",
+        // Name of the bucket to use for storing log files
+        "utility_bucket": "basestring",
+        // Description to use for top-level template
+        "description": "basestring",
+
+        "ec2_key_default": "basestring",
+        "remote_access_cidr": "basestring"
     },
     "network": {
         "az_count": "int",

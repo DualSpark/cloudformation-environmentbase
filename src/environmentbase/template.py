@@ -29,12 +29,6 @@ class Template(t.Template):
     consistency since it was generated.
     """
 
-    # input parameters for public and private subnets provided externally
-    subnets = {
-        'public': [],
-        'private': []
-    }
-
     def __init__(self, template_name):
         """
         Init method for environmentbase.Template class
@@ -44,6 +38,17 @@ class Template(t.Template):
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
 
+        self.vpc_cidr = None
+        self.vpc_id = None
+        self.common_security_group = None
+        self.utility_bucket = None
+
+        self.azs = []
+        self.subnets = {
+            'public': [],
+            'private': []
+        }
+
     def __get_template_hash(self):
         """
         Private method holds process for hashing this template for future validation.
@@ -51,6 +56,44 @@ class Template(t.Template):
         m = hashlib.sha256()
         m.update(self.__validation_formatter())
         return m.hexdigest()
+
+    def merge(self, other_template):
+        '''
+        Experimental merge function
+        1. This passes all the initialized attributes to the other template
+        2. Calls the other template's build_hook()
+        3. Copies the generated troposphere attributes back into this template
+        '''
+        other_template.copy_attributes_from(self)
+
+        other_template.build_hook()
+
+        self.metadata.update(other_template.metadata)
+        self.conditions.update(other_template.conditions)
+        self.mappings.update(other_template.mappings)
+        self.outputs.update(other_template.outputs)
+        self.parameters.update(other_template.parameters)
+        self.resources.update(other_template.resources)
+
+    def copy_attributes_from(self, other_template):
+        '''
+        Copies all attributes from the other template into this one
+        These typically get initialized for a template when add_child_template is called
+        from the controller, but that never happens when merging two templates
+        '''
+        self.vpc_cidr              = other_template.vpc_cidr
+        self.vpc_id                = other_template.vpc_id
+        self.common_security_group = other_template.common_security_group
+        self.utility_bucket        = other_template.utility_bucket
+        
+        self.azs        = list(other_template.azs)
+        self.subnets    = other_template.subnets.copy()
+        self.parameters = other_template.parameters.copy()
+        self.mappings   = other_template.mappings.copy()
+        self.metadata   = other_template.metadata.copy()
+        self.conditions = other_template.conditions.copy()
+        self.outputs    = other_template.outputs.copy()
+        self.resources  = other_template.resources.copy()
 
     def build_hook(self):
         """

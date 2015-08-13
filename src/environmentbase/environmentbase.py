@@ -46,7 +46,6 @@ class EnvironmentBase(object):
     template = None
     manual_parameter_bindings = {}
     deploy_parameter_bindings = []
-    subnets = {}
     ignore_outputs = ['templateValidationHash', 'dateGenerated']
     stack_outputs = {}
     config_handlers = []
@@ -327,8 +326,10 @@ class EnvironmentBase(object):
                     # print 'termination condition found!'
 
     def cleanup_stack_monitor(self, topic, queue):
-        topic.delete()
-        queue.delete()
+        if topic:
+            topic.delete()
+        if queue:
+            queue.delete()
 
     def add_stack_event_handler(self, handler):
         self.stack_event_handlers.append(handler)
@@ -360,8 +361,10 @@ class EnvironmentBase(object):
 
         topic = None
         queue = None
+        notification_arns = []
         if len(self.stack_event_handlers) > 0:
             (topic, queue) = self.setup_stack_monitor()
+            notification_arns = [topic.arn]
 
         # First try to do an update-stack... if it doesn't exist, then try create-stack
         try:
@@ -391,7 +394,7 @@ class EnvironmentBase(object):
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
-                NotificationARNs=[topic.arn],
+                NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'])
 
         # Else stack doesn't currently exist, create a new stack
@@ -402,7 +405,7 @@ class EnvironmentBase(object):
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
-                NotificationARNs=[topic.arn],
+                NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'],
                 DisableRollback=True,
                 TimeoutInMinutes=TIMEOUT)

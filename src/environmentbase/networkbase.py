@@ -27,11 +27,12 @@ class NetworkBase(EnvironmentBase):
 
         self.local_subnets = {}
         self.stack_outputs = {}
+
         self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
         self.add_network_cidr_mapping(network_config=network_config)
-        self.create_network(network_config=network_config)
+        self.create_network_components(network_config=network_config)
 
-        self.common_sg = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
+        self.template.common_security_group = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
             VpcId=Ref(self.vpc),
             SecurityGroupEgress=[ec2.SecurityGroupRule(
@@ -98,7 +99,7 @@ class NetworkBase(EnvironmentBase):
                     for item in temp_dict:
                         self.template.add_region_map_value(region.name, item, temp_dict[item])
 
-    def create_network(self,
+    def create_network_components(self,
                        network_config=None):
         """
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
@@ -160,10 +161,13 @@ class NetworkBase(EnvironmentBase):
         self.manual_parameter_bindings['vpcId'] = Ref(self.vpc)
 
         for x in self.local_subnets:
-            if x not in self.subnets:
-                self.subnets[x] = []
+            if x not in self.template.subnets:
+                self.template.subnets[x] = []
             for y in self.local_subnets[x]:
-                self.subnets[x].append(Ref(self.local_subnets[x][y]))
+                self.template.subnets[x].append(Ref(self.local_subnets[x][y]))
+
+        self.template.vpc_id = self.vpc
+        self.template.vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 
     def create_subnet_egress(self,
                       index,

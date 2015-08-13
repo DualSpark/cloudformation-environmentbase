@@ -62,16 +62,17 @@ setup(
     package_dir={"": "src"},
 
     install_requires=[
-        "troposphere==1.0.0",
+        "troposphere>=1.1.2",
         "boto>=2.38.0",
         "botocore>=1.1.1",
         "boto3>=1.1.0",
         "ipcalc==1.1.2",
         "docopt==0.6.2",
-        'setuptools>=17.1',
-        'boto3',
-        'lxml',
-        'cssselect',
+        "setuptools>=17.1",
+        "awacs>=0.5.2",
+        "boto3",
+        "lxml",
+        "cssselect",
         "commentjson"
     ],
 

@@ -1,14 +1,8 @@
-from troposphere import Template, Select, Ref, Parameter, FindInMap, Output, Base64, Join, GetAtt, Retain
-import troposphere.iam as iam
+from troposphere import Ref, Parameter, FindInMap
 import troposphere.ec2 as ec2
-import troposphere.s3 as s3
-import troposphere.elasticloadbalancing as elb
 import boto.vpc
 import boto
-import hashlib
-import json
 from environmentbase import EnvironmentBase
-from datetime import datetime
 from ipcalc import IP, Network
 import resources as res
 
@@ -20,9 +14,9 @@ class NetworkBase(EnvironmentBase):
     """
 
     def construct_network(self):
-        '''
+        """
         Main function to construct VPC, subnets, security groups, NAT instances, etc
-        '''
+        """
         network_config = self.config.get('network', {})
         template_config = self.config.get('template', {})
 
@@ -33,15 +27,12 @@ class NetworkBase(EnvironmentBase):
 
         self.local_subnets = {}
         self.stack_outputs = {}
+
         self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
         self.add_network_cidr_mapping(network_config=network_config)
-        self.create_network(network_config=network_config)
+        self.create_network_components(network_config=network_config)
 
-        self.template.add_utility_bucket(
-            name=template_config.get('s3_utility_bucket', 'demo'),
-            param_binding_map=self.manual_parameter_bindings)
-
-        self.common_sg = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
+        self.template.common_security_group = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
             VpcId=Ref(self.vpc),
             SecurityGroupEgress=[ec2.SecurityGroupRule(
@@ -70,9 +61,9 @@ class NetworkBase(EnvironmentBase):
             self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def create_action(self):
-        '''
+        """
         Override EnvironmentBase.create_action() to construct VPC
-        '''
+        """
         self.initialize_template()
         self.construct_network()
         self.write_template_to_file()
@@ -108,7 +99,7 @@ class NetworkBase(EnvironmentBase):
                     for item in temp_dict:
                         self.template.add_region_map_value(region.name, item, temp_dict[item])
 
-    def create_network(self,
+    def create_network_components(self,
                        network_config=None):
         """
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
@@ -170,10 +161,13 @@ class NetworkBase(EnvironmentBase):
         self.manual_parameter_bindings['vpcId'] = Ref(self.vpc)
 
         for x in self.local_subnets:
-            if x not in self.subnets:
-                self.subnets[x] = []
+            if x not in self.template.subnets:
+                self.template.subnets[x] = []
             for y in self.local_subnets[x]:
-                self.subnets[x].append(Ref(self.local_subnets[x][y]))
+                self.template.subnets[x].append(Ref(self.local_subnets[x][y]))
+
+        self.template.vpc_id = self.vpc
+        self.template.vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 
     def create_subnet_egress(self,
                       index,

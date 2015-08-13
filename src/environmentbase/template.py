@@ -1,5 +1,7 @@
 from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain
-from troposphere import iam, ec2, autoscaling, route53 as r53, s3
+from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs
+from awacs import logs as awacs_logs, aws
+from awacs.helpers.trust import make_simple_assume_statement
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
@@ -27,12 +29,6 @@ class Template(t.Template):
     consistency since it was generated.
     """
 
-    # input parameters for public and private subnets provided externally
-    subnets = {
-        'public': [],
-        'private': []
-    }
-
     def __init__(self, template_name):
         """
         Init method for environmentbase.Template class
@@ -42,6 +38,17 @@ class Template(t.Template):
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
 
+        self.vpc_cidr = None
+        self.vpc_id = None
+        self.common_security_group = None
+        self.utility_bucket = None
+
+        self.azs = []
+        self.subnets = {
+            'public': [],
+            'private': []
+        }
+
     def __get_template_hash(self):
         """
         Private method holds process for hashing this template for future validation.
@@ -49,6 +56,44 @@ class Template(t.Template):
         m = hashlib.sha256()
         m.update(self.__validation_formatter())
         return m.hexdigest()
+
+    def merge(self, other_template):
+        '''
+        Experimental merge function
+        1. This passes all the initialized attributes to the other template
+        2. Calls the other template's build_hook()
+        3. Copies the generated troposphere attributes back into this template
+        '''
+        other_template.copy_attributes_from(self)
+
+        other_template.build_hook()
+
+        self.metadata.update(other_template.metadata)
+        self.conditions.update(other_template.conditions)
+        self.mappings.update(other_template.mappings)
+        self.outputs.update(other_template.outputs)
+        self.parameters.update(other_template.parameters)
+        self.resources.update(other_template.resources)
+
+    def copy_attributes_from(self, other_template):
+        '''
+        Copies all attributes from the other template into this one
+        These typically get initialized for a template when add_child_template is called
+        from the controller, but that never happens when merging two templates
+        '''
+        self.vpc_cidr              = other_template.vpc_cidr
+        self.vpc_id                = other_template.vpc_id
+        self.common_security_group = other_template.common_security_group
+        self.utility_bucket        = other_template.utility_bucket
+        
+        self.azs        = list(other_template.azs)
+        self.subnets    = other_template.subnets.copy()
+        self.parameters = other_template.parameters.copy()
+        self.mappings   = other_template.mappings.copy()
+        self.metadata   = other_template.metadata.copy()
+        self.conditions = other_template.conditions.copy()
+        self.outputs    = other_template.outputs.copy()
+        self.resources  = other_template.resources.copy()
 
     def build_hook(self):
         """
@@ -801,6 +846,38 @@ class Template(t.Template):
 
         return {"Statement": statements}
 
+    def create_vpcflowlogs_role(self):
+        flowlogs_policy = aws.Policy(
+            Version="2012-10-17",
+            Statement=[
+                aws.Statement(
+                    Sid="",
+                    Effect=aws.Allow,
+                    Resource=['*'],
+                    Action=[awacs_logs.CreateLogGroup,
+                            awacs_logs.CreateLogStream,
+                            awacs_logs.PutLogEvents,
+                            awacs_logs.DescribeLogGroups,
+                            awacs_logs.DescribeLogStreams],
+                )
+            ]
+        )
+
+        flowlogs_trust_policy = aws.Policy(
+            Version="2012-10-17",
+            Statement=[make_simple_assume_statement("vpc-flow-logs.amazonaws.com")]
+        )
+
+        vpcflowlogs_role = iam.Role(
+            'VPCFlowLogsIAMRole',
+            AssumeRolePolicyDocument=flowlogs_trust_policy,
+            Path='/',
+            Policies=[
+                iam.Policy(PolicyName='vpcflowlogs_policy', PolicyDocument=flowlogs_policy)
+            ])
+
+        return vpcflowlogs_role
+
     def add_utility_bucket(self,
                            name='demo',
                            param_binding_map={}):
@@ -814,8 +891,16 @@ class Template(t.Template):
 
         bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
 
-        self.add_resource(s3.BucketPolicy( name.lower() + 'UtilityBucketLoggingPolicy',
+        self.add_resource(s3.BucketPolicy(name.lower() + 'UtilityBucketLoggingPolicy',
                 Bucket=Ref(self.utility_bucket),
                 PolicyDocument=bucket_policy_statements))
 
         param_binding_map['utilityBucket'] = Ref(self.utility_bucket)
+
+        log_group_name = 'DefaultLogGroup'
+        self.add_resource(logs.LogGroup(
+            log_group_name,
+            RetentionInDays=7
+        ))
+
+        self.add_resource(self.create_vpcflowlogs_role())

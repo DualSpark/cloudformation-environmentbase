@@ -1,7 +1,8 @@
 from environmentbase.template import Template
-from troposphere import Ref, ec2
+from troposphere import Ref, Output, GetAtt, ec2
 
 SSH_PORT = '22'
+
 
 class Bastion(Template):
     """
@@ -22,6 +23,23 @@ class Bastion(Template):
 
         super(Bastion, self).__init__(template_name=name)
 
+    # Called after add_child_template() has attached common parameters and some instance attributes:
+    # - RegionMap: Region to AMI map, allows template to be deployed in different regions without updating AMI ids
+    # - ec2Key: keyname to use for ssh authentication
+    # - vpcCidr: IP block claimed by whole VPC
+    # - vpcId: resource id of VPC
+    # - commonSecurityGroup: sg identifier for common allowed ports (22 in from VPC)
+    # - utilityBucket: S3 bucket name used to send logs to
+    # - availabilityZone[0-3]: Indexed names of AZs VPC is deployed to
+    # - [public|private]Subnet[0-9]: indexed and classified subnet identifiers
+    #
+    # and some instance attributes referencing the attached parameters:
+    # - self.vpc_cidr
+    # - self.vpc_id
+    # - self.common_security_group
+    # - self.utility_bucket
+    # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
+    # - self.azs: List of parameter references
     def build_hook(self):
         """
         Hook to add tier-specific assets within the build stage of initializing this class.
@@ -36,9 +54,14 @@ class Bastion(Template):
 
         bastion_asg = self.add_asg(
             layer_name=self.name,
-            security_groups=[security_groups['bastion']],
+            security_groups=[security_groups['bastion'], self.common_security_group],
             load_balancer=bastion_elb
         )
+
+        self.add_output(Output(
+            'BastionELBDNSName',
+            Value=GetAtt(bastion_elb, 'DNSName')
+        ))
 
     @staticmethod
     def get_factory_defaults():

@@ -4,12 +4,6 @@
     "environment_name": "environmentbase",
     "output": "environmentbase.template"
   },
-  "images": {
-    "windows2012r2Base": "Windows_Server-2012-R2_RTM-English-64Bit-Base-2015.05.13",
-    "ubuntu1404LTS": "ubuntu/images/hvm-ssd/ubuntu-trusty-14.04-amd64-server-20150325",
-    "amazonLinux": "amzn-ami-hvm-2015.03.0.x86_64-gp2",
-    "nat": "amzn-ami-vpc-nat-pv-2014.09.1.x86_64-ebs"
-  },
   "template": {
     "ami_map_file": "ami_cache.json",
     "description": "Environment Generator Base deployment.",

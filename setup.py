@@ -71,8 +71,6 @@ setup(
         "setuptools>=17.1",
         "awacs>=0.5.2",
         "boto3",
-        "lxml",
-        "cssselect",
         "commentjson"
     ],
 

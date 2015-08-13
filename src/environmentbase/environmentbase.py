@@ -45,7 +45,6 @@ class EnvironmentBase(object):
     template = None
     manual_parameter_bindings = {}
     deploy_parameter_bindings = []
-    subnets = {}
     ignore_outputs = ['templateValidationHash', 'dateGenerated']
     stack_outputs = {}
     config_handlers = []

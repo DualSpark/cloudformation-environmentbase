@@ -29,12 +29,6 @@ class Template(t.Template):
     consistency since it was generated.
     """
 
-    # input parameters for public and private subnets provided externally
-    subnets = {
-        'public': [],
-        'private': []
-    }
-
     def __init__(self, template_name):
         """
         Init method for environmentbase.Template class
@@ -43,6 +37,17 @@ class Template(t.Template):
         t.Template.__init__(self)
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
+
+        self.vpc_cidr = None
+        self.vpc_id = None
+        self.common_security_group = None
+        self.utility_bucket = None
+
+        self.azs = []
+        self.subnets = {
+            'public': [],
+            'private': []
+        }
 
     def __get_template_hash(self):
         """

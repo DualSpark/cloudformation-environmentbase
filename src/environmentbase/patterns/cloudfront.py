@@ -9,7 +9,7 @@ class CloudFront(Template):
     Creates a CloudFront distribution from a static resource
     """
 
-    def __init__(self, resource_name, domain_name, origin_path='', utility_bucket=None):
+    def __init__(self, resource_name, domain_name, origin_path='', utility_bucket=None, dist_config=None):
         """
         This will create a cloudfront distribution from a static resource
         @param resource_name [string] - name of the cloudfront distribution to be created
@@ -21,6 +21,7 @@ class CloudFront(Template):
         self.domain_name = domain_name
         self.origin_path = origin_path
         self.utility_bucket = utility_bucket
+        self.dist_config = dist_config
 
         super(CloudFront, self).__init__(template_name=resource_name)
 
@@ -29,24 +30,25 @@ class CloudFront(Template):
         Hook to add tier-specific assets within the build stage of initializing this class.
         """
 
-        cf_dist_config = DistributionConfig(
-            Origins=[Origin(
-                Id="Origin",
-                DomainName=self.domain_name,
-                OriginPath=self.origin_path,
-                S3OriginConfig=S3Origin(),
-            )],
-            DefaultCacheBehavior=DefaultCacheBehavior(
-                TargetOriginId="Origin",
-                ForwardedValues=ForwardedValues(
-                    QueryString=False
-                ),
-                ViewerProtocolPolicy="allow-all"),
-            Enabled=True
-        )
+        if not self.dist_config:
+            self.dist_config = DistributionConfig(
+                Origins=[Origin(
+                    Id="Origin",
+                    DomainName=self.domain_name,
+                    OriginPath=self.origin_path,
+                    S3OriginConfig=S3Origin(),
+                )],
+                DefaultCacheBehavior=DefaultCacheBehavior(
+                    TargetOriginId="Origin",
+                    ForwardedValues=ForwardedValues(
+                        QueryString=False
+                    ),
+                    ViewerProtocolPolicy="allow-all"),
+                Enabled=True
+            )
 
         if self.utility_bucket:
-            cf_dist_config.Logging = Logging(
+            self.dist_config.Logging = Logging(
                 Bucket=Join('.', [Ref(self.utility_bucket), 's3.amazonaws.com']),
                 IncludeCookies=True,
                 Prefix='%sCloudFront' % self.resource_name
@@ -54,7 +56,7 @@ class CloudFront(Template):
 
         cf_distribution = self.add_resource(Distribution(
             self.resource_name,
-            DistributionConfig=cf_dist_config
+            DistributionConfig=self.dist_config
         ))
 
         self.add_output([

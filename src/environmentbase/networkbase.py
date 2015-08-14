@@ -5,6 +5,8 @@ import boto
 from environmentbase import EnvironmentBase
 from ipcalc import IP, Network
 import resources as res
+from patterns import ha_nat
+import json
 
 
 class NetworkBase(EnvironmentBase):
@@ -18,14 +20,11 @@ class NetworkBase(EnvironmentBase):
         Main function to construct VPC, subnets, security groups, NAT instances, etc
         """
         network_config = self.config.get('network', {})
-        template_config = self.config.get('template', {})
 
-        self.vpc = None
         self.azs = []
 
         az_count = int(network_config.get('az_count', '2'))
 
-        self.local_subnets = {}
         self.stack_outputs = {}
 
         self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
@@ -34,7 +33,7 @@ class NetworkBase(EnvironmentBase):
 
         self.template.common_security_group = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
-            VpcId=Ref(self.vpc),
+            VpcId=Ref(self.template.vpc_id),
             SecurityGroupEgress=[ec2.SecurityGroupRule(
                         FromPort='80',
                         ToPort='80',
@@ -99,8 +98,7 @@ class NetworkBase(EnvironmentBase):
                     for item in temp_dict:
                         self.template.add_region_map_value(region.name, item, temp_dict[item])
 
-    def create_network_components(self,
-                       network_config=None):
+    def create_network_components(self, network_config=None):
         """
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
         @param network_config [dict] collection of network parameters for creating the VPC network
@@ -110,71 +108,58 @@ class NetworkBase(EnvironmentBase):
         else:
             network_name = self.__class__.__name__
 
-        self.vpc = self.template.add_resource(ec2.VPC('vpc',
+        self.template.vpc_id = self.template.add_resource(ec2.VPC('vpc',
                 CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'),
                 EnableDnsSupport=True,
                 EnableDnsHostnames=True,
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
+
+        self.template.vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 
         self.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
 
         igw_title = 'igwVpcAttachment'
         self.igw_attachment = self.template.add_resource(ec2.VPCGatewayAttachment(igw_title,
                 InternetGatewayId=Ref(self.igw),
-                VpcId=Ref(self.vpc)))
-
-        nat_instance_type = self.template.add_parameter(Parameter('natInstanceType',
-                Type='String',
-                Default=str(network_config.get('nat_instance_type', 't2.small')),
-                AllowedValues=res.get_str('valid_instance_types'),
-                ConstraintDescription=res.get_str('valid_instance_type_message'),
-                Description='Instance type to use when launching NAT instances.'))
-
-        subnet_types = network_config.get('subnet_types',['public','private'])
+                VpcId=Ref(self.template.vpc_id)))
 
         self.gateway_hook()
 
+        # Iterate through each subnet type for each AZ and add subnets, routing tables, routes, and NATs as necessary
         for index in range(0, int(network_config.get('az_count', 2))):
-            for subnet_type in subnet_types:
-                if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
-                    if subnet_type not in self.local_subnets:
-                        self.local_subnets[subnet_type] = {}
-                    self.local_subnets[subnet_type][str(index)] = self.template.add_resource(ec2.Subnet(subnet_type + 'Subnet' + str(index),
-                            AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
-                            VpcId=Ref(self.vpc),
-                            CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type)))
+            for subnet_type in network_config.get('subnet_types', ['public', 'private']):
 
-        for index in range(0, int(network_config.get('az_count', 2))):
-            for subnet_type in subnet_types:
-                if subnet_type in self.template.mappings['networkAddresses']['subnet' + str(index)]:
+                if subnet_type not in self.template.subnets:
+                    self.template.subnets[subnet_type] = []
+                if subnet_type not in self.template.mappings['networkAddresses']['subnet' + str(index)]:
+                    continue
 
-                    route_table = self.template.add_resource(ec2.RouteTable(subnet_type + 'Subnet' + str(index) + 'RouteTable',
-                            VpcId=Ref(self.vpc)))
+                # Create the subnet
+                self.template.subnets[subnet_type].append(self.template.add_resource(ec2.Subnet(
+                    subnet_type + 'Subnet' + str(index),
+                    AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
+                    VpcId=Ref(self.template.vpc_id),
+                    CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type),
+                    Tags=[ec2.Tag(key='network', value=subnet_type)])))
 
-                    self.create_subnet_egress(index, route_table, igw_title, nat_instance_type, subnet_type)
+                # Create the routing table
+                route_table = self.template.add_resource(ec2.RouteTable(
+                    subnet_type + 'Subnet' + str(index) + 'RouteTable',
+                    VpcId=Ref(self.template.vpc_id)))
 
-                    self.template.add_resource(ec2.SubnetRouteTableAssociation(subnet_type + 'Subnet' + str(index) + 'EgressRouteTableAssociation',
-                            RouteTableId=Ref(route_table),
-                            SubnetId=Ref(self.local_subnets[subnet_type][str(index)])))
+                # Create the NATs and egress rules
+                self.create_subnet_egress(index, route_table, igw_title, subnet_type, network_config['nat_instance_type'])
 
-        self.manual_parameter_bindings['vpcCidr'] = FindInMap('networkAddresses', 'vpcBase', 'cidr')
-        self.manual_parameter_bindings['vpcId'] = Ref(self.vpc)
+                # Associate the routing table with the subnet
+                self.template.add_resource(ec2.SubnetRouteTableAssociation(
+                    subnet_type + 'Subnet' + str(index) + 'EgressRouteTableAssociation',
+                    RouteTableId=Ref(route_table),
+                    SubnetId=Ref(self.template.subnets[subnet_type][index])))
 
-        for x in self.local_subnets:
-            if x not in self.template.subnets:
-                self.template.subnets[x] = []
-            for y in self.local_subnets[x]:
-                self.template.subnets[x].append(Ref(self.local_subnets[x][y]))
+        self.manual_parameter_bindings['vpcId'] = Ref(self.template.vpc_id)
+        self.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
 
-        self.template.vpc_id = self.vpc
-        self.template.vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
-
-    def create_subnet_egress(self,
-                      index,
-                      route_table,
-                      igw_title,
-                      nat_instance_type,
-                      subnet_type):
+    def create_subnet_egress(self, index, route_table, igw_title, subnet_type, nat_instance_type='t2.micro'):
         """
         Create an egress route for the a subnet with the given index and type
         Override to create egress routes for other subnet types
@@ -186,63 +171,13 @@ class NetworkBase(EnvironmentBase):
                 GatewayId=Ref(self.igw),
                 RouteTableId=Ref(route_table)))
         elif subnet_type == 'private':
-           nat_instance = self.create_nat_instance(index, nat_instance_type, subnet_type)
-           self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
-            DestinationCidrBlock='0.0.0.0/0',
-            InstanceId=Ref(nat_instance),
-            RouteTableId=Ref(route_table)))
+            self.template.merge(ha_nat.HaNat(index, nat_instance_type, name='HaNat%s' % str(index)))
 
     def gateway_hook(self):
         """
         Override to allow subclasses to create VPGs and similar components during network creation
         """
         pass
-
-
-    def create_nat_instance(self,
-                            nat_subnet_number,
-                            nat_instance_type=None,
-                            nat_subnet_type='public'):
-        """
-        Method creates a NAT instance for the private subnet within the specified corresponding subnet
-        @param nat_subnet_number [int] ID of the subnet that the NAT instance will be deployed to
-        @param nat_instance_type [string | Troposphere.Parameter] instance type to be set when launching the NAT instance
-        @param nat_subnet_type [string] type of subnet (public/private) that this instance will be deployed for (which subnet is going to use this to egress traffic)
-        """
-        if nat_instance_type == None:
-            nat_instance_type = 'm1.small'
-        elif type(nat_instance_type) == Parameter:
-            nat_instance_type = Ref(nat_instance_type)
-
-        nat_sg = self.template.add_resource(ec2.SecurityGroup(nat_subnet_type + 'Subnet' + str(nat_subnet_number) + 'SecurityGroup',
-                VpcId=Ref(self.vpc),
-                GroupDescription='Security Group for the ' + nat_subnet_type + ' subnet for az ' + str(nat_subnet_number),
-                SecurityGroupIngress=[
-                    ec2.SecurityGroupRule(
-                            IpProtocol='-1',
-                            FromPort='-1',
-                            ToPort='-1',
-                            CidrIp=FindInMap('networkAddresses', 'subnet' + str(nat_subnet_number), nat_subnet_type))],
-                SecurityGroupEgress=[
-                    ec2.SecurityGroupRule(
-                            IpProtocol='-1',
-                            FromPort='-1',
-                            ToPort='-1',
-                            CidrIp='0.0.0.0/0')]))
-
-        return self.template.add_resource(ec2.Instance(nat_subnet_type + str(nat_subnet_number) + 'NATInstance',
-                AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(nat_subnet_number) + 'Name'),
-                ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
-                KeyName=Ref(self.template.parameters['ec2Key']),
-                InstanceType=nat_instance_type,
-                Tags=[ec2.Tag('Name','NAT')],
-                NetworkInterfaces=[ec2.NetworkInterfaceProperty(
-                        AssociatePublicIpAddress=True,
-                        DeleteOnTermination=True,
-                        DeviceIndex='0',
-                        GroupSet=[Ref(nat_sg)],
-                        SubnetId=Ref(self.local_subnets['public'][str(nat_subnet_number)]))],
-                SourceDestCheck=False))
 
     def add_network_cidr_mapping(self,
                                  network_config):
@@ -261,11 +196,11 @@ class NetworkBase(EnvironmentBase):
         ret_val['vpcBase'] = {'cidr': base_cidr}
         current_base_address = first_network_address_block
 
-        subnet_types = network_config.get('subnet_types',['public','private'])
+        subnet_types = network_config.get('subnet_types', ['public', 'private'])
 
         for index in range(0, len(subnet_types)):
             subnet_type = subnet_types[index]
-            subnet_size = network_config.get(subnet_type + '_subnet_size','22')
+            subnet_size = network_config.get(subnet_type + '_subnet_size', '22')
 
             if index != 0:
                 range_reset = Network(current_base_address + '/' + str(subnet_size))
@@ -299,12 +234,11 @@ class NetworkBase(EnvironmentBase):
             Tags=[ec2.Tag(key='Name', value=vpn_name)]))
 
         gateway_connection = self.template.add_resource(ec2.VPCGatewayAttachment('vpnGatewayAttachment',
-            VpcId=Ref(self.vpc),
+            VpcId=Ref(self.template.vpc_id),
             InternetGatewayId=Ref(self.igw),
             VpnGatewayId=Ref(gateway)))
 
 if __name__ == '__main__':
-    import json
     with open('config.json', 'r') as f:
         cmd_args = json.loads(f.read())
     test = NetworkBase(cmd_args)

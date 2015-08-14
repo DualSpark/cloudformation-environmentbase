@@ -85,9 +85,10 @@ class Template(t.Template):
         self.vpc_id                = other_template.vpc_id
         self.common_security_group = other_template.common_security_group
         self.utility_bucket        = other_template.utility_bucket
-        
+
         self.azs        = list(other_template.azs)
         self.subnets    = other_template.subnets.copy()
+
         self.parameters = other_template.parameters.copy()
         self.mappings   = other_template.mappings.copy()
         self.metadata   = other_template.metadata.copy()

@@ -1,6 +1,6 @@
 from environmentbase.template import Template
-from troposphere import Parameter, Ref, Join, Base64, FindInMap
-from troposphere.ec2 import SecurityGroup, SecurityGroupIngress
+from troposphere import Ref, Join, Base64, FindInMap
+from troposphere.ec2 import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tags
 from troposphere.iam import Policy, Role, InstanceProfile
 
@@ -8,82 +8,72 @@ from troposphere.iam import Policy, Role, InstanceProfile
 class HaNat(Template):
     '''
     Adds a highly available NAT that also serves as an NTP server
+    Creates a 1-1 autoscaling group in the provided public subnet and creates
+    a route directing egress traffic from the private subnet through this NAT
     '''
 
-    def __init__(self, asg_min=1, asg_max=1, instance_type='t2.micro', install_ntp=False):
+    def __init__(self, subnet_index, instance_type='t2.micro', name='HaNat'):
         '''
         Method initializes HA NAT in a given environment deployment
-        @param asg_min [number] - Lower bound of number of instances in the autoscaling group
-        @param asg_max [number] - Upper bound of number of instances in the autoscaling group
-        @param instance_type [string] - Type of instances in the autoscaling group
-        @param install_ntp [boolean] - Toggle for installing NTP on the NAT instances
+        @param subnet_index [int] ID of the subnet that the NAT instance will be deployed to
+        @param instance_type [string] - Type of NAT instance in the autoscaling group
         '''
-        self.asg_min = asg_min
-        self.asg_max = asg_max
+        self.subnet_index = subnet_index
         self.instance_type = instance_type
-        # TODO: Use this parameter to toggle NTP on or off
-        self.install_ntp = install_ntp
 
-        super(HaNat, self).__init__(template_name='HaNat')
+        # These will be initialized and consumed by various functions called in the build hook
+        self.sg = None
+        self.instance_profile = None
+
+        super(HaNat, self).__init__(template_name=name)
 
     def build_hook(self):
         '''
         Hook to add tier-specific assets within the build stage of initializing this class.
         '''
+        self.add_nat_sg()
+        self.add_nat_instance_profile()
+        self.add_nat_asg()
 
-        NatSG = self.add_resource(SecurityGroup(
-            "NatSG",
+    def add_nat_sg(self):
+        '''
+        Create the NAT security group and add the ingress/egress rules
+        '''
+        self.sg = self.add_resource(SecurityGroup(
+            "Nat%sSG" % str(self.subnet_index),
             VpcId=Ref(self.vpc_id),
             GroupDescription="Security group for NAT host."
         ))
+        self.add_nat_sg_rules()
 
-        NatDNSIngress = self.add_resource(SecurityGroupIngress(
-            "NatDNSIngress",
-            ToPort="53",
-            FromPort="53",
-            IpProtocol="udp",
-            GroupId=Ref(NatSG),
-            CidrIp=Ref(self.vpc_cidr)
-        ))
-
-        NatHTTPSIngress = self.add_resource(SecurityGroupIngress(
-            "NatHTTPSIngress",
-            ToPort="443",
-            FromPort="443",
-            IpProtocol="tcp",
-            GroupId=Ref(NatSG),
-            CidrIp=Ref(self.vpc_cidr)
-        ))
-
-        NatHTTPIngress = self.add_resource(SecurityGroupIngress(
-            "NatHTTPIngress",
-            ToPort="80",
-            FromPort="80",
-            IpProtocol="tcp",
-            GroupId=Ref(NatSG),
-            CidrIp=Ref(self.vpc_cidr)
-        ))
-
-        NatNTPIngress = self.add_resource(SecurityGroupIngress(
-            "NatNTPIngress",
-            ToPort="123",
-            FromPort="123",
-            IpProtocol="udp",
-            GroupId=Ref(NatSG),
-            CidrIp=Ref(self.vpc_cidr)
-        ))
-
-        NatICMPIngress = self.add_resource(SecurityGroupIngress(
-            "NatICMPIngress",
+    def add_nat_sg_rules(self):
+        '''
+        Add the security group rules necessary for the NAT to operate
+        For now, this is opening all ingress from the VPC and all egress to the internet
+        '''
+        self.add_resource(SecurityGroupIngress(
+            "Nat%sIngress" % str(self.subnet_index),
             ToPort="-1",
             FromPort="-1",
-            IpProtocol="icmp",
-            GroupId=Ref(NatSG),
-            CidrIp=Ref(self.vpc_cidr)
+            IpProtocol="-1",
+            GroupId=Ref(self.sg),
+            CidrIp=self.vpc_cidr
+        ))
+        self.add_resource(SecurityGroupEgress(
+            "Nat%sEgress" % str(self.subnet_index),
+            ToPort="-1",
+            FromPort="-1",
+            IpProtocol="-1",
+            GroupId=Ref(self.sg),
+            CidrIp='0.0.0.0/0'
         ))
 
-        NatRole = self.add_resource(Role(
-            "NatRole",
+    def add_nat_instance_profile(self):
+        '''
+        Create the NAT role and instance profile
+        '''
+        nat_role = self.add_resource(Role(
+            "Nat%sRole" % str(self.subnet_index),
             AssumeRolePolicyDocument={
                 "Statement": [{
                     "Effect": "Allow",
@@ -95,12 +85,14 @@ class HaNat(Template):
             },
             Path="/",
             Policies=[Policy(
-                PolicyName="NATPolicy",
+                PolicyName="NAT%sPolicy" % str(self.subnet_index),
                 PolicyDocument={
                     "Statement": [{
                         "Effect": "Allow",
                         "Action": [
                             "ec2:DescribeInstances",
+                            "ec2:ModifyInstanceAttribute",
+                            "ec2:DescribeSubnets",
                             "ec2:DescribeRouteTables",
                             "ec2:CreateRoute",
                             "ec2:ReplaceRoute",
@@ -113,14 +105,16 @@ class HaNat(Template):
             )]
         ))
 
-        NatInstanceProfile = self.add_resource(InstanceProfile(
-            "NatInstanceProfile",
+        self.instance_profile = self.add_resource(InstanceProfile(
+            "Nat%sInstanceProfile" % str(self.subnet_index),
             Path="/",
-            Roles=[Ref(NatRole)]
+            Roles=[Ref(nat_role)]
         ))
 
-        NatAsgLaunchConfiguration = self.add_resource(LaunchConfiguration(
-            "NatAsgLaunchConfiguration",
+    def add_nat_asg(self):
+
+        nat_launch_config = self.add_resource(LaunchConfiguration(
+            "Nat%sLaunchConfig" % str(self.subnet_index),
             UserData=Base64(Join("", [
                 "#!/bin/bash -v\n",
                 "function log { logger -t \"vpc\" -- $1; }\n",
@@ -166,9 +160,9 @@ class HaNat(Template):
 
                 "# Install AWS CLI tool\n",
                 "#apt-get -y install python-pip\n",
-                "#pip install --upgrade awscli  && log \"AWS CLI Upgraded Successfully. Beginning HA NAT configuration...\""
+                "#pip install --upgrade awscli  && log \"AWS CLI Upgraded Successfully. Beginning HA NAT configuration...\"\n"
 
-                "awscmd=\"/usr/local/bin/aws\"\n",
+                "awscmd=\"/usr/bin/aws\"\n",
 
                 "# Set CLI Output to text\n",
                 "export AWS_DEFAULT_OUTPUT=\"text\"\n",
@@ -177,16 +171,16 @@ class HaNat(Template):
                 "II_URI=\"http://169.254.169.254/latest/dynamic/instance-identity/document\"\n",
 
                 "# Set region of NAT instance\n",
-                "REGION=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep region | awk -F\" '{print $4}')\n",
+                "REGION=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep region | awk -F\\\" '{print $4}')\n",
 
                 "# Set AWS CLI default Region\n",
                 "export AWS_DEFAULT_REGION=$REGION\n",
 
                 "# Set AZ of NAT instance\n",
-                "AVAILABILITY_ZONE=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep availabilityZone | awk -F\" '{print $4}')\n",
+                "AVAILABILITY_ZONE=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep availabilityZone | awk -F\\\" '{print $4}')\n",
 
                 "# Set Instance ID from metadata\n",
-                "INSTANCE_ID=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep instanceId | awk -F\" '{print $4}')\n",
+                "INSTANCE_ID=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep instanceId | awk -F\\\" '{print $4}')\n",
 
                 "# Set VPC_ID of Instance\n",
                 "VPC_ID=$(${awscmd} ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[*].Instances[*].VpcId') ||\n",
@@ -232,7 +226,7 @@ class HaNat(Template):
                 "fi\n",
 
                 "# Turn off source / destination check\n",
-                "${awscmd} ec2 modify-instance-attribute --instance-id $INSTANCE_ID --source-dest-check \"{\"Value\": false}\" &&\n",
+                "${awscmd} ec2 modify-instance-attribute --instance-id $INSTANCE_ID --no-source-dest-check &&\n",
                 "log \"Source Destination check disabled for $INSTANCE_ID.\"\n",
 
                 "log \"Configuration of HA NAT complete.\"\n",
@@ -242,28 +236,27 @@ class HaNat(Template):
                 "/sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE\n",
                 "/sbin/iptables-save > /etc/sysconfig/iptables\n",
                 "exit 0\n"
-
             ])),
-            ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'amazonLinuxAmiId'),
+            ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
             KeyName=Ref('ec2Key'),
-            SecurityGroups=[Ref(NatSG)],
+            SecurityGroups=[Ref(self.sg)],
             EbsOptimized=False,
-            IamInstanceProfile=Ref(NatInstanceProfile),
+            IamInstanceProfile=Ref(self.instance_profile),
             InstanceType=self.instance_type,
             AssociatePublicIpAddress=True
         ))
 
-        NatASG = self.add_resource(AutoScalingGroup(
-            "NatASG",
-            DesiredCapacity=self.asg_min,
-            Tags=Tags(
-                Name=Join("-", [Ref(self.vpc_id), "NAT"]),
-            ),
-            MinSize=self.asg_min,
-            MaxSize=self.asg_max,
+        nat_asg = self.add_resource(AutoScalingGroup(
+            "Nat%sASG" % str(self.subnet_index),
+            DesiredCapacity=1,
+            Tags=Tags(Name=Join("-", [Ref(self.vpc_id), "NAT"])),
+            MinSize=1,
+            MaxSize=1,
             Cooldown="30",
-            LaunchConfigurationName=Ref(NatAsgLaunchConfiguration),
+            LaunchConfigurationName=Ref(nat_launch_config),
             HealthCheckGracePeriod=30,
             HealthCheckType="EC2",
-            VPCZoneIdentifier=self.subnets['public']
+            VPCZoneIdentifier=[Ref(self.subnets['public'][self.subnet_index])]
         ))
+
+        return nat_asg

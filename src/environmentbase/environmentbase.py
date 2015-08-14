@@ -16,11 +16,12 @@ import resources as res
 from fnmatch import fnmatch
 
 # Allow comments in json if you can but at least parse regular json if not
-try:
-    import commentjson as json
-    from commentjson import JSONLibraryException as ValueError
-except ImportError:
-    import json
+# try:
+#     import commentjson as json
+#     from commentjson import JSONLibraryException as ValueError
+# except ImportError:
+#     import json
+import json
 
 TIMEOUT = 60
 

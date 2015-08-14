@@ -7,6 +7,8 @@ import json
 """
 Yes, it's a screen scraper script for assembling the instance type to arch map.
 The thought is that updates to the web page will be minor ... maybe
+
+You will need to have the following two dependencies to your environment: lxml, cssselect
 """
 
 SELECT_TABLES = "div.informaltable"

@@ -14,3 +14,4 @@ config.json
 .DS_Store
 .idea/
 .eggs
+templates

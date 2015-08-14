@@ -1,6 +1,7 @@
 from environmentbase.template import Template
 from troposphere import Ref, Join, Output, GetAtt
-from troposphere.cloudfront import Distribution, DistributionConfig, Origin, S3Origin, DefaultCacheBehavior, ForwardedValues
+from troposphere.cloudfront import Distribution, DistributionConfig, Origin, S3Origin
+from troposphere.cloudfront import DefaultCacheBehavior, ForwardedValues, Logging
 
 
 class CloudFront(Template):
@@ -8,7 +9,7 @@ class CloudFront(Template):
     Creates a CloudFront distribution from a static resource
     """
 
-    def __init__(self, resource_name, domain_name, origin_path=''):
+    def __init__(self, resource_name, domain_name, origin_path='', utility_bucket=None, dist_config=None):
         """
         This will create a cloudfront distribution from a static resource
         @param resource_name [string] - name of the cloudfront distribution to be created
@@ -19,6 +20,8 @@ class CloudFront(Template):
         self.resource_name = resource_name
         self.domain_name = domain_name
         self.origin_path = origin_path
+        self.utility_bucket = utility_bucket
+        self.dist_config = dist_config
 
         super(CloudFront, self).__init__(template_name=resource_name)
 
@@ -27,9 +30,8 @@ class CloudFront(Template):
         Hook to add tier-specific assets within the build stage of initializing this class.
         """
 
-        cf_distribution = self.add_resource(Distribution(
-            self.resource_name,
-            DistributionConfig=DistributionConfig(
+        if not self.dist_config:
+            self.dist_config = DistributionConfig(
                 Origins=[Origin(
                     Id="Origin",
                     DomainName=self.domain_name,
@@ -44,6 +46,17 @@ class CloudFront(Template):
                     ViewerProtocolPolicy="allow-all"),
                 Enabled=True
             )
+
+        if self.utility_bucket:
+            self.dist_config.Logging = Logging(
+                Bucket=Join('.', [Ref(self.utility_bucket), 's3.amazonaws.com']),
+                IncludeCookies=True,
+                Prefix='%sCloudFront' % self.resource_name
+            )
+
+        cf_distribution = self.add_resource(Distribution(
+            self.resource_name,
+            DistributionConfig=self.dist_config
         ))
 
         self.add_output([

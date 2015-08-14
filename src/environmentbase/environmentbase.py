@@ -16,12 +16,14 @@ import resources as res
 from fnmatch import fnmatch
 
 # Allow comments in json if you can but at least parse regular json if not
-# try:
-#     import commentjson as json
-#     from commentjson import JSONLibraryException as ValueError
-# except ImportError:
-#     import json
-import json
+try:
+    import commentjson as json
+    from commentjson import JSONLibraryException as ValueError
+except ImportError:
+    import json
+
+# If you run into compatibility issues, use the regular json library instead:
+import json as pure_json
 
 TIMEOUT = 60
 
@@ -103,8 +105,8 @@ class EnvironmentBase(object):
             # Here to_json() loads child templates into S3
             raw_json = self.template.to_template_json()
 
-            reloaded_template = json.loads(raw_json)
-            json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
+            reloaded_template = pure_json.loads(raw_json)
+            pure_json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
 
     def create_action(self):
         """

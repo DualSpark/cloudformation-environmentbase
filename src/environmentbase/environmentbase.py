@@ -100,7 +100,6 @@ class EnvironmentBase(object):
         """
         Serializes self.template to string and writes it to the file named in config['global']['output']
         """
-        indent = 0 if not self.config['global']['print_debug'] else 4
         local_path = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
 
         with open(local_path, 'w') as output_file:
@@ -108,7 +107,7 @@ class EnvironmentBase(object):
             raw_json = self.template.to_template_json()
 
             reloaded_template = pure_json.loads(raw_json)
-            pure_json.dump(reloaded_template, output_file, indent=indent, separators=(',', ':'))
+            pure_json.dump(reloaded_template, output_file, indent=4, separators=(',', ':'))
 
     def create_action(self):
         """
@@ -350,8 +349,9 @@ class EnvironmentBase(object):
         cfn_template_filename = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
         if os.path.isfile(cfn_template_filename):
             with open(cfn_template_filename, 'r') as cfn_template_file:
-                cfn_template = cfn_template_file.read().replace('\n', '')
-
+                cfn_template = cfn_template_file.read()
+            white_space = re.compile(r'\s+')
+            cfn_template = re.sub(white_space, ' ', cfn_template)
         else:
             print 'Template at: %s not found\n' % cfn_template_filename
             sys.exit(1)

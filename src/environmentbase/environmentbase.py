@@ -393,9 +393,8 @@ class EnvironmentBase(object):
 
     def deploy_action(self):
         """
-        Default deploy_action invoked by the CLI
-        Attempt to query the status of the stack. If it already exists and is in a ready state, it will issue an
-        update-stack command. If the stack does not yet exist, it will issue a create-stack command
+        Default deploy_action invoked by the CLI. Attempt to update the stack. If the stack does not yet exist, it will
+        issue a create-stack command.
         """
 
         # gather runtime parameters to be passed to create/update stack
@@ -406,10 +405,8 @@ class EnvironmentBase(object):
         # initialize stack event monitor
         topic = None
         queue = None
-        notification_arns = []
         if len(self.stack_event_handlers) > 0:
             (topic, queue) = self.setup_stack_monitor()
-            notification_arns = [topic.arn]
 
         # Get url to cost estimate calculator
         # estimate_cost_url = cfn_conn.estimate_template_cost(

@@ -430,6 +430,17 @@ class EnvironmentBase(object):
 
         self.cleanup_stack_monitor(topic, queue)
 
+    def delete_action(self):
+        """
+        Default delete_action invoked by CLI
+        """
+        cfn_conn = self._get_boto_client('cloudformation')
+        stack_name = self.config['global']['environment_name']
+
+        print "Deleting stack '%s' ..." % stack_name,
+        cfn_conn.delete_stack(StackName=stack_name)
+        print "Done"
+
     def _validate_config_helper(self, schema, config, path):
         # Check each requirement
         for (req_key, req_value) in schema.iteritems():

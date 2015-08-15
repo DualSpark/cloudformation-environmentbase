@@ -5,7 +5,7 @@ environmentbase
 Tool bundle manages generation, deployment, and feedback of cloudformation resources.
 
 Usage:
-    environmentbase (create|deploy) [--config-file <FILE_LOCATION>] [--debug] [--template-file=<TEMPLATE_FILE>]
+    environmentbase (create|deploy|delete) [--config-file <FILE_LOCATION>] [--debug] [--template-file=<TEMPLATE_FILE>]
 
 Options:
   -h --help                            Show this screen.
@@ -70,3 +70,6 @@ class CLI(object):
 
         elif self.args.get('deploy', False):
             controller.deploy_action()
+
+        elif self.args.get('delete', False):
+            controller.delete_action()

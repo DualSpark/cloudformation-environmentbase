@@ -5,21 +5,11 @@ from awacs.helpers.trust import make_simple_assume_statement
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
-from boto.s3.key import Key
 import hashlib
 import json
-import boto
-import time
 import os
 from datetime import datetime
 import resources as res
-
-
-def tropo_to_string(snippet, indent=4, sort_keys=True, separators=(',', ': ')):
-    """
-    Returns the json representation of any troposphere object/template
-    """
-    return json.dumps(snippet, cls=t.awsencode, indent=indent, sort_keys=sort_keys, separators=separators)
 
 
 class Template(t.Template):

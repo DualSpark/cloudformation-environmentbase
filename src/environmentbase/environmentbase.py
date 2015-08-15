@@ -4,16 +4,14 @@ import copy
 import sys
 import time
 import re
-import string
-import random
 import botocore.exceptions
-import boto3
 import troposphere.cloudformation as cf
-from troposphere import Ref, Parameter, GetAtt, Join, Output, FindInMap
+from troposphere import Ref, Parameter, GetAtt
 from template import Template
 import cli
 import resources as res
 from fnmatch import fnmatch
+import utility
 
 # Allow comments in json if you can but at least parse regular json if not
 try:
@@ -31,10 +29,6 @@ TEMPLATES_PATH = 'templates'
 
 class ValidationError(Exception):
     pass
-
-
-def random_string(size=5):
-    return ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(size))
 
 
 class EnvironmentBase(object):
@@ -100,13 +94,14 @@ class EnvironmentBase(object):
         parent_dir = TEMPLATES_PATH
         if not os.path.exists(parent_dir):
             os.makedirs(parent_dir)
+        path = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
+        return path
 
     def write_template_to_file(self):
         """
         Serializes self.template to string and writes it to the file named in config['global']['output']
         """
-        self._ensure_template_dir_exists()
-        local_path = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
+        local_path = self._ensure_template_dir_exists()
 
         with open(local_path, 'w') as output_file:
             # Here to_json() loads child templates into S3
@@ -125,30 +120,6 @@ class EnvironmentBase(object):
         # Do custom troposphere resource creation in your overridden copy of this method
 
         self.write_template_to_file()
-
-    def _get_boto_resource(self, service_name):
-        if not self.boto_session:
-            self.boto_session = boto3.session.Session(region_name=self.config['boto']['region_name'])
-
-        resource = self.boto_session.resource(
-            service_name,
-            aws_access_key_id=self.config['boto']['aws_access_key_id'],
-            aws_secret_access_key=self.config['boto']['aws_secret_access_key']
-        )
-
-        return resource
-
-    def _get_boto_client(self, service_name):
-        if not self.boto_session:
-            self.boto_session = boto3.session.Session(region_name=self.config['boto']['region_name'])
-
-        client = self.boto_session.client(
-            service_name,
-            aws_access_key_id=self.config['boto']['aws_access_key_id'],
-            aws_secret_access_key=self.config['boto']['aws_secret_access_key']
-        )
-
-        return client
 
     def _update_config_from_env(self, section_label, config_key):
         """
@@ -211,14 +182,14 @@ class EnvironmentBase(object):
 
     def setup_stack_monitor(self):
         # Topic and queue names are randomly generated so there's no chance of picking up messages from a previous runs
-        name = self.config['global']['environment_name'] + '_' + time.strftime("%Y%m%d-%H%M%S") + '_' + random_string(5)
+        name = self.config['global']['environment_name'] + '_' + time.strftime("%Y%m%d-%H%M%S") + '_' + utility.random_string(5)
 
         # Creating a topic is idempotent, so if it already exists then we will just get the topic returned.
-        sns = self._get_boto_resource('sns')
+        sns = utility.get_boto_resource(self.config, 'sns')
         topic_arn = sns.create_topic(Name=name).arn
 
         # Creating a queue is idempotent, so if it already exists then we will just get the queue returned.
-        sqs = self._get_boto_resource('sqs')
+        sqs = utility.get_boto_resource(self.config, 'sqs')
         queue = sqs.create_queue(QueueName=name)
 
         queue_arn = queue.attributes['QueueArn']
@@ -359,10 +330,10 @@ class EnvironmentBase(object):
         notification_arns = []
 
         if sns_topic:
-            notification_arns.append(sns_topic)
+            notification_arns.append(sns_topic.arn)
 
         cfn_template = self._load_root_template()
-        cfn_conn = self._get_boto_client('cloudformation')
+        cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         try:
             print "Updating stack '%s' ..." % stack_name
             cfn_conn.update_stack(
@@ -434,7 +405,7 @@ class EnvironmentBase(object):
         """
         Default delete_action invoked by CLI
         """
-        cfn_conn = self._get_boto_client('cloudformation')
+        cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         stack_name = self.config['global']['environment_name']
 
         print "Deleting stack '%s' ..." % stack_name,
@@ -747,15 +718,13 @@ class EnvironmentBase(object):
 
         template_name = "%s.%s.template" % (template.name, key_serial)
         s3_path = "%s/%s" % (s3_template_prefix, template_name)
-        local_path = os.path.join(TEMPLATES_PATH, template_name)
-
-        self._ensure_template_dir_exists()
+        local_path = self._ensure_template_dir_exists()
 
         if self.config['global']['print_debug']:
             with open(local_path, 'w') as f:
                 f.write(self.to_json())
 
-        s3 = self._get_boto_resource('s3')
+        s3 = utility.get_boto_resource(self.config, 's3')
 
         s3.Bucket(template_bucket).put_object(
             Key=s3_path,

@@ -323,16 +323,17 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Initialize the the controller with faked 'create' CLI parameter
         with patch.object(sys, 'argv', ['environmentbase', 'create']):
-            MyController(cli.CLI(quiet=True))
+            ctrlr = MyController(cli.CLI(quiet=True))
 
-        # Load the generated output template
-        with open('environmentbase.template', 'r') as f:
-            template = json.load(f)
+            # Load the generated output template
+            template_path = ctrlr._ensure_template_dir_exists()
+            with open(template_path, 'r') as f:
+                template = json.load(f)
 
-        # Verify that the ec2 instance is in the output
-        self.assertTrue('ec2instance' in template['Resources'])
+            # Verify that the ec2 instance is in the output
+            self.assertTrue('ec2instance' in template['Resources'])
 
-        # print json.dumps(template, indent=4)
+            # print json.dumps(template, indent=4)
 
 
     # Cloudformation doesn't currently support a dry run, so this test would create a live stack

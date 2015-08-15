@@ -1,4 +1,4 @@
-from environmentbase.template import Template, tropo_to_string
+from environmentbase.template import Template
 import environmentbase.resources as res
 from environmentbase.networkbase import NetworkBase
 from troposphere import Ref, Parameter, GetAtt, Output, Join, rds, ec2

@@ -4,19 +4,11 @@ from mock import patch
 import os
 import shutil
 import sys
-import json
 from tempfile import mkdtemp
-from environmentbase import cli, template
+from environmentbase import cli, template, utility
 import troposphere as tropo
 from troposphere import ec2
-
-# commentjson is optional, parsing invalid json throws commonjson.JSONLibraryException
-# if not present parsing invalid json throws __builtin__.ValueError.
-# Make them the same and don't worry about it
-try:
-    from commentjson import JSONLibraryException as ValueError
-except ImportError:
-    pass
+import json
 
 
 class TemplateTestCase(TestCase):
@@ -48,17 +40,17 @@ class TemplateTestCase(TestCase):
         return f
 
     def test_tropo_to_string(self):
-        template.tropo_to_string(tropo.Template())
-        template.tropo_to_string(tropo.Base64('efsdfsdf'))
-        template.tropo_to_string(tropo.Output('efsdfsdf', Value='dsfsdfs'))
-        template.tropo_to_string(tropo.Parameter('efsdfsdf', Type='dsfsdfs'))
+        utility.tropo_to_string(tropo.Template())
+        utility.tropo_to_string(tropo.Base64('efsdfsdf'))
+        utility.tropo_to_string(tropo.Output('efsdfsdf', Value='dsfsdfs'))
+        utility.tropo_to_string(tropo.Parameter('efsdfsdf', Type='dsfsdfs'))
 
         # These constructors recursively call themselves for some reason
         # Don't instantiate directly
-        # template.tropo_to_string(tropo.AWSProperty())
-        # template.tropo_to_string(tropo.AWSAttribute())
+        # utility.tropo_to_string(tropo.AWSProperty())
+        # utility.tropo_to_string(tropo.AWSAttribute())
 
-        template.tropo_to_string(ec2.Instance(
+        utility.tropo_to_string(ec2.Instance(
             "ec2instance",
             InstanceType="m3.medium",
             ImageId="ami-951945d0"))
@@ -70,7 +62,7 @@ class TemplateTestCase(TestCase):
 
         # Basic test
         template_snippet = template.Template.build_bootstrap([file1_name], prepend_line='')
-        generated_json = json.loads(template.tropo_to_string(template_snippet))
+        generated_json = json.loads(utility.tropo_to_string(template_snippet))
         expected_json_1 = {"Fn::Base64": {"Fn::Join": ["\n", ["line1", "line2", "line3"]]}}
         self.assertEqual(generated_json, expected_json_1)
 
@@ -90,7 +82,7 @@ class TemplateTestCase(TestCase):
             variable_declarations=['var_dec_line_1', 'var_dec_line_2'],
             cleanup_commands=['cleanup_line_1', 'cleanup_line_2'])
 
-        generated_json = json.loads(template.tropo_to_string(template_snippet))
+        generated_json = json.loads(utility.tropo_to_string(template_snippet))
         expected_json_2 = {
             "Fn::Base64": {"Fn::Join": [
                 "\n", [

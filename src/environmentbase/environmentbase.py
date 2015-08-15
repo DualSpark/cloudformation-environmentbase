@@ -96,10 +96,16 @@ class EnvironmentBase(object):
         # Finally allow the view to execute the user's requested action
         view.process_request(self)
 
+    def _ensure_template_dir_exists(self):
+        parent_dir = TEMPLATES_PATH
+        if not os.path.exists(parent_dir):
+            os.makedirs(parent_dir)
+
     def write_template_to_file(self):
         """
         Serializes self.template to string and writes it to the file named in config['global']['output']
         """
+        self._ensure_template_dir_exists()
         local_path = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
 
         with open(local_path, 'w') as output_file:
@@ -730,11 +736,9 @@ class EnvironmentBase(object):
         s3_path = "%s/%s" % (s3_template_prefix, template_name)
         local_path = os.path.join(TEMPLATES_PATH, template_name)
 
-        if self.config['global']['print_debug']:
-            parent_dir = os.path.dirname(local_path)
-            if not os.path.exists(parent_dir):
-                os.makedirs(parent_dir)
+        self._ensure_template_dir_exists()
 
+        if self.config['global']['print_debug']:
             with open(local_path, 'w') as f:
                 f.write(self.to_json())
 

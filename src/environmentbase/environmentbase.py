@@ -342,15 +342,7 @@ class EnvironmentBase(object):
     def add_stack_event_handler(self, handler):
         self.stack_event_handlers.append(handler)
 
-    def deploy_action(self):
-        """
-        Default deploy_action invoked by the CLI
-        Attempt to query the status of the stack. If it already exists and is in a ready state, it will issue an
-        update-stack command. If the stack does not yet exist, it will issue a create-stack command
-        """
-
-        cfn_conn = self._get_boto_client('cloudformation')
-
+    def _load_root_template(self):
         # Validate existence of and read in the template file
         cfn_template_filename = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
         if os.path.isfile(cfn_template_filename):
@@ -359,15 +351,59 @@ class EnvironmentBase(object):
             white_space = re.compile(r'\s+')
             cfn_template = re.sub(white_space, ' ', cfn_template)
         else:
-            print 'Template at: %s not found\n' % cfn_template_filename
-            sys.exit(1)
+            raise ValueError('Template at: %s not found\n' % cfn_template_filename)
 
-        stack_name = self.config['global']['environment_name']
+        return cfn_template
+
+    def _ensure_stack_is_deployed(self, stack_name='UnnamedStack', sns_topic=None, stack_params=[]):
+        notification_arns = []
+
+        if sns_topic:
+            notification_arns.append(sns_topic)
+
+        cfn_template = self._load_root_template()
+        cfn_conn = self._get_boto_client('cloudformation')
+        try:
+            print "Updating stack '%s' ..." % stack_name
+            cfn_conn.update_stack(
+                StackName=stack_name,
+                TemplateBody=cfn_template,
+                Parameters=stack_params,
+                NotificationARNs=notification_arns,
+                Capabilities=['CAPABILITY_IAM'])
+            print "[Update success]"
+
+        # Else stack doesn't currently exist, create a new stack
+        except botocore.exceptions.ClientError as e:
+            print "[Update failed], %s\n" % e.message
+            print "Trying create stack ..."
+            # Load template to string
+            try:
+                cfn_conn.create_stack(
+                    StackName=stack_name,
+                    TemplateBody=cfn_template,
+                    Parameters=stack_params,
+                    NotificationARNs=notification_arns,
+                    Capabilities=['CAPABILITY_IAM'],
+                    DisableRollback=True,
+                    TimeoutInMinutes=TIMEOUT)
+                print "Created new CF stack %s\n" % stack_name
+            except botocore.exceptions.ClientError as e:
+                print "[Create failed], %s\nExiting" % e.message
+
+    def deploy_action(self):
+        """
+        Default deploy_action invoked by the CLI
+        Attempt to query the status of the stack. If it already exists and is in a ready state, it will issue an
+        update-stack command. If the stack does not yet exist, it will issue a create-stack command
+        """
+
+        # gather runtime parameters to be passed to create/update stack
         stack_params = []
-
         if self.deploy_parameter_bindings:
             stack_params.extend(self.deploy_parameter_bindings)
 
+        # initialize stack event monitor
         topic = None
         queue = None
         notification_arns = []
@@ -375,49 +411,18 @@ class EnvironmentBase(object):
             (topic, queue) = self.setup_stack_monitor()
             notification_arns = [topic.arn]
 
+        # Get url to cost estimate calculator
+        # estimate_cost_url = cfn_conn.estimate_template_cost(
+        #     TemplateBody=cfn_template,
+        #     Parameters=stack_params).get('Url')
+        # print estimate_cost_url
+
         # First try to do an update-stack... if it doesn't exist, then try create-stack
-        try:
-            response = cfn_conn.describe_stacks(StackName=stack_name)
-
-            stack = None
-            for s in response.get('Stacks'):
-                if s.get('StackName') == stack_name:
-                    stack = s
-            if not stack:
-                raise Exception('Cannot find stack %s' % stack_name)
-
-            status = stack.get('StackStatus')
-
-            if status == 'ROLLBACK_COMPLETE':
-                print 'Stack rolled back. Deleting it first.\n'
-                cfn_conn.delete_stack(StackName=stack_name)
-                print 'Re-run the command once it is deleted.\n'
-                raise Exception('Cannot update, current state: %s' % status)
-
-            # CREATE_COMPLETE and UPDATE_COMPLETE are both permissible states
-            if not status.endswith('_COMPLETE'):
-                raise Exception('Cannot update, current state: %s' % status)
-
-            print "Updating new CF stack %s\n" % stack_name
-            cfn_conn.update_stack(
-                StackName=stack_name,
-                TemplateBody=cfn_template,
-                Parameters=stack_params,
-                NotificationARNs=notification_arns,
-                Capabilities=['CAPABILITY_IAM'])
-
-        # Else stack doesn't currently exist, create a new stack
-        except botocore.exceptions.ClientError:
-            print "Creating new CF stack %s\n" % stack_name
-            # Load template to string
-            cfn_conn.create_stack(
-                StackName=stack_name,
-                TemplateBody=cfn_template,
-                Parameters=stack_params,
-                NotificationARNs=notification_arns,
-                Capabilities=['CAPABILITY_IAM'],
-                DisableRollback=True,
-                TimeoutInMinutes=TIMEOUT)
+        stack_name = self.config['global']['environment_name']
+        self._ensure_stack_is_deployed(
+            stack_name,
+            sns_topic=topic,
+            stack_params=stack_params)
 
         try:
             self.start_stack_monitor(queue, stack_name)

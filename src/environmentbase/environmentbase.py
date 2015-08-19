@@ -76,8 +76,8 @@ class EnvironmentBase(object):
         self.boto_session = None
 
         # self.env_config = env_config
-        for config_handlers in env_config.config_handlers:
-            self._add_config_handler(config_handlers)
+        for config_handler in env_config.config_handlers:
+            self._add_config_handler(config_handler)
 
         # Load the user interface
         if view is None:
@@ -196,7 +196,7 @@ class EnvironmentBase(object):
         """
 
         for deploy_handler in self._deploy_handlers:
-            deploy_handler(self.deploy_parameter_bindings, self.config)
+            deploy_handler.handle_deploy_event(self.deploy_parameter_bindings, self.config)
 
         # gather runtime parameters to be passed to create/update stack
         stack_params = []
@@ -303,8 +303,8 @@ class EnvironmentBase(object):
         self.stack_monitor.add_handler(handler)
 
     def _add_deploy_handler(self, handler):
-        if not hasattr(handler, 'deploy_handler') or not callable(getattr(handler, 'deploy_handler')):
-            raise ValidationError('Class %s cannot be a deploy handler, missing deploy_handler(parameter_bindings, config)' % type(handler).__name__ )
+        if not hasattr(handler, 'handle_deploy_event') or not callable(getattr(handler, 'handle_deploy_event')):
+            raise ValidationError('Class %s cannot be a deploy handler, missing handle_deploy_event(parameter_bindings, config)' % type(handler).__name__ )
 
         self._deploy_handlers.append(handler)
 

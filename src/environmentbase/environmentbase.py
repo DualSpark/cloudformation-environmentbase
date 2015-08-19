@@ -162,20 +162,16 @@ class EnvironmentBase(object):
         cfn_template = self._load_root_template()
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         try:
-            print "Updating stack '%s' ..." % stack_name
             cfn_conn.update_stack(
                 StackName=stack_name,
                 TemplateBody=cfn_template,
                 Parameters=stack_params,
                 NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'])
-            print "[Update success]"
+            print "Successfully issued update stack command for %s\n" % stack_name
 
         # Else stack doesn't currently exist, create a new stack
         except botocore.exceptions.ClientError as e:
-            print "[Update failed], %s\n" % e.message
-            print "Trying create stack ..."
-            # Load template to string
             try:
                 cfn_conn.create_stack(
                     StackName=stack_name,
@@ -185,9 +181,9 @@ class EnvironmentBase(object):
                     Capabilities=['CAPABILITY_IAM'],
                     DisableRollback=True,
                     TimeoutInMinutes=TIMEOUT)
-                print "Created new CF stack %s\n" % stack_name
+                print "Successfully issued create stack command for %s\n" % stack_name
             except botocore.exceptions.ClientError as e:
-                print "[Create failed], %s\nExiting" % e.message
+                print "Create failed: \n\n%s\n" % e.message
 
     def deploy_action(self):
         """
@@ -239,9 +235,8 @@ class EnvironmentBase(object):
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         stack_name = self.config['global']['environment_name']
 
-        print "Deleting stack '%s' ..." % stack_name,
         cfn_conn.delete_stack(StackName=stack_name)
-        print "Done"
+        print "Successfully issued delete stack command for %s\n" % stack_name
 
     def _validate_config_helper(self, schema, config, path):
         # Check each requirement

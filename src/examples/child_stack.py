@@ -1,5 +1,6 @@
 from environmentbase.networkbase import NetworkBase
 from environmentbase.template import Template
+from environmentbase.environmentbase import EnvConfig
 from troposphere import ec2
 
 
@@ -7,12 +8,6 @@ class MyRootTemplate(NetworkBase):
     """
     Class creates a VPC and common network components for the environment
     """
-
-    def __init__(self, *args, **kwargs):
-        # This function allows MyRootTemplate to use MyChildTemplate's particular configuration requirements
-        self.add_config_handler(MyChildTemplate)
-
-        super(MyRootTemplate, self).__init__(*args, **kwargs)
 
     def create_action(self):
         self.initialize_template()
@@ -50,4 +45,9 @@ class MyChildTemplate(Template):
 
 if __name__ == '__main__':
 
-    MyRootTemplate()
+    # EnvConfig holds references to handler classes used to extend certain functionality
+    # of EnvironmentBase. The config_handlers list takes any class that implements
+    # get_factory_defaults() and get_config_schema().
+    env_config = EnvConfig(config_handlers=[MyChildTemplate])
+
+    MyRootTemplate(env_config=env_config)

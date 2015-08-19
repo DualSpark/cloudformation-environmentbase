@@ -313,4 +313,4 @@ if __name__ == '__main__':
     my_config = res.FACTORY_DEFAULT_CONFIG
     my_config['db'] = db_config
 
-    Controller(config=my_config)
+    Controller(config_file_override=my_config)

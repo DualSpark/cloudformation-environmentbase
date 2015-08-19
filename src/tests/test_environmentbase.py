@@ -83,7 +83,7 @@ class EnvironmentBaseTestCase(TestCase):
 
     def test_alternate_view(self):
         """ More of an example of how to use your own custom view than a test """
-        actions_called = {'deploy': 0, 'create': 0}
+        actions_called = {'deploy': 0, 'create': 0, 'delete': 0}
 
         class MyView(object):
 
@@ -91,12 +91,12 @@ class EnvironmentBaseTestCase(TestCase):
                 # Start an api, a web server or a rich client UI for example
                 # Record user request(s), the controller will then call process_request()
                 # so the can relay user requests to the appropriate controller action
-                self.user_actions = ['create', 'deploy', 'deploy']
-                self.user_config_changes = {'debug': True, 'output_filename': 'output.txt'}
+                self.user_actions = ['create', 'deploy', 'delete']
+                self.user_config_changes = {'output_filename': 'output.txt'}
 
             def update_config(self, config):
                 # Update any config properties you need to
-                config['global']['print_debug'] = self.user_config_changes['debug']
+                # config['global']['print_debug'] = self.user_config_changes['debug']
                 config['global']['output'] = self.user_config_changes['output_filename']
 
             def process_request(self, controller):
@@ -112,7 +112,8 @@ class EnvironmentBaseTestCase(TestCase):
         eb.EnvironmentBase(MyView())
 
         self.assertEqual(actions_called['create'], 1)
-        self.assertEqual(actions_called['deploy'], 2)
+        self.assertEqual(actions_called['deploy'], 1)
+        self.assertEqual(actions_called['delete'], 1)
 
     def test_config_override(self):
         """ Make sure local config files overrides default values."""
@@ -140,14 +141,14 @@ class EnvironmentBaseTestCase(TestCase):
         config = self._create_dummy_config()
 
         # Change one of the values
-        original_value = config['global']['print_debug']
-        config['global']['print_debug'] = not original_value
+        original_value = config['global']['environment_name']
+        config['global']['environment_name'] = original_value + 'dummy'
         with open(res.DEFAULT_CONFIG_FILENAME, 'w') as f:
             f.write(json.dumps(config))
             f.flush()
             base = eb.EnvironmentBase(fake_cli)
 
-        self.assertNotEqual(base.config['global']['print_debug'], original_value)
+        self.assertNotEqual(base.config['global']['environment_name'], original_value)
 
         # 4) Validate local config with non-default name
         config_filename = 'not_default_name'
@@ -165,7 +166,7 @@ class EnvironmentBaseTestCase(TestCase):
             f.flush()
             base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]))
 
-        self.assertNotEqual(base.config['global']['print_debug'], original_value)
+        self.assertNotEqual(base.config['global']['environment_name'], original_value)
 
     def test_config_validation(self):
         """
@@ -243,15 +244,17 @@ class EnvironmentBaseTestCase(TestCase):
                 return {'new_section': {'new_key': 'str'}}
 
         class MyEnvBase(eb.EnvironmentBase):
-            def __init__(self, *args, **kwargs):
-                self.add_config_handler(MyConfigHandler)
-                super(MyEnvBase, self).__init__(*args, **kwargs)
+            pass
 
-        cli = self.fake_cli(['create'])
-        ctlr = MyEnvBase(cli)
+        view = self.fake_cli(['create'])
+        env_config=eb.EnvConfig(config_handlers=[MyConfigHandler])
+        controller = MyEnvBase(
+            view=view,
+            env_config=env_config
+        )
 
         # Make sure the runtime config and the file saved to disk have the new parameter
-        self.assertEquals(ctlr.config['new_section']['new_key'], 'value')
+        self.assertEquals(controller.config['new_section']['new_key'], 'value')
 
         with open(res.DEFAULT_CONFIG_FILENAME, 'r') as f:
             external_config = json.load(f)
@@ -264,7 +267,7 @@ class EnvironmentBaseTestCase(TestCase):
         self._create_local_file(res.DEFAULT_CONFIG_FILENAME, json.dumps(dummy_config, indent=4))
 
         with self.assertRaises(eb.ValidationError):
-            MyEnvBase(cli)
+            MyEnvBase(view=view, env_config=env_config)
 
     def test_flags(self):
         """ Verify cli flags update config object """
@@ -276,14 +279,17 @@ class EnvironmentBaseTestCase(TestCase):
         self.assertEqual(base.config['global']['output'],
                          res.FACTORY_DEFAULT_CONFIG['global']['output'])
 
-        # verify that the the debug cli flag changes the config value
-        base = eb.EnvironmentBase(self.fake_cli(['create', '--debug']))
-        self.assertTrue(base.config['global']['print_debug'])
+        # # verify that the the debug cli flag changes the config value
+        # base = eb.EnvironmentBase(self.fake_cli(['create', '--debug']))
+        # self.assertTrue(base.config['global']['print_debug'])
 
         # verify that the --template-file flag changes the config value
         dummy_value = 'dummy'
         base = eb.EnvironmentBase(self.fake_cli(['create', '--template-file', dummy_value]))
         self.assertEqual(base.config['global']['output'], dummy_value)
+
+        with self.assertRaises(IOError):
+            eb.EnvironmentBase(self.fake_cli(['create', '--config-file', dummy_value]))
 
     def test_factory_default(self):
         with self.assertRaises(IOError):

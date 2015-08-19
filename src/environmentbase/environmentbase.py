@@ -12,6 +12,7 @@ import cli
 import resources as res
 from fnmatch import fnmatch
 import utility
+import monitor
 
 # Allow comments in json if you can but at least parse regular json if not
 try:
@@ -31,31 +32,25 @@ class ValidationError(Exception):
     pass
 
 
+class EnvConfig(object):
+
+    def __init__(self, config_handlers=None, stack_event_handlers=None, deploy_handlers=None):
+        self.config_handlers = config_handlers if config_handlers else []
+        self.stack_event_handlers = stack_event_handlers if stack_event_handlers else []
+        self.deploy_handlers = deploy_handlers if deploy_handlers else {}
+
+
 class EnvironmentBase(object):
     """
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
     """
 
-    config_filename = None
-    config = {}
-    globals = {}
-    template_args = {}
-    template = None
-    manual_parameter_bindings = {}
-    deploy_parameter_bindings = []
-    ignore_outputs = ['templateValidationHash', 'dateGenerated']
-    stack_outputs = {}
-    config_handlers = []
-
-    boto_session = None
-
-    stack_event_handlers = []
-
     def __init__(self,
                  view=None,
+                 env_config=EnvConfig(),
                  create_missing_files=True,
                  config_filename=res.DEFAULT_CONFIG_FILENAME,
-                 config=None):
+                 config_file_override=None):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
@@ -65,6 +60,24 @@ class EnvironmentBase(object):
         :param config_filename: The name of the config file to load by default.  Note: User can still override this value from the CLI with '--config-file'.
         :param config: Override loading config values from file by providing config setting directly to the constructor
         """
+
+        self.config_filename = None
+        self.config = {}
+        self.globals = {}
+        self.template_args = {}
+        self.template = None
+        self.manual_parameter_bindings = {}
+        self.deploy_parameter_bindings = []
+        self.ignore_outputs = ['templateValidationHash', 'dateGenerated']
+        self.stack_outputs = {}
+        self._config_handlers = []
+        self._deploy_handlers = []
+
+        self.boto_session = None
+
+        # self.env_config = env_config
+        for config_handlers in env_config.config_handlers:
+            self._add_config_handler(config_handlers)
 
         # Load the user interface
         if view is None:
@@ -78,17 +91,23 @@ class EnvironmentBase(object):
 
         # Config location override
         self.create_missing_files = create_missing_files
-        self.handle_local_config(config)
+        self.handle_local_config(view, config=config_file_override)
 
-        # Process any global flags here before letting the view execute any requested user actions
-        view.update_config(self.config)
+        self.view = view
 
         # Shortcut references to config sections
         self.globals = self.config.get('global', {})
         self.template_args = self.config.get('template', {})
 
-        # Finally allow the view to execute the user's requested action
-        view.process_request(self)
+        self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
+        for stack_handler in env_config.stack_event_handlers:
+            self._add_stack_event_handler(stack_handler)
+
+        for deploy_handler in env_config.deploy_handlers:
+            self._add_deploy_handler(deploy_handler)
+
+        # allow the view to execute the user's requested action
+        self.view.process_request(self)
 
     def _ensure_template_dir_exists(self):
         parent_dir = TEMPLATES_PATH
@@ -120,198 +139,6 @@ class EnvironmentBase(object):
         # Do custom troposphere resource creation in your overridden copy of this method
 
         self.write_template_to_file()
-
-    def _update_config_from_env(self, section_label, config_key):
-        """
-        Update config value with values from the environment variables. For each subsection below the 'section_label'
-        containing the 'config_key' the environment is scanned to find an environment variable matching the name
-        <subsection_label>_<config_key> (in all caps). If thais variable exists the config value is replaced.
-
-        For example: self._update_config_from_env('db', 'password') for the config file:
-        {
-            ...
-            'db': {
-                'label1': {
-                    ...
-                    'password': 'changeme'
-                },
-                'label2': {
-                    ...
-                    'password': 'changeme]'
-                }
-            }
-        }
-
-        Would replace those two database passwords if the following is run from the shell:
-        > export LABEL1_PASSWORD=myvoiceismypassword12345
-        > export LABEL2_PASSWORD=myvoiceismyotherpassword12345
-        """
-        config_section = self.config.get(section_label)
-        if config_section is None:
-            raise ValueError('No config section %s found' % config_key)
-
-        # TODO: handle direct change in case where we don't need subsections
-
-        update_set = {}
-        for subsection_label, subsection in config_section.iteritems():
-
-            # Look for env var: <subsection_label> '_' <config key> (e.g. proddb, password --> PRODDB_PASSWORD)
-            env_name = ("%s_%s" % (subsection_label, config_key)).upper()
-
-            # Save the old value and the new value
-            env_value = os.environ.get(env_name)
-            default_value = subsection.get(config_key)
-
-            # If an env var was found override old value in a separate map
-            update_set[subsection_label] = env_value if env_value else default_value
-
-            if self.config['global']['print_debug']:
-                print "%s.%s.%s = '%s'" % (section_label, subsection_label, config_key, default_value)
-                if env_value:
-                    print "* Value updated to", "'{}'".format(env_value), "({})".format(env_name)
-                else:
-                    print "* Value NOT updated since '%s' not found" % env_name
-                print
-
-        # process the map of updates and make the actual changes
-        for subsection_label, updated_value in update_set.iteritems():
-            config_section[subsection_label][config_key] = updated_value
-
-    def load_db_passwords_from_env(self):
-        self._update_config_from_env('db', 'password')
-
-    def setup_stack_monitor(self):
-        # Topic and queue names are randomly generated so there's no chance of picking up messages from a previous runs
-        name = self.config['global']['environment_name'] + '_' + time.strftime("%Y%m%d-%H%M%S") + '_' + utility.random_string(5)
-
-        # Creating a topic is idempotent, so if it already exists then we will just get the topic returned.
-        sns = utility.get_boto_resource(self.config, 'sns')
-        topic_arn = sns.create_topic(Name=name).arn
-
-        # Creating a queue is idempotent, so if it already exists then we will just get the queue returned.
-        sqs = utility.get_boto_resource(self.config, 'sqs')
-        queue = sqs.create_queue(QueueName=name)
-
-        queue_arn = queue.attributes['QueueArn']
-
-        # Ensure that we are subscribed to the SNS topic
-        subscribed = False
-        topic = sns.Topic(topic_arn)
-        for subscription in topic.subscriptions.all():
-            if subscription.attributes['Endpoint'] == queue_arn:
-                subscribed = True
-                break
-
-        if not subscribed:
-            topic.subscribe(Protocol='sqs', Endpoint=queue_arn)
-
-        # Set up a policy to allow SNS access to the queue
-        if 'Policy' in queue.attributes:
-            policy = json.loads(queue.attributes['Policy'])
-        else:
-            policy = {'Version': '2008-10-17'}
-
-        if 'Statement' not in policy:
-            statement = {
-                "Sid": "sqs-access",
-                "Effect": "Allow",
-                "Principal": {"AWS": "*"},
-                "Action": "SQS:SendMessage",
-                "Resource": "<SQS QUEUE ARN>",
-                "Condition": {"StringLike": {"aws:SourceArn": "<SNS TOPIC ARN>"}}
-            }
-            statement['Resource'] = queue_arn
-            statement['Condition']['StringLike']['aws:SourceArn'] = topic_arn
-            policy['Statement'] = [statement]
-
-            queue.set_attributes(Attributes={
-                'Policy': json.dumps(policy)
-            })
-
-        return topic, queue
-
-    def start_stack_monitor(self, queue, stack_name):
-        TERMINAL_STATES = [
-            'CREATE_COMPLETE',
-            'UPDATE_COMPLETE',
-            'UPDATE_ROLLBACK_COMPLETE',
-            'CREATE_FAILED',
-            'UPDATE_FAILED',
-            'UPDATE_ROLLBACK_FAILED',
-        ]
-        # Process messages by printing out body and optional author name
-        poll_timeout = 3600  # an hour
-        poll_interval = 5
-        start_time = time.time()
-        time.clock()
-        elapsed = 0
-        is_stack_running = True
-
-        while elapsed < poll_timeout and is_stack_running and len(self.stack_event_handlers) > 0:
-
-            elapsed = time.time() - start_time
-
-            msgs = queue.receive_messages(WaitTimeSeconds=poll_interval, MaxNumberOfMessages=10)
-            # print 'grabbed batch of %s' % len(msgs)
-
-            for raw_msg in msgs:
-                parsed_msg = json.loads(raw_msg.body)
-                msg_body = parsed_msg['Message']
-
-                # parse k='val' into a dict
-                parsed_msg = {k: v.strip("'") for k, v in re.findall(r"(\S+)=('.*?'|\S+)", msg_body)}
-
-                # remember the most interesting outputs
-                data = {
-                    "status": parsed_msg.get('ResourceStatus'),
-                    "type": parsed_msg.get('ResourceType'),
-                    "name": parsed_msg.get('LogicalResourceId'),
-                    "reason": parsed_msg.get('ResourceStatusReason'),
-                    "props": parsed_msg.get('ResourceProperties')
-                }
-
-                # attempt to parse the properties
-                try:
-                    data['props'] = json.loads(data['props'])
-                except ValueError:
-                    pass
-
-                if self.config['global']['print_debug']:
-                    print "New Stack Event --------------\n", \
-                        data['status'], data['type'], data['name'], '\n', \
-                        data['reason'], '\n', \
-                        json.dumps(data['props'], indent=4)
-                else:
-                    pass
-
-                # clear the message
-                raw_msg.delete()
-
-                # process handlers
-                handlers_to_remove = []
-                for handler in self.stack_event_handlers:
-                    if handler.handle_stack_event(data):
-                        handlers_to_remove.append(handler)
-
-                # once a handlers job is done no need to keep checking for more events
-                for handler in handlers_to_remove:
-                    self.stack_event_handlers.remove(handler)
-
-                # Finally test for the termination condition
-                if data['type'] == "AWS::CloudFormation::Stack" \
-                        and data['name'] == stack_name \
-                        and data['status'] in TERMINAL_STATES:
-                    is_stack_running = False
-                    # print 'termination condition found!'
-
-    def cleanup_stack_monitor(self, topic, queue):
-        if topic:
-            topic.delete()
-        if queue:
-            queue.delete()
-
-    def add_stack_event_handler(self, handler):
-        self.stack_event_handlers.append(handler)
 
     def _load_root_template(self):
         # Validate existence of and read in the template file
@@ -368,16 +195,21 @@ class EnvironmentBase(object):
         issue a create-stack command.
         """
 
+        for deploy_handler in self._deploy_handlers:
+            deploy_handler(self.deploy_parameter_bindings, self.config)
+
         # gather runtime parameters to be passed to create/update stack
         stack_params = []
         if self.deploy_parameter_bindings:
             stack_params.extend(self.deploy_parameter_bindings)
 
+        stack_name = self.config['global']['environment_name']
+
         # initialize stack event monitor
         topic = None
         queue = None
-        if len(self.stack_event_handlers) > 0:
-            (topic, queue) = self.setup_stack_monitor()
+        if self.stack_monitor.has_handlers():
+            (topic, queue) = self.stack_monitor.setup_stack_monitor()
 
         # Get url to cost estimate calculator
         # estimate_cost_url = cfn_conn.estimate_template_cost(
@@ -386,20 +218,19 @@ class EnvironmentBase(object):
         # print estimate_cost_url
 
         # First try to do an update-stack... if it doesn't exist, then try create-stack
-        stack_name = self.config['global']['environment_name']
         self._ensure_stack_is_deployed(
             stack_name,
             sns_topic=topic,
             stack_params=stack_params)
 
         try:
-            self.start_stack_monitor(queue, stack_name)
+            self.stack_monitor.start_stack_monitor(queue, stack_name, self.config)
         except KeyboardInterrupt:
             print 'KeyboardInterrupt: calling cleanup'
-            self.cleanup_stack_monitor(topic, queue)
+            self.stack_monitor.cleanup_stack_monitor(topic, queue)
             raise
 
-        self.cleanup_stack_monitor(topic, queue)
+        self.stack_monitor.cleanup_stack_monitor(topic, queue)
 
     def delete_action(self):
         """
@@ -460,12 +291,24 @@ class EnvironmentBase(object):
         config_reqs_copy = copy.deepcopy(factory_schema)
 
         # Merge in any requirements provided by config handlers
-        for handler in self.config_handlers:
+        for handler in self._config_handlers:
             config_reqs_copy.update(handler.get_config_schema())
 
         self._validate_config_helper(config_reqs_copy, config, '')
 
-    def add_config_handler(self, handler):
+    def _add_stack_event_handler(self, handler):
+        if not hasattr(handler, 'handle_stack_event') or not callable(getattr(handler, 'handle_stack_event')):
+            raise ValidationError('Class %s cannot be a stack_event handler, missing handle_stack_event(event_data, config)' % type(handler).__name__ )
+
+        self.stack_monitor.add_handler(handler)
+
+    def _add_deploy_handler(self, handler):
+        if not hasattr(handler, 'deploy_handler') or not callable(getattr(handler, 'deploy_handler')):
+            raise ValidationError('Class %s cannot be a deploy handler, missing deploy_handler(parameter_bindings, config)' % type(handler).__name__ )
+
+        self._deploy_handlers.append(handler)
+
+    def _add_config_handler(self, handler):
         """
         Register classes that will augment the configuration defaults and/or validation logic here
         """
@@ -476,9 +319,59 @@ class EnvironmentBase(object):
         if not hasattr(handler, 'get_config_schema') or not callable(getattr(handler, 'get_config_schema')):
             raise ValidationError('Class %s cannot be a config handler, missing get_config_schema()' % type(handler).__name__ )
 
-        self.config_handlers.append(handler)
+        self._config_handlers.append(handler)
 
-    def handle_local_config(self, config=None):
+    @staticmethod
+    def _config_env_override(config, path, print_debug=False):
+        """
+        Update config value with values from the environment variables. If the environment variable exists
+        the config value is replaced with it's value.
+
+        For config parameters like template.ec2_key_default this function will expect an environment
+        variable matching the <section label>_<config_key> in all caps (e.g. TEMPLATE_EC2_KEY_DEFAULT).
+        For environment variables containing multiple subsections the same pattern applies.
+
+        For example: self._update_config_from_env('db', 'password') for the config file:
+        {
+            ...
+            'db': {
+                'label1': {
+                    ...
+                    'password': 'changeme'
+                },
+                'label2': {
+                    ...
+                    'password': 'changeme]'
+                }
+            }
+        }
+
+        Would replace those two database passwords if the following is run from the shell:
+        > export DB_LABEL1_PASSWORD=myvoiceismypassword12345
+        > export DB_LABEL2_PASSWORD=myvoiceismyotherpassword12345
+        """
+        for key, val in config.iteritems():
+            new_path = path + ('.' if path is not '' else '') + key
+            env_name = '_'.join(new_path.split('.')).upper()
+
+            if not isinstance(val, dict):
+                env_value = os.environ.get(env_name)
+                if print_debug:
+                    print "Checking %s (%s)" % (env_name, new_path)
+
+                if not env_value:
+                    continue
+
+                default_value = config.get(key)
+                config[key] = env_value if env_value else default_value
+
+                if env_value:
+                    print "* Updating %s from '%s' to value of '%s'" % (new_path, default_value, env_name)
+
+            else:
+                EnvironmentBase._config_env_override(config[key], new_path, print_debug=print_debug)
+
+    def handle_local_config(self, view, config=None):
         """
         Use local file if present, otherwise use factory values and write that to disk
         unless self.create_missing_files == false, in which case throw IOError
@@ -502,7 +395,7 @@ class EnvironmentBase(object):
                 default_config_copy = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
 
                 # Merge in any defaults provided by registered config handlers
-                for handler in self.config_handlers:
+                for handler in self._config_handlers:
                     default_config_copy.update(handler.get_factory_defaults())
 
                 # Don't want changes to config modifying the FACTORY_DEFAULT
@@ -514,6 +407,15 @@ class EnvironmentBase(object):
             # Otherwise complain
             else:
                 raise IOError(self.config_filename + ' could not be found')
+
+        # Load in cli config overrides
+        view.update_config(config)
+
+        # record value of the debug variable
+        debug = config['global']['print_debug']
+
+        # Check the environment variables for any overrides
+        self._config_env_override(config, '', print_debug=debug)
 
         # Validate and save results
         self._validate_config(config)

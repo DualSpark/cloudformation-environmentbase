@@ -209,7 +209,7 @@ class EnvironmentBase(object):
         topic = None
         queue = None
         if self.stack_monitor.has_handlers():
-            (topic, queue) = self.stack_monitor.setup_stack_monitor()
+            (topic, queue) = self.stack_monitor.setup_stack_monitor(self.config)
 
         # Get url to cost estimate calculator
         # estimate_cost_url = cfn_conn.estimate_template_cost(

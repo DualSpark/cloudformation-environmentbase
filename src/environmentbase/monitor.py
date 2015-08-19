@@ -19,16 +19,16 @@ class StackMonitor(object):
         self.stack_event_handlers = []
         self.env_name = env_name
 
-    def setup_stack_monitor(self):
+    def setup_stack_monitor(self, config):
         # Topic and queue names are randomly generated so there's no chance of picking up messages from a previous runs
         name = self.env_name + '_' + time.strftime("%Y%m%d-%H%M%S") + '_' + utility.random_string(5)
 
         # Creating a topic is idempotent, so if it already exists then we will just get the topic returned.
-        sns = utility.get_boto_resource('sns')
+        sns = utility.get_boto_resource(config, 'sns')
         topic_arn = sns.create_topic(Name=name).arn
 
         # Creating a queue is idempotent, so if it already exists then we will just get the queue returned.
-        sqs = utility.get_boto_resource('sqs')
+        sqs = utility.get_boto_resource(config, 'sqs')
         queue = sqs.create_queue(QueueName=name)
 
         queue_arn = queue.attributes['QueueArn']

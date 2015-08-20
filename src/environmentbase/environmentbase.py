@@ -131,6 +131,15 @@ class EnvironmentBase(object):
             reloaded_template = pure_json.loads(raw_json)
             pure_json.dump(reloaded_template, output_file, indent=4, separators=(',', ':'))
 
+    def estimate_cost(self, template_name=None, stack_params=None):
+        template_body = self._load_template(template_name)
+        # Get url to cost estimate calculator
+        cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
+        estimate_cost_url = cfn_conn.estimate_template_cost(
+            TemplateBody=template_body,
+            Parameters=stack_params).get('Url')
+        print estimate_cost_url
+
     def create_action(self):
         """
         Default create_action invoked by the CLI
@@ -142,9 +151,12 @@ class EnvironmentBase(object):
 
         self.write_template_to_file()
 
-    def _load_root_template(self):
+    def _load_template(self, template_name=None):
+        if not template_name:
+            template_name = self.config['global']['output']
+
         # Validate existence of and read in the template file
-        cfn_template_filename = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
+        cfn_template_filename = os.path.join(TEMPLATES_PATH, template_name)
         if os.path.isfile(cfn_template_filename):
             with open(cfn_template_filename, 'r') as cfn_template_file:
                 cfn_template = cfn_template_file.read()
@@ -156,12 +168,13 @@ class EnvironmentBase(object):
         return cfn_template
 
     def _ensure_stack_is_deployed(self, stack_name='UnnamedStack', sns_topic=None, stack_params=[]):
+        is_successful = False
         notification_arns = []
 
         if sns_topic:
             notification_arns.append(sns_topic.arn)
 
-        cfn_template = self._load_root_template()
+        cfn_template = self._load_template()
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         try:
             cfn_conn.update_stack(
@@ -170,6 +183,7 @@ class EnvironmentBase(object):
                 Parameters=stack_params,
                 NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'])
+            is_successful = True
             print "Successfully issued update stack command for %s\n" % stack_name
 
         # Else stack doesn't currently exist, create a new stack
@@ -183,16 +197,14 @@ class EnvironmentBase(object):
                     Capabilities=['CAPABILITY_IAM'],
                     DisableRollback=True,
                     TimeoutInMinutes=TIMEOUT)
+                is_successful = True
                 print "Successfully issued create stack command for %s\n" % stack_name
             except botocore.exceptions.ClientError as e:
                 print "Create failed: \n\n%s\n" % e.message
 
-    def deploy_action(self):
-        """
-        Default deploy_action invoked by the CLI. Attempt to update the stack. If the stack does not yet exist, it will
-        issue a create-stack command.
-        """
+        return is_successful
 
+    def _get_stack_params(self):
         for deploy_handler in self._deploy_handlers:
             deploy_handler.handle_deploy_event(self.deploy_parameter_bindings, self.config)
 
@@ -200,6 +212,16 @@ class EnvironmentBase(object):
         stack_params = []
         if self.deploy_parameter_bindings:
             stack_params.extend(self.deploy_parameter_bindings)
+
+        return stack_params
+
+    def deploy_action(self):
+        """
+        Default deploy_action invoked by the CLI. Attempt to update the stack. If the stack does not yet exist, it will
+        issue a create-stack command.
+        """
+
+        stack_params = self._get_stack_params()
 
         stack_name = self.config['global']['environment_name']
 
@@ -209,20 +231,18 @@ class EnvironmentBase(object):
         if self.stack_monitor.has_handlers():
             (topic, queue) = self.stack_monitor.setup_stack_monitor(self.config)
 
-        # Get url to cost estimate calculator
-        # estimate_cost_url = cfn_conn.estimate_template_cost(
-        #     TemplateBody=cfn_template,
-        #     Parameters=stack_params).get('Url')
-        # print estimate_cost_url
-
-        # First try to do an update-stack... if it doesn't exist, then try create-stack
-        self._ensure_stack_is_deployed(
-            stack_name,
-            sns_topic=topic,
-            stack_params=stack_params)
+        # self.estimate_cost(stack_params=stack_params)
 
         try:
-            self.stack_monitor.start_stack_monitor(queue, stack_name, self.config)
+            # First try to do an update-stack... if it doesn't exist, then try create-stack
+            is_successful = self._ensure_stack_is_deployed(
+                stack_name,
+                sns_topic=topic,
+                stack_params=stack_params)
+
+            if is_successful:
+                self.stack_monitor.start_stack_monitor(queue, stack_name, self.config)
+
         except KeyboardInterrupt:
             print 'KeyboardInterrupt: calling cleanup'
             self.stack_monitor.cleanup_stack_monitor(topic, queue)

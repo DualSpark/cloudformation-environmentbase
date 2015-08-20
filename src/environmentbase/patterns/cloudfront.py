@@ -1,5 +1,5 @@
 from environmentbase.template import Template
-from troposphere import Ref, Join, Output, GetAtt
+from troposphere import Ref, Join, Output, GetAtt, AWS_ACCOUNT_ID
 from troposphere.cloudfront import Distribution, DistributionConfig, Origin, S3Origin
 from troposphere.cloudfront import DefaultCacheBehavior, ForwardedValues, Logging
 
@@ -51,7 +51,7 @@ class CloudFront(Template):
             self.dist_config.Logging = Logging(
                 Bucket=Join('.', [Ref(self.utility_bucket), 's3.amazonaws.com']),
                 IncludeCookies=True,
-                Prefix='%sCloudFront' % self.resource_name
+                Prefix=Join('/', ['AWSLogs', Ref(AWS_ACCOUNT_ID), 'CloudFront'])
             )
 
         cf_distribution = self.add_resource(Distribution(

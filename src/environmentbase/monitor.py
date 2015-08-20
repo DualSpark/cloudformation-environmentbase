@@ -124,7 +124,7 @@ class StackMonitor(object):
                     print "New Stack Event --------------\n", \
                         data['status'], data['type'], data['name'], '\n', \
                         data['reason'], '\n', \
-                        json.dumps(data['props'], indent=4)
+                        # json.dumps(data['props'], indent=4)
                 else:
                     pass
 

@@ -595,7 +595,7 @@ class Template(t.Template):
             elb_obj.AccessLoggingPolicy = elb.AccessLoggingPolicy(
                 EmitInterval=5,
                 Enabled=True,
-                S3BucketName=Ref(utility_bucket))
+                S3BucketName=utility_bucket)
 
         return self.add_resource(elb_obj)
 
@@ -835,8 +835,7 @@ class Template(t.Template):
         """
         if name:
             self.utility_bucket = name
-            param_binding_map['utilityBucket'] = Join('.', [self.utility_bucket, 's3.amazonaws.com'])
-
+            param_binding_map['utilityBucket'] = name
         else:
             self.utility_bucket = self.add_resource(s3.Bucket(
                 name.lower() + 'UtilityBucket',

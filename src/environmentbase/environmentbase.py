@@ -109,12 +109,14 @@ class EnvironmentBase(object):
         # allow the view to execute the user's requested action
         self.view.process_request(self)
 
-    def _ensure_template_dir_exists(self):
+    def _ensure_template_dir_exists(self, filename=None):
         parent_dir = TEMPLATES_PATH
         if not os.path.exists(parent_dir):
             os.makedirs(parent_dir)
-        path = os.path.join(TEMPLATES_PATH, self.config['global']['output'])
-        return path
+
+        if not filename:
+            filename = self.globals['output']
+        return os.path.join(TEMPLATES_PATH, filename)
 
     def write_template_to_file(self):
         """
@@ -615,11 +617,12 @@ class EnvironmentBase(object):
 
         template_name = "%s.%s.template" % (template.name, key_serial)
         s3_path = "%s/%s" % (s3_template_prefix, template_name)
-        local_path = self._ensure_template_dir_exists()
+        local_path = self._ensure_template_dir_exists(template_name)
 
         if self.config['global']['print_debug']:
+            print 'Saving copy of %s to %s' % (template.name, local_path)
             with open(local_path, 'w') as f:
-                f.write(self.to_json())
+                f.write(template.to_json())
 
         s3 = utility.get_boto_resource(self.config, 's3')
 

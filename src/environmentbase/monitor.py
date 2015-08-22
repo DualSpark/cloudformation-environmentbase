@@ -114,17 +114,10 @@ class StackMonitor(object):
                     "props": parsed_msg.get('ResourceProperties')
                 }
 
-                # attempt to parse the properties
-                try:
-                    data['props'] = json.loads(data['props'])
-                except ValueError:
-                    pass
-
-                if quiet:
+                if not quiet:
                     print "New Stack Event --------------\n", \
                         data['status'], data['type'], data['name'], '\n', \
-                        data['reason'], '\n', \
-                        # json.dumps(data['props'], indent=4)
+                        data['reason']
                 else:
                     pass
 

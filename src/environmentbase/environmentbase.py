@@ -241,7 +241,7 @@ class EnvironmentBase(object):
                 stack_params=stack_params)
 
             if is_successful:
-                self.stack_monitor.start_stack_monitor(queue, stack_name, self.config)
+                self.stack_monitor.start_stack_monitor(queue, stack_name, self.config, debug=self.globals['print_debug'])
 
         except KeyboardInterrupt:
             print 'KeyboardInterrupt: calling cleanup'

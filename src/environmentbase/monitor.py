@@ -81,7 +81,7 @@ class StackMonitor(object):
         if queue:
             queue.delete()
 
-    def start_stack_monitor(self, queue, stack_name, config, quiet=True):
+    def start_stack_monitor(self, queue, stack_name, config, debug=False):
 
         # Process messages by printing out body and optional author name
         poll_timeout = 3600  # an hour
@@ -114,10 +114,16 @@ class StackMonitor(object):
                     "props": parsed_msg.get('ResourceProperties')
                 }
 
-                if not quiet:
+                # attempt to parse the properties
+                try:
+                    data['props'] = json.loads(data['props'])
+                except ValueError:
+                    pass
+
+                if debug:
                     print "New Stack Event --------------\n", \
                         data['status'], data['type'], data['name'], '\n', \
-                        data['reason']
+                        data['reason'], '\n'
                 else:
                     pass
 

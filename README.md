@@ -9,7 +9,6 @@ Environmentbase extends [troposphere](https://github.com/cloudtools/troposphere)
 - provides a small but growing library of functional infrastructure patterns encapsulating industry best practices.
 - provides an extension mechanism to develop your own configurable, reusable 'patterns' using child-templates.
 
-and combines all this into a platform for constructing complex Cloudformation templates out of reusable patterns encapsulating best practices. 
 
 Moreover the Environmentbase platform allows for a service oriented development model, whereby small teams can build, test and deploy independent infrastructure automation templates, each focused on a specific service or function.  These templates can be imported and associated to a 'top-level' (integration) template to centrally deploy and manage the full environment. The same template can be deployed in any region or AWS account to produce identical environments.
 

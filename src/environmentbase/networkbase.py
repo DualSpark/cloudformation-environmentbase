@@ -116,12 +116,13 @@ class NetworkBase(EnvironmentBase):
 
         self.template.vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 
-        self.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
+        self.template.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
 
         igw_title = 'igwVpcAttachment'
-        self.igw_attachment = self.template.add_resource(ec2.VPCGatewayAttachment(igw_title,
-                InternetGatewayId=Ref(self.igw),
-                VpcId=Ref(self.template.vpc_id)))
+        self.template.igw_attachment = self.template.add_resource(ec2.VPCGatewayAttachment(
+            igw_title,
+            InternetGatewayId=Ref(self.template.igw),
+            VpcId=Ref(self.template.vpc_id)))
 
         self.gateway_hook()
 
@@ -168,7 +169,7 @@ class NetworkBase(EnvironmentBase):
             self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
                 DestinationCidrBlock='0.0.0.0/0',
-                GatewayId=Ref(self.igw),
+                GatewayId=Ref(self.template.igw),
                 RouteTableId=Ref(route_table)))
         elif subnet_type == 'private':
             self.template.merge(ha_nat.HaNat(index, nat_instance_type, name='HaNat%s' % str(index)))
@@ -235,7 +236,7 @@ class NetworkBase(EnvironmentBase):
 
         gateway_connection = self.template.add_resource(ec2.VPCGatewayAttachment('vpnGatewayAttachment',
             VpcId=Ref(self.template.vpc_id),
-            InternetGatewayId=Ref(self.igw),
+            InternetGatewayId=Ref(self.template.igw),
             VpnGatewayId=Ref(gateway)))
 
 if __name__ == '__main__':

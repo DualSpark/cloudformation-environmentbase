@@ -74,6 +74,19 @@ class HaNat(Template):
         '''
         Create the NAT role and instance profile
         '''
+        policy_actions = [
+            "ec2:DescribeInstances",
+            "ec2:ModifyInstanceAttribute",
+            "ec2:DescribeSubnets",
+            "ec2:DescribeRouteTables",
+            "ec2:CreateRoute",
+            "ec2:ReplaceRoute",
+            "ec2:StartInstances",
+            "ec2:StopInstances"
+        ]
+        if self.enable_ntp:
+            policy_actions.append("ec2:*DhcpOptions*")
+
         nat_role = self.add_resource(Role(
             "Nat%sRole" % str(self.subnet_index),
             AssumeRolePolicyDocument={
@@ -91,16 +104,7 @@ class HaNat(Template):
                 PolicyDocument={
                     "Statement": [{
                         "Effect": "Allow",
-                        "Action": [
-                            "ec2:DescribeInstances",
-                            "ec2:ModifyInstanceAttribute",
-                            "ec2:DescribeSubnets",
-                            "ec2:DescribeRouteTables",
-                            "ec2:CreateRoute",
-                            "ec2:ReplaceRoute",
-                            "ec2:StartInstances",
-                            "ec2:StopInstances"
-                        ],
+                        "Action": policy_actions,
                         "Resource": "*"
                     }]
                 }

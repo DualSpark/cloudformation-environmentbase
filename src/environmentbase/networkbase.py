@@ -159,7 +159,7 @@ class NetworkBase(EnvironmentBase):
 
         self.manual_parameter_bindings['vpcId'] = Ref(self.template.vpc_id)
         self.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
-        self.manual_parameter_bindings['internetGateway'] = self.template.igw
+        self.manual_parameter_bindings['internetGateway'] = Ref(self.template.igw)
 
     def create_subnet_egress(self, index, route_table, igw_title, subnet_type):
         """

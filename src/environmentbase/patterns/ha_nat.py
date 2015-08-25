@@ -119,9 +119,14 @@ class HaNat(Template):
 
     def add_nat_asg(self):
 
+        user_data = resources.get_resource('nat_takeover.sh')
+
+        if self.enable_ntp:
+            user_data = Join('\n', [user_data, resources.get_resource('ntp_takeover.sh')])
+
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),
-            UserData=Base64(resources.get_resource('nat_ntp_takeover.sh')),
+            UserData=Base64(user_data),
             ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
             KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(self.sg)],

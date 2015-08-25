@@ -233,6 +233,11 @@ class Template(t.Template):
             Description='Name of the S3 bucket used for infrastructure utility',
             Type='String'))
 
+        self.igw = self.add_parameter(Parameter(
+            'internetGateway',
+            Description='Name of the internet gateway used by the vpc',
+            Type='String'))
+
         for subnet_type in subnet_types:
             if subnet_type not in self.subnets:
                 self.subnets[subnet_type] = []

@@ -2,7 +2,7 @@ from environmentbase.template import Template
 from environmentbase import resources
 from troposphere import Ref, Join, Base64, FindInMap
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tags
+from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tag
 from troposphere.iam import Policy, Role, InstanceProfile
 
 
@@ -13,7 +13,7 @@ class HaNat(Template):
     a route directing egress traffic from the private subnet through this NAT
     '''
 
-    def __init__(self, subnet_index, instance_type='t2.micro', name='HaNat'):
+    def __init__(self, subnet_index, instance_type='t2.micro', enable_ntp=False, name='HaNat'):
         '''
         Method initializes HA NAT in a given environment deployment
         @param subnet_index [int] ID of the subnet that the NAT instance will be deployed to
@@ -21,6 +21,7 @@ class HaNat(Template):
         '''
         self.subnet_index = subnet_index
         self.instance_type = instance_type
+        self.enable_ntp = enable_ntp
 
         # These will be initialized and consumed by various functions called in the build hook
         self.sg = None
@@ -73,6 +74,19 @@ class HaNat(Template):
         '''
         Create the NAT role and instance profile
         '''
+        policy_actions = [
+            "ec2:DescribeInstances",
+            "ec2:ModifyInstanceAttribute",
+            "ec2:DescribeSubnets",
+            "ec2:DescribeRouteTables",
+            "ec2:CreateRoute",
+            "ec2:ReplaceRoute",
+            "ec2:StartInstances",
+            "ec2:StopInstances"
+        ]
+        if self.enable_ntp:
+            policy_actions.append("ec2:*DhcpOptions*")
+
         nat_role = self.add_resource(Role(
             "Nat%sRole" % str(self.subnet_index),
             AssumeRolePolicyDocument={
@@ -90,16 +104,7 @@ class HaNat(Template):
                 PolicyDocument={
                     "Statement": [{
                         "Effect": "Allow",
-                        "Action": [
-                            "ec2:DescribeInstances",
-                            "ec2:ModifyInstanceAttribute",
-                            "ec2:DescribeSubnets",
-                            "ec2:DescribeRouteTables",
-                            "ec2:CreateRoute",
-                            "ec2:ReplaceRoute",
-                            "ec2:StartInstances",
-                            "ec2:StopInstances"
-                        ],
+                        "Action": policy_actions,
                         "Resource": "*"
                     }]
                 }
@@ -114,9 +119,14 @@ class HaNat(Template):
 
     def add_nat_asg(self):
 
+        user_data = resources.get_resource('nat_takeover.sh')
+
+        if self.enable_ntp:
+            user_data = Join('\n', [user_data, resources.get_resource('ntp_takeover.sh')])
+
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),
-            UserData=Base64(resources.get_resource('nat_ntp_takeover.sh')),
+            UserData=Base64(user_data),
             ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
             KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(self.sg)],
@@ -129,7 +139,10 @@ class HaNat(Template):
         nat_asg = self.add_resource(AutoScalingGroup(
             "Nat%sASG" % str(self.subnet_index),
             DesiredCapacity=1,
-            Tags=Tags(Name=Join("-", [Ref(self.vpc_id), "NAT"])),
+            Tags=[
+                Tag("Name", Join("-", [Ref(self.vpc_id), "NAT"]), True),
+                Tag("isNat", "true", True)
+            ],
             MinSize=1,
             MaxSize=1,
             Cooldown="30",

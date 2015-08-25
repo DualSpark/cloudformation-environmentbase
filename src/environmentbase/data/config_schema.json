@@ -32,7 +32,10 @@
         "public_subnet_size": "basestring",
         "private_subnet_size": "basestring",
         "network_cidr_base": "basestring",
-        "network_cidr_size": "basestring",
-        "nat_instance_type": "basestring"
+        "network_cidr_size": "basestring"
+    },
+    "nat": {
+        "instance_type": "basestring",
+        "enable_ntp": "bool"
     }
 }

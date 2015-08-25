@@ -32,7 +32,10 @@
     "protected_subnet_size": "20",
     "private_subnet_size": "19",
     "network_cidr_base": "10.0.0.0",
-    "network_cidr_size": "16",
-    "nat_instance_type": "t2.micro"
+    "network_cidr_size": "16"
+  },
+  "nat": {
+    "instance_type": "t2.micro",
+    "enable_ntp": false
   }
 }

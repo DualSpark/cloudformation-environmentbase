@@ -149,7 +149,7 @@ class NetworkBase(EnvironmentBase):
                     VpcId=Ref(self.template.vpc_id)))
 
                 # Create the NATs and egress rules
-                self.create_subnet_egress(index, route_table, igw_title, subnet_type, network_config['nat_instance_type'])
+                self.create_subnet_egress(index, route_table, igw_title, subnet_type)
 
                 # Associate the routing table with the subnet
                 self.template.add_resource(ec2.SubnetRouteTableAssociation(
@@ -160,7 +160,7 @@ class NetworkBase(EnvironmentBase):
         self.manual_parameter_bindings['vpcId'] = Ref(self.template.vpc_id)
         self.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
 
-    def create_subnet_egress(self, index, route_table, igw_title, subnet_type, nat_instance_type='t2.micro'):
+    def create_subnet_egress(self, index, route_table, igw_title, subnet_type):
         """
         Create an egress route for the a subnet with the given index and type
         Override to create egress routes for other subnet types
@@ -172,7 +172,9 @@ class NetworkBase(EnvironmentBase):
                 GatewayId=Ref(self.template.igw),
                 RouteTableId=Ref(route_table)))
         elif subnet_type == 'private':
-            self.template.merge(ha_nat.HaNat(index, nat_instance_type, name='HaNat%s' % str(index)))
+            nat_instance_type = self.config['nat']['instance_type']
+            nat_enable_ntp = self.config['nat']['enable_ntp']
+            self.template.merge(ha_nat.HaNat(index, nat_instance_type, nat_enable_ntp, name='HaNat%s' % str(index)))
 
     def gateway_hook(self):
         """

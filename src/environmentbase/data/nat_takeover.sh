@@ -114,7 +114,7 @@ log "Source Destination check disabled for $INSTANCE_ID."
 log "Configuration of HA NAT complete."
 yum update -y aws*
 . /etc/profile.d/aws-apitools-common.sh
+
 # Configure iptables
 /sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE
 /sbin/iptables-save > /etc/sysconfig/iptables
-exit 

@@ -13,7 +13,7 @@ class HaNat(Template):
     a route directing egress traffic from the private subnet through this NAT
     '''
 
-    def __init__(self, subnet_index, instance_type='t2.micro', name='HaNat'):
+    def __init__(self, subnet_index, instance_type='t2.micro', enable_ntp=False, name='HaNat'):
         '''
         Method initializes HA NAT in a given environment deployment
         @param subnet_index [int] ID of the subnet that the NAT instance will be deployed to
@@ -21,6 +21,7 @@ class HaNat(Template):
         '''
         self.subnet_index = subnet_index
         self.instance_type = instance_type
+        self.enable_ntp = enable_ntp
 
         # These will be initialized and consumed by various functions called in the build hook
         self.sg = None

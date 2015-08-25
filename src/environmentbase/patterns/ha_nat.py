@@ -2,7 +2,7 @@ from environmentbase.template import Template
 from environmentbase import resources
 from troposphere import Ref, Join, Base64, FindInMap
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tags
+from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tag
 from troposphere.iam import Policy, Role, InstanceProfile
 
 
@@ -129,7 +129,10 @@ class HaNat(Template):
         nat_asg = self.add_resource(AutoScalingGroup(
             "Nat%sASG" % str(self.subnet_index),
             DesiredCapacity=1,
-            Tags=Tags(Name=Join("-", [Ref(self.vpc_id), "NAT"])),
+            Tags=[
+                Tag("Name", Join("-", [Ref(self.vpc_id), "NAT"]), True),
+                Tag("isNat", "true", True)
+            ],
             MinSize=1,
             MaxSize=1,
             Cooldown="30",

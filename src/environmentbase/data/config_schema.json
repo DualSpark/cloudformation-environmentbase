@@ -22,8 +22,7 @@
         // Description to use for top-level template
         "description": "basestring",
 
-        "ec2_key_default": "basestring",
-        "remote_access_cidr": "basestring"
+        "ec2_key_default": "basestring"
     },
     "network": {
         "az_count": "int",

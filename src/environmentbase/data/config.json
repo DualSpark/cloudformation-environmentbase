@@ -12,8 +12,7 @@
     "s3_template_prefix": "templates",
     "template_upload_acl": "public-read",
 
-    "ec2_key_default": "dualspark_rsa",
-    "remote_access_cidr": "0.0.0.0/0"
+    "ec2_key_default": "dualspark_rsa"
   },
   "logging": {
     "cloudtrail_log_prefix": "cloudtrail_logs",

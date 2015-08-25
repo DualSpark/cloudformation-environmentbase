@@ -66,11 +66,17 @@ class Bastion(Template):
 
     @staticmethod
     def get_factory_defaults():
-        return {"bastion": {"instance_type_default": "t2.micro"}}
+        return {"bastion": {
+            "instance_type_default": "t2.micro",
+            "remote_access_cidr": "0.0.0.0/0"
+        }}
 
     @staticmethod
     def get_config_schema():
-        return {"bastion": {"instance_type_default": "str"}}
+        return {"bastion": {
+            "instance_type_default": "str",
+            "remote_access_cidr": "str"
+        }}
 
     def add_security_groups(self):
         """

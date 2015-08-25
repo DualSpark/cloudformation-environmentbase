@@ -493,15 +493,6 @@ class EnvironmentBase(object):
                 MaxLength=255,
                 ConstraintDescription=res.get_str('ec2_key_message')))
 
-        self.remote_access_cidr = self.template.add_parameter(Parameter('remoteAccessLocation',
-                Description='CIDR block identifying the network address space that will be allowed to ingress into public access points within this solution',
-                Type='String',
-                Default='0.0.0.0/0',
-                MinLength=9,
-                MaxLength=18,
-                AllowedPattern=res.get_str('cidr_regex'),
-                ConstraintDescription=res.get_str('cidr_regex_message')))
-
         self.template.add_utility_bucket(
             name=template_config.get('utility_bucket'),
             param_binding_map=self.manual_parameter_bindings)

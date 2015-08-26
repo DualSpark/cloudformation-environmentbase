@@ -39,3 +39,6 @@ UPDATED_DHCP_OPTIONS_ID=$(${awscmd} ec2 create-dhcp-options --cli-input-json "$D
 
 # Associate the new DHCP Options set with the VPC
 ${awscmd} ec2 associate-dhcp-options --dhcp-options-id=$UPDATED_DHCP_OPTIONS_ID --vpc-id=$VPC_ID 
+
+# Delete the old DHCP Options set
+${awscmd} ec2 delete-dhcp-options --dhcp-options-id=$DHCP_OPTIONS_ID

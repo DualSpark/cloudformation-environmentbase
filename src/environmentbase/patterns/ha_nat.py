@@ -85,7 +85,10 @@ class HaNat(Template):
             "ec2:StopInstances"
         ]
         if self.enable_ntp:
-            policy_actions.append("ec2:*DhcpOptions*")
+            policy_actions.extend([
+                "ec2:*DhcpOptions*",
+                "ec2:DescribeVpcs"
+            ])
 
         nat_role = self.add_resource(Role(
             "Nat%sRole" % str(self.subnet_index),

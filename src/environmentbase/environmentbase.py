@@ -645,6 +645,3 @@ class EnvironmentBase(object):
 
         stack_url = 'https://%s.s3.amazonaws.com/%s' % (template_bucket, s3_path)
         return stack_url
-
-if __name__ == '__main__':
-    EnvironmentBase()

@@ -241,9 +241,3 @@ class NetworkBase(EnvironmentBase):
             VpcId=Ref(self.template.vpc_id),
             InternetGatewayId=Ref(self.template.igw),
             VpnGatewayId=Ref(gateway)))
-
-if __name__ == '__main__':
-    with open('config.json', 'r') as f:
-        cmd_args = json.loads(f.read())
-    test = NetworkBase(cmd_args)
-    print test.to_json()

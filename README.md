@@ -1,4 +1,4 @@
-# Cloudformation Base Environment Generator
+## Cloudformation Environment Generator
 [![Build Status](https://ci.dualspark.com/api/badge/github.com/DualSpark/cloudformation-environmentbase/status.svg?branch=master)](https://ci.dualspark.com/github.com/DualSpark/cloudformation-environmentbase)
 
 What is Environmentbase?
@@ -120,17 +120,23 @@ This is required to perform the VPC lookups.
 Once you have configured your credentials, you can run the generator as follows:
 
 ```bash
+environmentbase init
+```
+
+This initialization command will generate two files: `config.json` and `ami_cache.json`. You may override the config filename with the `--config-file` parameter. This is useful when managing multiple stacks simultaneously.
+
+You should now look at the generated `config.json` file and fill out at least the following fields:
+
+`template : ec2_key_default` - SSH key used to log into your EC2 instances  
+`template : template_bucket` - S3 bucket used to upload the generated cloudformation templates
+
+You may also edit the other fields to customize the environment to your liking. After you have configured your environment, run:
+
+```bash
 environmentbase create
 ```
 
-This first run will provide you with a copy of config.json. To write to a different file, use the `--config-file` parameter to specify the filename. 
-
-You should now look at the config.json file that was generated and fill out at least the following fields:
-
-template : ec2_key_default - SSH key used to log into your EC2 instances  
-template : s3_bucket - S3 bucket used to upload the generated cloudformation templates
-
-You may also edit the other fields to customize the environment to your liking. After you have configured your environment, run the `environmentbase create` command again to generate the cloudformation templates using your updated config. Then run:
+This will generate the cloudformation templates using your updated config. Then run:
 
 ```bash
 environmentbase deploy
@@ -138,46 +144,10 @@ environmentbase deploy
 
 This will create a cloudformation stack from your generated template on [AWS](https://console.aws.amazon.com/cloudformation/)
 
-## File Descriptions
+You may run the following command to delete your stack when you are done with it:
 
-### ami_cache.json
+```bash
+environmentbase delete
+```
 
-This file is a simple JSON dictionary to use when assembling the 'RegionMap'
-object within the CloudFormation template. This is a simple way to abstract AMI
-Id's out of the solution and can be used in conjunction with Packer to populate
-custom AMIs directly from external tools.
-
-### config.json
-
-This is a sample 'config' file to be passed into the command line use case and
-identifies a simple dictionary of configuration keys and values to be used
-within the execution of the script.
-
-### environmentbase.py
-
-This is the actual python script and can be used as a stand-alone class or as
-a command line tool. Documentation is in
-pseudo-[doxygen](http://www.stack.nl/~dimitri/doxygen/manual/docblocks.html#pythonblocks)
-format and the command line argument parsing process is implemented in Docopt.
-This script requires that all packages in the requirements.txt file are
-installed.
-
-### networkbase.py
-
-This python script extends the functionlity of environmentbase.py to include all of the basic
-network infrastructure including VPC, public and private subnets, NAT instances, and security groups.
-The basic usage example shows how to use the class with your own code.
-
-### environmentbase.template
-
-This is a sample output from the environmentbase.py script run from the command
-line with all arguments set to their defaults.
-
-### EnvironmentBase.docx
-
-A Microsoft Word-formatted version of this documentation.
-
-### README.md
-
-This file--documentation for usage of this set of scripts and files.
-
+See [File Descriptions](FILE_DESCRIPTIONS.md) for a detailed explanation on the various files generated and consumed by EnvironmentBase

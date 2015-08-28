@@ -27,7 +27,7 @@ Run/Test/Clean
 --------------
 ### Run
 ```bash
-environmentbase [create|deploy|delete] [options]
+environmentbase [init|create|deploy|delete] [options]
 ```
 
 ### From the source repo you can run the unit test suite from setup.py
@@ -49,6 +49,7 @@ Getting started
 Here is a simple EnvironmentBase project that utilizes one of the packaged patterns
 
 ```python
+from environmentbase.environmentbase import EnvConfig
 from environmentbase.networkbase import NetworkBase
 from environmentbase.patterns import bastion
 
@@ -63,16 +64,17 @@ class MyEnv(NetworkBase):
         self.write_template_to_file()
 
 if __name__ == '__main__':
-    MyEnv()
+    my_config = EnvConfig(config_handlers=[bastion.Bastion])
+    MyEnv(env_config=my_config)
 
 ```
 
-To generate the cloudformation template for this python code, save the above snippet in a file called my_env.py and run `python my_env.py create`.
+To generate the cloudformation template for this python code, save the above snippet in a file called `my_env.py` and run `python my_env.py init`.
 
-The first time you run it, it will look at the patterns used and generate a config.json file with the relevant fields added. Fill this config file out, adding values for at least the following fields:  
+This will look at the patterns passed into the EnvConfig object and generate a config.json file with the relevant fields added. Fill this config file out, adding values for at least the following fields:  
 
-template : ec2_key_default - SSH key used to log into your EC2 instances  
-template : s3_bucket - S3 bucket used to upload the generated cloudformation templates  
+`template : ec2_key_default` - SSH key used to log into your EC2 instances  
+`template : template_bucket` - S3 bucket used to upload the generated cloudformation templates  
 
 Next run `python my_env.py create` to generate the cloudformation template using the updated config. 
 

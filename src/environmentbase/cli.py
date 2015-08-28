@@ -5,7 +5,7 @@ environmentbase
 Tool bundle manages generation, deployment, and feedback of cloudformation resources.
 
 Usage:
-    environmentbase (create|deploy|delete) [--config-file <FILE_LOCATION>] [--debug] [--template-file=<TEMPLATE_FILE>]
+    environmentbase (init|create|deploy|delete) [--config-file <FILE_LOCATION>] [--debug] [--template-file=<TEMPLATE_FILE>]
 
 Options:
   -h --help                            Show this screen.
@@ -57,10 +57,13 @@ class CLI(object):
     def process_request(self, controller):
         """
         Controller has finished initializing its config. This function maps user requested action to
-        controller.XXX_action().  Currently supported actions: create_action() and deploy_action().
+        controller.XXX_action().  Currently supported actions: init_action(), create_action(), deploy_action(), delete_action().
         """
         if not self.quiet:
             print ''
+
+        if self.args.get('init', False):
+            controller.init_action()
 
         if self.args.get('create', False):
             if not self.quiet:

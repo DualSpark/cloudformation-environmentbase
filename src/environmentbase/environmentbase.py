@@ -61,7 +61,7 @@ class EnvironmentBase(object):
         :param config: Override loading config values from file by providing config setting directly to the constructor
         """
 
-        self.config_filename = None
+        self.config_filename = config_filename
         self.config = {}
         self.globals = {}
         self.template_args = {}
@@ -80,33 +80,26 @@ class EnvironmentBase(object):
             self._add_config_handler(config_handler)
 
         # Load the user interface
-        if view is None:
-            view = cli.CLI()
+        self.view = view if view else cli.CLI()
 
-        # Config filename check has to happen now because the rest of the settings rely on having a loaded config file
-        if hasattr(view, 'config_filename') and view.config_filename is not None:
-            self.config_filename = view.config_filename
-        else:
-            self.config_filename = config_filename
-
-        # Config location override
         self.create_missing_files = create_missing_files
-        self.handle_local_config(view, config=config_file_override)
+        if not self.view.args['init']:
+            self.load_config()
 
-        self.view = view
+            # Save shortcut references to commonly referenced config sections
+            self.globals = self.config.get('global', {})
+            self.template_args = self.config.get('template', {})
 
-        # Shortcut references to config sections
-        self.globals = self.config.get('global', {})
-        self.template_args = self.config.get('template', {})
+            # Register all stack handlers
+            self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
+            for stack_handler in env_config.stack_event_handlers:
+                self._add_stack_event_handler(stack_handler)
 
-        self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
-        for stack_handler in env_config.stack_event_handlers:
-            self._add_stack_event_handler(stack_handler)
+            # Register all deploy handlers
+            for deploy_handler in env_config.deploy_handlers:
+                self._add_deploy_handler(deploy_handler)
 
-        for deploy_handler in env_config.deploy_handlers:
-            self._add_deploy_handler(deploy_handler)
-
-        # allow the view to execute the user's requested action
+        # Allow the view to execute the user's requested action
         self.view.process_request(self)
 
     def _ensure_template_dir_exists(self, filename=None):
@@ -139,6 +132,15 @@ class EnvironmentBase(object):
             TemplateBody=template_body,
             Parameters=stack_params).get('Url')
         print estimate_cost_url
+
+
+    def init_action(self):
+        """
+        Default init_action invoked by the CLI
+        Generates config and ami_cache files
+        Override in your subclass for custom initialization steps
+        """
+        self.generate_config()
 
     def create_action(self):
         """
@@ -388,42 +390,58 @@ class EnvironmentBase(object):
             else:
                 EnvironmentBase._config_env_override(config[key], new_path, print_debug=print_debug)
 
-    def handle_local_config(self, view, config=None):
+
+    def generate_config(self):
         """
-        Use local file if present, otherwise use factory values and write that to disk
-        unless self.create_missing_files == false, in which case throw IOError
+        Generate config dictionary from defaults
+        Add defaults from all registered config handlers (added patterns, etc.)
+        Write file to self.config_filename
         """
 
-        if not config:
+        if os.path.isfile(self.config_filename):
+            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % self.config_filename).lower()
+            print
+            if not overwrite == 'y':
+                return
 
-            # If override config file exists, use it
-            if os.path.isfile(self.config_filename):
-                with open(self.config_filename, 'r') as f:
-                    content = f.read()
-                    try:
-                        config = json.loads(content)
-                    except ValueError:
-                        print '%s could not be parsed' % self.config_filename
-                        raise
+        config = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
 
-            # If we are instructed to create fresh override file, do it
-            # unless the filename is something other than DEFAULT_CONFIG_FILENAME
-            elif self.create_missing_files and self.config_filename == res.DEFAULT_CONFIG_FILENAME:
-                default_config_copy = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
+        # Merge in any defaults provided by registered config handlers
+        for handler in self._config_handlers:
+            config.update(handler.get_factory_defaults())
 
-                # Merge in any defaults provided by registered config handlers
-                for handler in self._config_handlers:
-                    default_config_copy.update(handler.get_factory_defaults())
+        with open(self.config_filename, 'w') as f:
+            print 'Generating config file at %s\n' % self.config_filename
+            f.write(json.dumps(config, indent=4, sort_keys=True, separators=(',', ': ')))
 
-                # Don't want changes to config modifying the FACTORY_DEFAULT
-                config = copy.deepcopy(default_config_copy)
 
-                with open(self.config_filename, 'w') as f:
-                    f.write(json.dumps(default_config_copy, indent=4, sort_keys=True, separators=(',', ': ')))
+    def load_config(self, view=None, config=None):
+        """
+        Load config from self.config_filename, break if it doesn't exist
+        Load any overrides from environment variables
+        Validate all loaded values
+        """
 
-            # Otherwise complain
-            else:
-                raise IOError(self.config_filename + ' could not be found')
+        # Allow overriding the view for testing purposes
+        if not view:
+            view = self.view
+
+        # The view may override the config file location (i.e. command line arguments)
+        if hasattr(self.view, 'config_filename') and self.view.config_filename is not None:
+            self.config_filename = view.config_filename
+
+        if not os.path.isfile(self.config_filename):
+            print "\n%s does not exist. Try running the init command to generate it.\n" % self.config_filename
+            sys.exit()
+
+        with open(self.config_filename, 'r') as f:
+            content = f.read()
+            try:
+                config = json.loads(content)
+            except ValueError:
+                print '%s could not be parsed' % self.config_filename
+                raise
+
 
         # Load in cli config overrides
         view.update_config(config)

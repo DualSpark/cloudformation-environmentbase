@@ -61,14 +61,18 @@ class CLI(object):
         """
         print
 
-        if self.args.get('init', False):
-            controller.init_action()
+        try:
+            if self.args.get('init', False):
+                controller.init_action()
 
-        if self.args.get('create', False):
-            controller.create_action()
+            if self.args.get('create', False):
+                controller.create_action()
 
-        elif self.args.get('deploy', False):
-            controller.deploy_action()
+            elif self.args.get('deploy', False):
+                controller.deploy_action()
 
-        elif self.args.get('delete', False):
-            controller.delete_action()
+            elif self.args.get('delete', False):
+                controller.delete_action()
+        except Exception as e:
+            print e.message
+

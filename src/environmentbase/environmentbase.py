@@ -431,8 +431,7 @@ class EnvironmentBase(object):
             view = self.view
 
         if not os.path.isfile(self.config_filename):
-            print "\n%s does not exist. Try running the init command to generate it.\n" % self.config_filename
-            sys.exit()
+            raise Exception("%s does not exist. Try running the init command to generate it.\n" % self.config_filename)
 
         with open(self.config_filename, 'r') as f:
             content = f.read()

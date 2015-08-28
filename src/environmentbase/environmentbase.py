@@ -61,6 +61,7 @@ class EnvironmentBase(object):
         """
 
         self.config_filename = config_filename
+        self.env_config = env_config
         self.config = {}
         self.globals = {}
         self.template_args = {}
@@ -84,22 +85,6 @@ class EnvironmentBase(object):
         # The view may override the config file location (i.e. command line arguments)
         if hasattr(self.view, 'config_filename') and self.view.config_filename is not None:
             self.config_filename = self.view.config_filename
-
-        if not self.view.args['init']:
-            self.load_config()
-
-            # Save shortcut references to commonly referenced config sections
-            self.globals = self.config.get('global', {})
-            self.template_args = self.config.get('template', {})
-
-            # Register all stack handlers
-            self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
-            for stack_handler in env_config.stack_event_handlers:
-                self._add_stack_event_handler(stack_handler)
-
-            # Register all deploy handlers
-            for deploy_handler in env_config.deploy_handlers:
-                self._add_deploy_handler(deploy_handler)
 
         # Allow the view to execute the user's requested action
         self.view.process_request(self)
@@ -453,6 +438,19 @@ class EnvironmentBase(object):
         # Validate and save results
         self._validate_config(config)
         self.config = config
+
+        # Save shortcut references to commonly referenced config sections
+        self.globals = self.config.get('global', {})
+        self.template_args = self.config.get('template', {})
+
+        # Register all stack handlers
+        self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
+        for stack_handler in self.env_config.stack_event_handlers:
+            self._add_stack_event_handler(stack_handler)
+
+        # Register all deploy handlers
+        for deploy_handler in self.env_config.deploy_handlers:
+            self._add_deploy_handler(deploy_handler)
 
     def initialize_template(self):
         """

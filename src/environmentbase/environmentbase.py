@@ -81,6 +81,10 @@ class EnvironmentBase(object):
         # Load the user interface
         self.view = view if view else cli.CLI()
 
+        # The view may override the config file location (i.e. command line arguments)
+        if hasattr(self.view, 'config_filename') and self.view.config_filename is not None:
+            self.config_filename = self.view.config_filename
+
         if not self.view.args['init']:
             self.load_config()
 
@@ -425,10 +429,6 @@ class EnvironmentBase(object):
         # Allow overriding the view for testing purposes
         if not view:
             view = self.view
-
-        # The view may override the config file location (i.e. command line arguments)
-        if hasattr(view, 'config_filename') and view.config_filename is not None:
-            self.config_filename = view.config_filename
 
         if not os.path.isfile(self.config_filename):
             print "\n%s does not exist. Try running the init command to generate it.\n" % self.config_filename

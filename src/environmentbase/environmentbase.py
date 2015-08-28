@@ -48,7 +48,6 @@ class EnvironmentBase(object):
     def __init__(self,
                  view=None,
                  env_config=EnvConfig(),
-                 create_missing_files=True,
                  config_filename=res.DEFAULT_CONFIG_FILENAME,
                  config_file_override=None):
         """
@@ -82,7 +81,6 @@ class EnvironmentBase(object):
         # Load the user interface
         self.view = view if view else cli.CLI()
 
-        self.create_missing_files = create_missing_files
         if not self.view.args['init']:
             self.load_config()
 
@@ -117,6 +115,8 @@ class EnvironmentBase(object):
         """
         local_path = self._ensure_template_dir_exists()
 
+        print 'Writing template to %s\n' % self.globals['output']
+
         with open(local_path, 'w') as output_file:
             # Here to_json() loads child templates into S3
             raw_json = self.template.to_template_json()
@@ -141,6 +141,7 @@ class EnvironmentBase(object):
         Override in your subclass for custom initialization steps
         """
         self.generate_config()
+        self.generate_ami_cache()
 
     def create_action(self):
         """
@@ -411,8 +412,8 @@ class EnvironmentBase(object):
             config.update(handler.get_factory_defaults())
 
         with open(self.config_filename, 'w') as f:
-            print 'Generating config file at %s\n' % self.config_filename
             f.write(json.dumps(config, indent=4, sort_keys=True, separators=(',', ': ')))
+            print 'Generated config file at %s\n' % self.config_filename
 
 
     def load_config(self, view=None, config=None):
@@ -421,7 +422,6 @@ class EnvironmentBase(object):
         Load any overrides from environment variables
         Validate all loaded values
         """
-
         # Allow overriding the view for testing purposes
         if not view:
             view = self.view
@@ -442,7 +442,6 @@ class EnvironmentBase(object):
                 print '%s could not be parsed' % self.config_filename
                 raise
 
-
         # Load in cli config overrides
         view.update_config(config)
 
@@ -460,42 +459,26 @@ class EnvironmentBase(object):
         """
         Create new Template instance, set description and common parameters and load AMI cache.
         """
+        print 'Generating template for %s stack\n' % self.globals['environment_name']
         self.template = Template(self.globals.get('output', 'default_template'))
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
         self.init_root_template(self.template_args)
-        EnvironmentBase.load_ami_cache(self.template, self.create_missing_files)
+        self.template.load_ami_cache()
 
-    @staticmethod
-    def load_ami_cache(template, create_missing_files=True):
+    def generate_ami_cache(self):
         """
-        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
-        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
-        @param template The template to attach the AMI mapping to
-        @param create_missing_file File loading policy, if true
+        Generate ami_cache.json file from defaults
         """
-        file_path = None
+        if os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
+            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % res.DEFAULT_AMI_CACHE_FILENAME).lower()
+            print
+            if not overwrite == 'y':
+                return
 
-        # Users can provide override ami_cache in their project root
-        local_amicache = os.path.join(os.getcwd(), res.DEFAULT_AMI_CACHE_FILENAME)
-        if os.path.isfile(local_amicache):
-            file_path = local_amicache
-
-        # Or sibling to the executing class
-        elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
-            file_path = res.DEFAULT_AMI_CACHE_FILENAME
-
-        if file_path:
-            with open(file_path, 'r') as json_file:
-                json_data = json.load(json_file)
-        elif create_missing_files:
-            json_data = res.FACTORY_DEFAULT_AMI_CACHE
-            with open(res.DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
-                f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
-        else:
-            raise IOError(res.DEFAULT_AMI_CACHE_FILENAME + ' could not be found')
-
-        template.add_ami_mapping(json_data)
+        with open(res.DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
+            f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
+            print "Generated AMI cache file at %s\n" % res.DEFAULT_AMI_CACHE_FILENAME
 
     def init_root_template(self, template_config):
         """
@@ -569,7 +552,8 @@ class EnvironmentBase(object):
         name = template.name
 
         self.add_common_params_to_child_template(template)
-        self.load_ami_cache(template)
+
+        template.load_ami_cache()
 
         template.build_hook()
 

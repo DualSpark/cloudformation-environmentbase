@@ -8,6 +8,7 @@ import troposphere.elasticloadbalancing as elb
 import hashlib
 import json
 import os
+import sys
 from datetime import datetime
 import resources as res
 
@@ -308,12 +309,14 @@ class Template(t.Template):
 
     def load_ami_cache(self):
         """
-        Read in ami_cache file and attach AMI mapping to template. This file associates human readable handles to AMI ids.
+        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
+        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
         """
         file_path = None
 
         # Users can provide override ami_cache in their project root
         local_amicache = os.path.join(os.getcwd(), res.DEFAULT_AMI_CACHE_FILENAME)
+
         if os.path.isfile(local_amicache):
             file_path = local_amicache
 
@@ -321,8 +324,14 @@ class Template(t.Template):
         elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
             file_path = res.DEFAULT_AMI_CACHE_FILENAME
 
-        # ami_map_file = self.template_args.get('ami_map_file', file_path)
-        self.add_ami_mapping(file_path)
+        if file_path:
+            with open(file_path, 'r') as json_file:
+                json_data = json.load(json_file)
+        else:
+            print "%s does not exist. Try running the init command to generate it.\n" % res.DEFAULT_AMI_CACHE_FILENAME
+            sys.exit()
+
+        self.add_ami_mapping(json_data)
 
     def add_ami_mapping(self, json_data):
         """

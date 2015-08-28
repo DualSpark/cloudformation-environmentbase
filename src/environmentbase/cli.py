@@ -59,16 +59,12 @@ class CLI(object):
         Controller has finished initializing its config. This function maps user requested action to
         controller.XXX_action().  Currently supported actions: init_action(), create_action(), deploy_action(), delete_action().
         """
-        if not self.quiet:
-            print ''
+        print
 
         if self.args.get('init', False):
             controller.init_action()
 
         if self.args.get('create', False):
-            if not self.quiet:
-                print 'Generating template for %s stack' % controller.config['global']['environment_name']
-                print '\nWriting template to %s\n' % controller.config['global']['output']
             controller.create_action()
 
         elif self.args.get('deploy', False):

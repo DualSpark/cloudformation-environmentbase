@@ -6,4 +6,5 @@ git:
 script:
     - python setup.py -q install
     - python setup.py -q test
+    - environmentbase init
     - environmentbase create

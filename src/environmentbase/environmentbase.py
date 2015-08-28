@@ -427,7 +427,7 @@ class EnvironmentBase(object):
             view = self.view
 
         # The view may override the config file location (i.e. command line arguments)
-        if hasattr(self.view, 'config_filename') and self.view.config_filename is not None:
+        if hasattr(view, 'config_filename') and view.config_filename is not None:
             self.config_filename = view.config_filename
 
         if not os.path.isfile(self.config_filename):

@@ -54,6 +54,22 @@ class CLI(object):
         if template_file is not None:
             config['global']['output'] = template_file
 
+    def _process_request_helper(self, controller):
+        if self.args.get('init', False):
+            controller.init_action()
+
+        if self.args.get('create', False):
+            controller.load_config()
+            controller.create_action()
+
+        elif self.args.get('deploy', False):
+            controller.load_config()
+            controller.deploy_action()
+
+        elif self.args.get('delete', False):
+            controller.load_config()
+            controller.delete_action()
+
     def process_request(self, controller):
         """
         Controller has finished initializing its config. This function maps user requested action to
@@ -61,21 +77,12 @@ class CLI(object):
         """
         print
 
-        try:
-            if self.args.get('init', False):
-                controller.init_action()
+        if self.args.get('--debug'):
+            self._process_request_helper(controller)
 
-            if self.args.get('create', False):
-                controller.load_config()
-                controller.create_action()
-
-            elif self.args.get('deploy', False):
-                controller.load_config()
-                controller.deploy_action()
-
-            elif self.args.get('delete', False):
-                controller.load_config()
-                controller.delete_action()
-        except Exception as e:
-            print e.message
+        else:
+            try:
+                self._process_request_helper(controller)
+            except Exception as e:
+                print e.message
 

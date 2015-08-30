@@ -50,7 +50,7 @@ class Bastion(Template):
             resource_name=self.name,
             security_groups=[security_groups['elb']],
             ports={self.ingress_port: SSH_PORT},
-            utility_bucket=Ref(self.utility_bucket)
+            utility_bucket=self.utility_bucket
         )
 
         bastion_asg = self.add_asg(
@@ -90,7 +90,7 @@ class Bastion(Template):
             ec2.SecurityGroup(
                 elb_sg_name,
                 GroupDescription='Security group for %s ELB' % self.name,
-                VpcId=Ref(self.vpc_id),
+                VpcId=self.vpc_id,
                 SecurityGroupIngress=[elb_sg_ingress_rule])
         )
 
@@ -99,7 +99,7 @@ class Bastion(Template):
             ec2.SecurityGroup(
                 bastion_sg_name,
                 GroupDescription='Security group for %s' % self.name,
-                VpcId=Ref(self.vpc_id))
+                VpcId=self.vpc_id)
         )
 
         self.create_reciprocal_sg(

@@ -29,16 +29,71 @@ class Template(t.Template):
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
 
-        self.vpc_cidr = None
-        self.vpc_id = None
-        self.common_security_group = None
-        self.utility_bucket = None
+        self._vpc_cidr = None
+        self._vpc_id = None
+        self._common_security_group = None
+        self._utility_bucket = None
+        self._igw = None
 
-        self.azs = []
-        self.subnets = {
+        self._azs = []
+        self._subnets = {
             'public': [],
             'private': []
         }
+
+    def _ref_maybe(self, item):
+        """
+        Wraps provided item in a troposphere.Ref() if the type makes sense to ref in cloudformation.
+        This allows attributes to be saved w/o needing to ref() them before (or after).
+        Note: Dicts and Lists are recursively processed for 'ref'able values
+        """
+        # AWSDeclaration --> Parameters & Outputs
+        # AWSObject --> Resources
+        if isinstance(item, (t.AWSDeclaration, t.AWSObject)):
+            return Ref(item)
+
+        elif isinstance(item, list):
+            items = []
+            for i in item:
+                items.append(self._ref_maybe(i))
+            return items
+
+        elif isinstance(item, dict):
+            items = {}
+            for (k, v) in item.iteritems():
+                items.update({k: self._ref_maybe(v)})
+            return items
+
+        else:
+            return item
+
+    @property
+    def vpc_cidr(self):
+        return self._ref_maybe(self._vpc_cidr)
+
+    @property
+    def vpc_id(self):
+        return self._ref_maybe(self._vpc_id)
+
+    @property
+    def common_security_group(self):
+        return self._ref_maybe(self._common_security_group)
+
+    @property
+    def utility_bucket(self):
+        return self._ref_maybe(self._utility_bucket)
+
+    @property
+    def igw(self):
+        return self._ref_maybe(self._igw)
+
+    @property
+    def azs(self):
+        return self._ref_maybe(self._azs)
+
+    @property
+    def subnets(self):
+        return self._ref_maybe(self._subnets)
 
     def __get_template_hash(self):
         """
@@ -72,13 +127,14 @@ class Template(t.Template):
         These typically get initialized for a template when add_child_template is called
         from the controller, but that never happens when merging two templates
         '''
-        self.vpc_cidr              = other_template.vpc_cidr
-        self.vpc_id                = other_template.vpc_id
-        self.common_security_group = other_template.common_security_group
-        self.utility_bucket        = other_template.utility_bucket
+        self._vpc_cidr              = other_template._vpc_cidr
+        self._vpc_id                = other_template._vpc_id
+        self._common_security_group = other_template._common_security_group
+        self._utility_bucket        = other_template._utility_bucket
+        self._igw                   = other_template._igw
 
-        self.azs        = list(other_template.azs)
-        self.subnets    = other_template.subnets.copy()
+        self._azs        = list(other_template.azs)
+        self._subnets    = other_template.subnets.copy()
 
         self.parameters = other_template.parameters.copy()
         self.mappings   = other_template.mappings.copy()
@@ -212,45 +268,46 @@ class Template(t.Template):
             each subnet: [public|private]Subnet[0-9],
             each AZ name: availabilityZone[0-9]
         """
-        self.vpc_cidr = self.add_parameter(Parameter(
+        self._vpc_cidr = self.add_parameter(Parameter(
             'vpcCidr',
             Description='CIDR of the VPC network',
             Type='String',
             AllowedPattern=res.get_str('cidr_regex'),
             ConstraintDescription=res.get_str('cidr_regex_message')))
 
-        self.vpc_id = self.add_parameter(Parameter(
+        self._vpc_id = self.add_parameter(Parameter(
             'vpcId',
             Description='ID of the VPC network',
             Type='String'))
 
-        self.common_security_group = self.add_parameter(Parameter(
+        self._common_security_group = self.add_parameter(Parameter(
             'commonSecurityGroup',
             Description='Security Group ID of the common security group for this environment',
             Type='String'))
 
-        self.utility_bucket = self.add_parameter(Parameter(
+        self._utility_bucket = self.add_parameter(Parameter(
             'utilityBucket',
             Description='Name of the S3 bucket used for infrastructure utility',
             Type='String'))
 
-        self.igw = self.add_parameter(Parameter(
+        self._igw = self.add_parameter(Parameter(
             'internetGateway',
             Description='Name of the internet gateway used by the vpc',
             Type='String'))
 
         for subnet_type in subnet_types:
-            if subnet_type not in self.subnets:
-                self.subnets[subnet_type] = []
+            if subnet_type not in self._subnets:
+                self._subnets[subnet_type] = []
+
             for index in range(0, az_count):
                 subnet_param = Parameter(
                     subnet_type.lower() + 'Subnet' + str(index),
                     Description=subnet_type + ' subnet ' + str(index),
                     Type='String')
                 self.add_parameter(subnet_param)
-                self.subnets[subnet_type].append(Ref(subnet_param))
+                self._subnets[subnet_type].append(subnet_param)
 
-        self.azs = []
+        self._azs = []
 
         for x in range(0, az_count):
             az_param = Parameter(
@@ -258,7 +315,7 @@ class Template(t.Template):
                 Description='Availability Zone ' + str(x),
                 Type='String')
             self.add_parameter(az_param)
-            self.azs.append(Ref(az_param))
+            self._azs.append(az_param)
 
     @staticmethod
     def build_bootstrap(bootstrap_files=None,
@@ -766,11 +823,11 @@ class Template(t.Template):
         statements = [{
             "Action": ["s3:PutObject"],
             "Effect": "Allow",
-            "Resource": Join('', ['arn:aws:s3:::', Ref(utility_bucket), '/', elb_log_prefix + 'AWSLogs/', Ref('AWS::AccountId'), '/*']),
+            "Resource": Join('', ['arn:aws:s3:::', utility_bucket, '/', elb_log_prefix + 'AWSLogs/', Ref('AWS::AccountId'), '/*']),
             "Principal": {"AWS": [FindInMap('RegionMap', Ref('AWS::Region'), 'elbAccountId')]}},
             {
                 "Action": ["s3:GetBucketAcl"],
-                "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket)]),
+                "Resource": Join('', ["arn:aws:s3:::", utility_bucket]),
                 "Effect": "Allow",
                 "Principal": {
                     "AWS": [
@@ -784,7 +841,7 @@ class Template(t.Template):
                         "arn:aws:iam::113285607260:root"]}},
             {
                 "Action": ["s3:PutObject"],
-                "Resource": Join('', ["arn:aws:s3:::", Ref(utility_bucket), '/', cloudtrail_log_prefix + "AWSLogs/", Ref("AWS::AccountId"), '/*']),
+                "Resource": Join('', ["arn:aws:s3:::", utility_bucket, '/', cloudtrail_log_prefix + "AWSLogs/", Ref("AWS::AccountId"), '/*']),
                 "Effect": "Allow",
                 "Principal": {
                     "AWS": [
@@ -800,12 +857,12 @@ class Template(t.Template):
 
         self.add_output(Output(
             'elbAccessLoggingBucketAndPath',
-            Value=Join('', ['arn:aws:s3:::', Ref(utility_bucket), elb_log_prefix]),
+            Value=Join('', ['arn:aws:s3:::', utility_bucket, elb_log_prefix]),
             Description='S3 bucket and key name prefix to use when configuring elb access logs to aggregate to S3'))
 
         self.add_output(Output(
             'cloudTrailLoggingBucketAndPath',
-            Value=Join('', ['arn:aws:s3:::', Ref(utility_bucket), cloudtrail_log_prefix]),
+            Value=Join('', ['arn:aws:s3:::', utility_bucket, cloudtrail_log_prefix]),
             Description='S3 bucket and key name prefix to use when configuring CloudTrail to aggregate logs to S3'))
 
         return {"Statement": statements}
@@ -848,10 +905,10 @@ class Template(t.Template):
         @param name [str] friendly name to prepend to the CloudFormation asset name
         """
         if name:
-            self.utility_bucket = name
+            self._utility_bucket = name
             param_binding_map['utilityBucket'] = name
         else:
-            self.utility_bucket = self.add_resource(s3.Bucket(
+            self._utility_bucket = self.add_resource(s3.Bucket(
                 name.lower() + 'UtilityBucket',
                 AccessControl=s3.BucketOwnerFullControl,
                 DeletionPolicy=Retain))
@@ -859,10 +916,10 @@ class Template(t.Template):
             bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
 
             self.add_resource(s3.BucketPolicy(name.lower() + 'UtilityBucketLoggingPolicy',
-                    Bucket=Ref(self.utility_bucket),
+                    Bucket=self.utility_bucket,
                     PolicyDocument=bucket_policy_statements))
 
-            param_binding_map['utilityBucket'] = Ref(self.utility_bucket)
+            param_binding_map['utilityBucket'] = self.utility_bucket
 
         log_group_name = 'DefaultLogGroup'
         self.add_resource(logs.LogGroup(

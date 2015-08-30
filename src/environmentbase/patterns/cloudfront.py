@@ -9,7 +9,7 @@ class CloudFront(Template):
     Creates a CloudFront distribution from a static resource
     """
 
-    def __init__(self, resource_name, domain_name, origin_path='', utility_bucket=None, dist_config=None):
+    def __init__(self, resource_name, domain_name, origin_path='', dist_config=None):
         """
         This will create a cloudfront distribution from a static resource
         @param resource_name [string] - name of the cloudfront distribution to be created
@@ -20,7 +20,6 @@ class CloudFront(Template):
         self.resource_name = resource_name
         self.domain_name = domain_name
         self.origin_path = origin_path
-        self.utility_bucket = utility_bucket
         self.dist_config = dist_config
 
         super(CloudFront, self).__init__(template_name=resource_name)
@@ -49,7 +48,7 @@ class CloudFront(Template):
 
         if self.utility_bucket:
             self.dist_config.Logging = Logging(
-                Bucket=Join('.', [Ref(self.utility_bucket), 's3.amazonaws.com']),
+                Bucket=Join('.', [self.utility_bucket, 's3.amazonaws.com']),
                 IncludeCookies=True,
                 Prefix=Join('/', ['AWSLogs', Ref(AWS_ACCOUNT_ID), 'CloudFront'])
             )

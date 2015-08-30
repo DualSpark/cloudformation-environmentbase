@@ -168,7 +168,7 @@ class RDS(Template):
                 ec2.SecurityGroup(
                     db_label.lower() + self.tier_name.title() + 'RdsSg',
                     GroupDescription='Security group for %s RDS tier' % self.tier_name.lower(),
-                    VpcId=Ref(self.vpc_id))
+                    VpcId=self.vpc_id)
             )
 
             rds_instance = self.add_resource(rds.DBInstance(
@@ -208,7 +208,7 @@ class RDS(Template):
             elif self.connect_from_cidr:
                 ingress_rule.CidrIp = self.connect_from_cidr
             else:
-                ingress_rule.CidrIp = Ref(self.vpc_cidr)
+                ingress_rule.CidrIp = self.vpc_cidr
 
             self.add_resource(ingress_rule)
 

@@ -21,7 +21,7 @@ class NetworkBase(EnvironmentBase):
         """
         network_config = self.config.get('network', {})
 
-        self.azs = []
+        self.template._azs = []
 
         az_count = int(network_config.get('az_count', '2'))
 
@@ -31,9 +31,9 @@ class NetworkBase(EnvironmentBase):
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network_components(network_config=network_config)
 
-        self.template.common_security_group = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
+        self.template._common_security_group = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
-            VpcId=Ref(self.template.vpc_id),
+            VpcId=self.template.vpc_id,
             SecurityGroupEgress=[ec2.SecurityGroupRule(
                         FromPort='80',
                         ToPort='80',
@@ -57,7 +57,7 @@ class NetworkBase(EnvironmentBase):
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
 
         for x in range(0, az_count):
-            self.azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
+            self.template._azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def create_action(self):
         """
@@ -108,21 +108,21 @@ class NetworkBase(EnvironmentBase):
         else:
             network_name = self.__class__.__name__
 
-        self.template.vpc_id = self.template.add_resource(ec2.VPC('vpc',
+        self.template._vpc_id = self.template.add_resource(ec2.VPC('vpc',
                 CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'),
                 EnableDnsSupport=True,
                 EnableDnsHostnames=True,
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
 
-        self.template.vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
+        self.template._vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 
-        self.template.igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
+        self.template._igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
 
         igw_title = 'igwVpcAttachment'
-        self.template.igw_attachment = self.template.add_resource(ec2.VPCGatewayAttachment(
+        self.template.add_resource(ec2.VPCGatewayAttachment(
             igw_title,
-            InternetGatewayId=Ref(self.template.igw),
-            VpcId=Ref(self.template.vpc_id)))
+            InternetGatewayId=self.template.igw,
+            VpcId=self.template.vpc_id))
 
         self.gateway_hook()
 
@@ -131,22 +131,24 @@ class NetworkBase(EnvironmentBase):
             for subnet_type in network_config.get('subnet_types', ['public', 'private']):
 
                 if subnet_type not in self.template.subnets:
-                    self.template.subnets[subnet_type] = []
+                    self.template._subnets[subnet_type] = []
                 if subnet_type not in self.template.mappings['networkAddresses']['subnet' + str(index)]:
                     continue
 
                 # Create the subnet
-                self.template.subnets[subnet_type].append(self.template.add_resource(ec2.Subnet(
+                subnet = self.template.add_resource(ec2.Subnet(
                     subnet_type + 'Subnet' + str(index),
                     AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
-                    VpcId=Ref(self.template.vpc_id),
+                    VpcId=self.template.vpc_id,
                     CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type),
-                    Tags=[ec2.Tag(key='network', value=subnet_type)])))
+                    Tags=[ec2.Tag(key='network', value=subnet_type)]))
+
+                self.template._subnets[subnet_type].append(subnet)
 
                 # Create the routing table
                 route_table = self.template.add_resource(ec2.RouteTable(
                     subnet_type + 'Subnet' + str(index) + 'RouteTable',
-                    VpcId=Ref(self.template.vpc_id)))
+                    VpcId=self.template.vpc_id))
 
                 # Create the NATs and egress rules
                 self.create_subnet_egress(index, route_table, igw_title, subnet_type)
@@ -155,11 +157,11 @@ class NetworkBase(EnvironmentBase):
                 self.template.add_resource(ec2.SubnetRouteTableAssociation(
                     subnet_type + 'Subnet' + str(index) + 'EgressRouteTableAssociation',
                     RouteTableId=Ref(route_table),
-                    SubnetId=Ref(self.template.subnets[subnet_type][index])))
+                    SubnetId=self.template.subnets[subnet_type][index]))
 
-        self.manual_parameter_bindings['vpcId'] = Ref(self.template.vpc_id)
+        self.manual_parameter_bindings['vpcId'] = self.template.vpc_id
         self.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
-        self.manual_parameter_bindings['internetGateway'] = Ref(self.template.igw)
+        self.manual_parameter_bindings['internetGateway'] = self.template.igw
 
     def create_subnet_egress(self, index, route_table, igw_title, subnet_type):
         """
@@ -170,7 +172,7 @@ class NetworkBase(EnvironmentBase):
             self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
                 DestinationCidrBlock='0.0.0.0/0',
-                GatewayId=Ref(self.template.igw),
+                GatewayId=self.template.igw,
                 RouteTableId=Ref(route_table)))
         elif subnet_type == 'private':
             nat_instance_type = self.config['nat']['instance_type']
@@ -238,6 +240,6 @@ class NetworkBase(EnvironmentBase):
             Tags=[ec2.Tag(key='Name', value=vpn_name)]))
 
         gateway_connection = self.template.add_resource(ec2.VPCGatewayAttachment('vpnGatewayAttachment',
-            VpcId=Ref(self.template.vpc_id),
-            InternetGatewayId=Ref(self.template.igw),
-            VpnGatewayId=Ref(gateway)))
+            VpcId=self.template.vpc_id,
+            InternetGatewayId=self.template.igw,
+            VpnGatewayId=gateway))

@@ -43,7 +43,7 @@ class HaNat(Template):
         '''
         self.sg = self.add_resource(SecurityGroup(
             "Nat%sSG" % str(self.subnet_index),
-            VpcId=Ref(self.vpc_id),
+            VpcId=self.vpc_id,
             GroupDescription="Security group for NAT host."
         ))
         self.add_nat_sg_rules()
@@ -143,7 +143,7 @@ class HaNat(Template):
             "Nat%sASG" % str(self.subnet_index),
             DesiredCapacity=1,
             Tags=[
-                Tag("Name", Join("-", [Ref(self.vpc_id), "NAT"]), True),
+                Tag("Name", Join("-", [self.vpc_id, "NAT"]), True),
                 Tag("isNat", "true", True)
             ],
             MinSize=1,
@@ -152,7 +152,7 @@ class HaNat(Template):
             LaunchConfigurationName=Ref(nat_launch_config),
             HealthCheckGracePeriod=30,
             HealthCheckType="EC2",
-            VPCZoneIdentifier=[Ref(self.subnets['public'][self.subnet_index])]
+            VPCZoneIdentifier=[self.subnets['public'][self.subnet_index]]
         ))
 
         return nat_asg

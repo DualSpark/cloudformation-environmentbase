@@ -81,7 +81,7 @@ class StackMonitor(object):
         if queue:
             queue.delete()
 
-    def start_stack_monitor(self, queue, stack_name, config, debug=False):
+    def start_stack_monitor(self, queue, stack_name, debug=False):
 
         # Process messages by printing out body and optional author name
         poll_timeout = 3600  # an hour
@@ -133,7 +133,7 @@ class StackMonitor(object):
                 # process handlers
                 handlers_to_remove = []
                 for handler in self.stack_event_handlers:
-                    if handler.handle_stack_event(data, config):
+                    if handler.stack_event_hook(data):
                         handlers_to_remove.append(handler)
 
                 # once a handlers job is done no need to keep checking for more events

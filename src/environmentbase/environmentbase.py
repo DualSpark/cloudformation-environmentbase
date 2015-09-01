@@ -34,10 +34,10 @@ class ValidationError(Exception):
 
 class EnvConfig(object):
 
-    def __init__(self, config_handlers=None, stack_event_handlers=None, deploy_handlers=None):
+    def __init__(self, config_handlers=None):
         self.config_handlers = config_handlers if config_handlers else []
-        self.stack_event_handlers = stack_event_handlers if stack_event_handlers else []
-        self.deploy_handlers = deploy_handlers if deploy_handlers else {}
+        # self.stack_event_handlers = stack_event_handlers if stack_event_handlers else []
+        # self.deploy_handlers = deploy_handlers if deploy_handlers else {}
 
 
 class EnvironmentBase(object):
@@ -71,7 +71,7 @@ class EnvironmentBase(object):
         self.ignore_outputs = ['templateValidationHash', 'dateGenerated']
         self.stack_outputs = {}
         self._config_handlers = []
-        self._deploy_handlers = []
+        self.stack_monitor = None
 
         self.boto_session = None
 
@@ -88,6 +88,54 @@ class EnvironmentBase(object):
 
         # Allow the view to execute the user's requested action
         self.view.process_request(self)
+
+    def create_hook(self):
+        """
+        Override in your subclass for custom resource creation.  Called after config is loaded and template is
+        initialized.  After the hook completes the templates are serialized and written to file and uploaded to S3.
+        """
+        pass
+
+    def deploy_hook(self):
+        """
+        Extension point for modifying behavior of deploy action. Called after config is loaded and before
+        cloudformation deploy_stack is called. Some things you can do in deploy_hook include modifying
+        config or deploy_parameter_bindings or run arbitrary commands with boto.
+        """
+        pass
+
+    def delete_hook(self):
+        """
+        Extension point for modifying behavior of delete action. Called after config is loaded and before cloudformation
+        deploy_stack is called. Can be used to manage out-of-band resources with boto.
+        """
+        pass
+
+    def stack_event_hook(self, event_data):
+        """
+        Extension point for reacting to the cloudformation stack event stream.  If global.monitor_stack is enabled in
+        config this function is used to react to stack events. Once a stack is created a notification topic will begin
+        emitting events to a queue.  Each event is passed to this call for further processing. Details about the event
+        data can be read here:
+        http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-listing-event-history.html
+        :param event_data: The event_data hash provided the following mappings from the raw cloudformation event:
+            "status" = "ResourceStatus"
+            "type"   = "ResourceType"
+            "name"   = "LogicalResourceId"
+            "reason" = "ResourceStatusReason"
+            "props"  = "ResourceProperties"
+        :return bool: Indicates that processing is complete, false indicates that you are not yet done
+        """
+        return True
+
+    def init_action(self):
+        """
+        Default init_action invoked by the CLI
+        Generates config and ami_cache files
+        Override in your subclass for custom initialization steps
+        """
+        self.generate_config()
+        self.generate_ami_cache()
 
     def _ensure_template_dir_exists(self, filename=None):
         parent_dir = TEMPLATES_PATH
@@ -106,6 +154,10 @@ class EnvironmentBase(object):
 
         print 'Writing template to %s\n' % self.globals['output']
 
+        # stack_params = self._get_stack_params()
+        # estimate_cost_url = self.estimate_cost(stack_params=stack_params)
+        # print estimate_cost_url
+
         with open(local_path, 'w') as output_file:
             # Here to_json() loads child templates into S3
             raw_json = self.template.to_template_json()
@@ -113,33 +165,31 @@ class EnvironmentBase(object):
             reloaded_template = pure_json.loads(raw_json)
             pure_json.dump(reloaded_template, output_file, indent=4, separators=(',', ':'))
 
-    def estimate_cost(self, template_name=None, stack_params=None):
-        template_body = self._load_template(template_name)
-        # Get url to cost estimate calculator
+    def estimate_cost(self, template_name=None, template_url=None, stack_params=None):
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
-        estimate_cost_url = cfn_conn.estimate_template_cost(
-            TemplateBody=template_body,
-            Parameters=stack_params).get('Url')
-        print estimate_cost_url
 
+        if template_url:
+            estimate_cost_url = cfn_conn.estimate_template_cost(
+                TemplateURL=template_url,
+                Parameters=stack_params)
+        else:
+            template_body = self._load_template(template_name)
+            estimate_cost_url = cfn_conn.estimate_template_cost(
+                TemplateBody=template_body,
+                Parameters=stack_params)
 
-    def init_action(self):
-        """
-        Default init_action invoked by the CLI
-        Generates config and ami_cache files
-        Override in your subclass for custom initialization steps
-        """
-        self.generate_config()
-        self.generate_ami_cache()
+        return estimate_cost_url.get('Url')
 
     def create_action(self):
         """
         Default create_action invoked by the CLI
         Initializes a new template instance, and write it to file.
         """
+        self.load_config()
         self.initialize_template()
 
         # Do custom troposphere resource creation in your overridden copy of this method
+        self.create_hook()
 
         self.write_template_to_file()
 
@@ -196,56 +246,64 @@ class EnvironmentBase(object):
 
         return is_successful
 
-    def _get_stack_params(self):
-        for deploy_handler in self._deploy_handlers:
-            deploy_handler.handle_deploy_event(self.deploy_parameter_bindings, self.config)
+    def add_parameter_binding(self, key, value):
+        """
+        The deploy_parameter_bindings is populated with hashes of the form:
+         {
+             'ParameterKey': <key>,
+             'ParameterValue': <value>
+         }
 
-        # gather runtime parameters to be passed to create/update stack
-        stack_params = []
-        if self.deploy_parameter_bindings:
-            stack_params.extend(self.deploy_parameter_bindings)
-
-        return stack_params
+        :param key: String representing an input Parameter name in the root template
+        :param value: Troposphere value for the Parameter
+        """
+        self.deploy_parameter_bindings.append({
+            'ParameterKey': key,
+            'ParameterValue': value
+        })
 
     def deploy_action(self):
         """
         Default deploy_action invoked by the CLI. Attempt to update the stack. If the stack does not yet exist, it will
         issue a create-stack command.
         """
-
-        stack_params = self._get_stack_params()
+        self.load_config()
+        self.deploy_hook()
 
         stack_name = self.config['global']['environment_name']
 
         # initialize stack event monitor
         topic = None
         queue = None
-        if self.stack_monitor.has_handlers():
+        if self.stack_monitor and self.stack_monitor.has_handlers():
             (topic, queue) = self.stack_monitor.setup_stack_monitor(self.config)
-
-        # self.estimate_cost(stack_params=stack_params)
 
         try:
             # First try to do an update-stack... if it doesn't exist, then try create-stack
             is_successful = self._ensure_stack_is_deployed(
                 stack_name,
                 sns_topic=topic,
-                stack_params=stack_params)
+                stack_params=self.deploy_parameter_bindings)
 
             if is_successful:
-                self.stack_monitor.start_stack_monitor(queue, stack_name, self.config, debug=self.globals['print_debug'])
+                self.stack_monitor.start_stack_monitor(queue, stack_name, debug=self.globals['print_debug'])
 
         except KeyboardInterrupt:
-            print 'KeyboardInterrupt: calling cleanup'
-            self.stack_monitor.cleanup_stack_monitor(topic, queue)
+            if self.stack_monitor:
+                print 'KeyboardInterrupt: calling cleanup'
+                self.stack_monitor.cleanup_stack_monitor(topic, queue)
             raise
 
-        self.stack_monitor.cleanup_stack_monitor(topic, queue)
+        if self.stack_monitor:
+            self.stack_monitor.cleanup_stack_monitor(topic, queue)
 
     def delete_action(self):
         """
         Default delete_action invoked by CLI
         """
+        self.load_config()
+        self.delete_hook()
+
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         stack_name = self.config['global']['environment_name']
 
@@ -304,18 +362,6 @@ class EnvironmentBase(object):
             config_reqs_copy.update(handler.get_config_schema())
 
         self._validate_config_helper(config_reqs_copy, config, '')
-
-    def _add_stack_event_handler(self, handler):
-        if not hasattr(handler, 'handle_stack_event') or not callable(getattr(handler, 'handle_stack_event')):
-            raise ValidationError('Class %s cannot be a stack_event handler, missing handle_stack_event(event_data, config)' % type(handler).__name__ )
-
-        self.stack_monitor.add_handler(handler)
-
-    def _add_deploy_handler(self, handler):
-        if not hasattr(handler, 'handle_deploy_event') or not callable(getattr(handler, 'handle_deploy_event')):
-            raise ValidationError('Class %s cannot be a deploy handler, missing handle_deploy_event(parameter_bindings, config)' % type(handler).__name__ )
-
-        self._deploy_handlers.append(handler)
 
     def _add_config_handler(self, handler):
         """
@@ -380,7 +426,6 @@ class EnvironmentBase(object):
             else:
                 EnvironmentBase._config_env_override(config[key], new_path, print_debug=print_debug)
 
-
     def generate_config(self):
         """
         Generate config dictionary from defaults
@@ -403,7 +448,6 @@ class EnvironmentBase(object):
         with open(self.config_filename, 'w') as f:
             f.write(json.dumps(config, indent=4, sort_keys=True, separators=(',', ': ')))
             print 'Generated config file at %s\n' % self.config_filename
-
 
     def load_config(self, view=None, config=None):
         """
@@ -444,13 +488,9 @@ class EnvironmentBase(object):
         self.template_args = self.config.get('template', {})
 
         # Register all stack handlers
-        self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
-        for stack_handler in self.env_config.stack_event_handlers:
-            self._add_stack_event_handler(stack_handler)
-
-        # Register all deploy handlers
-        for deploy_handler in self.env_config.deploy_handlers:
-            self._add_deploy_handler(deploy_handler)
+        if self.globals['monitor_stack']:
+            self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
+            self.stack_monitor.add_handler(self)
 
     def initialize_template(self):
         """
@@ -559,6 +599,10 @@ class EnvironmentBase(object):
             template_bucket=template_bucket,
             s3_template_prefix=s3_template_prefix,
             template_upload_acl=template_upload_acl)
+
+        # stack_params = self._get_stack_params()
+        # estimate_cost_url = self.estimate_cost(stack_params=stack_params, template_url=stack_url)
+        # print estimate_cost_url
 
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []

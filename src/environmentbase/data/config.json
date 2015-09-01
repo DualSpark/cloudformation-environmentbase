@@ -1,8 +1,9 @@
 {
   "global": {
     "print_debug": false,
-    "environment_name": "environmentbase",
-    "output": "environmentbase.template"
+    "environment_name": "environmentbase2",
+    "output": "environmentbase.template",
+    "monitor_stack": false
   },
   "template": {
     "ami_map_file": "ami_cache.json",

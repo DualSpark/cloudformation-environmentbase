@@ -1,6 +1,7 @@
 from environmentbase.template import Template
 import environmentbase.resources as res
 from environmentbase.networkbase import NetworkBase
+from environmentbase.environmentbase import EnvConfig
 from troposphere import Ref, Parameter, GetAtt, Output, Join, rds, ec2
 
 
@@ -241,14 +242,7 @@ class Controller(NetworkBase):
     > mysql -h <db endpoint> -P <db port> -u <db username> -p
     """
 
-    def __init__(self, *args, **kwargs):
-        self.add_config_handler(RDS)
-        super(Controller, self).__init__(*args, **kwargs)
-
-    def create_action(self):
-        self.initialize_template()
-        self.construct_network()
-
+    def create_hook(self):
         # Create the rds instance pattern (includes standard standard parameters)
         my_db = RDS(
             'dbTier',
@@ -258,18 +252,12 @@ class Controller(NetworkBase):
         # Attach pattern as a child template
         self.add_child_template(my_db)
 
-        # Our template is complete output it to file
-        self.write_template_to_file()
-
-    def deploy_action(self):
-        self.load_db_passwords_from_env()
-
+    def deploy_hook(self):
         for db_label, db_config in self.config['db'].iteritems():
-            self.deploy_parameter_bindings.append({
-                'ParameterKey': db_label.lower() + 'dbTier'.title() + 'RdsMasterUserPassword',
-                'ParameterValue': db_config['password']
-            })
-        super(Controller, self).deploy_action()
+            db_resource_name = db_label.lower() + 'dbTier'.title() + 'RdsMasterUserPassword'
+            print "adding ", db_resource_name
+            self.add_parameter_binding(key=db_resource_name, value=db_config['password'])
+
 
 if __name__ == '__main__':
 
@@ -313,4 +301,5 @@ if __name__ == '__main__':
     my_config = res.FACTORY_DEFAULT_CONFIG
     my_config['db'] = db_config
 
-    Controller(config_file_override=my_config)
+    env_config = EnvConfig(config_handlers=[RDS])
+    Controller(env_config=env_config, config_file_override=my_config)

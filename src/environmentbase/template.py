@@ -47,8 +47,10 @@ class Template(t.Template):
         This allows attributes to be saved w/o needing to ref() them before (or after).
         Note: Dicts and Lists are recursively processed for 'ref'able values
         """
-        # AWSDeclaration --> Parameters & Outputs
-        # AWSObject --> Resources
+        # Wrap input if type is:
+        # - AWSDeclaration --> Parameters & Outputs
+        # - AWSObject --> Resources
+        # - items in a list or valued of a hash
         if isinstance(item, (t.AWSDeclaration, t.AWSObject)):
             return Ref(item)
 

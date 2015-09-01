@@ -59,15 +59,12 @@ class CLI(object):
             controller.init_action()
 
         if self.args.get('create', False):
-            controller.load_config()
             controller.create_action()
 
         elif self.args.get('deploy', False):
-            controller.load_config()
             controller.deploy_action()
 
         elif self.args.get('delete', False):
-            controller.load_config()
             controller.delete_action()
 
     def process_request(self, controller):

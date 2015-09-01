@@ -63,8 +63,10 @@ class NetworkBase(EnvironmentBase):
         """
         Override EnvironmentBase.create_action() to construct VPC
         """
+        self.load_config()
         self.initialize_template()
         self.construct_network()
+        self.create_hook()
         self.write_template_to_file()
 
     def add_vpc_az_mapping(self,

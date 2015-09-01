@@ -5,7 +5,9 @@
         // Name of top-level stack when deploying template
         "environment_name": "basestring",
         // Prints extra information useful for debugging
-        "print_debug": "bool"
+        "print_debug": "bool",
+        // Enable monitoring of stack event stream
+        "monitor_stack": "bool"
     },
     "template": {
         // Name of json file containing mapping labels to AMI ids

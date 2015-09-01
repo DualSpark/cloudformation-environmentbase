@@ -84,3 +84,28 @@ Note that this example extends NetworkBase instead of EnvironmentBase. NetworkBa
 
 This should bring up a stack containing all of the configured network resources as well as a bastion host. Try SSHing into the bastion host using the SSH key specified in the config.json to validate that it worked.
 
+Creating your own controller:
+-----------------------------
+
+The following functions are created for the purpose of being overridden to augment default beheavior.
+
+### `deploy_hook()`:
+Extension point for modifying behavior of deploy action. Called after config is loaded and before cloudformation deploy_stack is called. Some things you can do in deploy_hook include modifying config or deploy_parameter_bindings or run arbitrary commands with boto.
+
+### `create_hook(self)`:
+Override in your subclass for custom resource creation.  Called after config is loaded and template is initialized.  After the hook completes the templates are serialized and written to file and uploaded to S3.
+
+### `delete_hook()`:
+Extension point for modifying behavior of delete action. Called after config is loaded and before cloudformation deploy_stack is called. Can be used to manage out-of-band resources with boto.
+
+### `stack_event_hook(event_data)`:
+Extension point for reacting to the cloudformation stack event stream.  If global.monitor_stack is enabled in config this function is used to react to stack events. Once a stack is created a notification topic will begin emitting events to a queue.  Each event is passed to this call for further processing.  The return value is used to indicate whether processing is complete (true indicates processing is complete, false indicates you are not yet done).
+Details about the event data can be read [here](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-listing-event-history.html)
+
+The event_data hash provided the following mappings from the raw cloudformation event:
+status = ResourceStatus
+type = ResourceType
+name = LogicalResourceId
+reason = ResourceStatusReason
+props = ResourceProperties
+

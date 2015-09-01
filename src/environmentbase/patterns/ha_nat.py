@@ -4,6 +4,7 @@ from troposphere import Ref, Join, Base64, FindInMap
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tag
 from troposphere.iam import Policy, Role, InstanceProfile
+from troposphere.policies import CreationPolicy, ResourceSignal
 
 
 class HaNat(Template):
@@ -127,6 +128,16 @@ class HaNat(Template):
         if self.enable_ntp:
             user_data = Join('\n', [user_data, resources.get_resource('ntp_takeover.sh')])
 
+        nat_asg_name = "Nat%sASG" % str(self.subnet_index)
+        user_data = Join('', [
+            user_data,
+            '\n',
+            "cfn-signal -s true",
+            " --resource ", nat_asg_name,
+            " --stack ", {"Ref": "AWS::StackName"},
+            " --region ", {"Ref": "AWS::Region"}
+        ])
+ 
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),
             UserData=Base64(user_data),
@@ -140,7 +151,7 @@ class HaNat(Template):
         ))
 
         nat_asg = self.add_resource(AutoScalingGroup(
-            "Nat%sASG" % str(self.subnet_index),
+            nat_asg_name,
             DesiredCapacity=1,
             Tags=[
                 Tag("Name", Join("-", [self.vpc_id, "NAT"]), True),
@@ -152,7 +163,13 @@ class HaNat(Template):
             LaunchConfigurationName=Ref(nat_launch_config),
             HealthCheckGracePeriod=30,
             HealthCheckType="EC2",
-            VPCZoneIdentifier=[self.subnets['public'][self.subnet_index]]
+            VPCZoneIdentifier=[self.subnets['public'][self.subnet_index]],
+            CreationPolicy=CreationPolicy(
+                ResourceSignal=ResourceSignal(
+                    Count=1,
+                    Timeout='PT15M'
+                )
+            )
         ))
 
         return nat_asg

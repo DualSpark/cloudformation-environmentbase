@@ -13,7 +13,7 @@ class HaNat(Template):
     a route directing egress traffic from the private subnet through this NAT
     '''
 
-    def __init__(self, subnet_index, instance_type='t2.micro', enable_ntp=False, name='HaNat'):
+    def __init__(self, subnet_index, instance_type='t2.micro', enable_ntp=False, name='HaNat', extra_user_data=None):
         '''
         Method initializes HA NAT in a given environment deployment
         @param subnet_index [int] ID of the subnet that the NAT instance will be deployed to
@@ -22,6 +22,7 @@ class HaNat(Template):
         self.subnet_index = subnet_index
         self.instance_type = instance_type
         self.enable_ntp = enable_ntp
+        self.extra_user_data = extra_user_data
 
         # These will be initialized and consumed by various functions called in the build hook
         self.sg = None
@@ -122,14 +123,16 @@ class HaNat(Template):
 
     def add_nat_asg(self):
 
-        user_data = resources.get_resource('nat_takeover.sh')
+        user_data = [resources.get_resource('nat_takeover.sh')]
 
         if self.enable_ntp:
-            user_data = Join('\n', [user_data, resources.get_resource('ntp_takeover.sh')])
+            user_data.append(resources.get_resource('ntp_takeover.sh'))
+        if self.extra_user_data:
+            user_data.append(open(self.extra_user_data).read())
 
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),
-            UserData=Base64(user_data),
+            UserData=Base64(Join('\n', user_data)),
             ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
             KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(self.sg)],

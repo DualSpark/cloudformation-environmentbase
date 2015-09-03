@@ -72,6 +72,7 @@ class EnvironmentBase(object):
         self.stack_outputs = {}
         self._config_handlers = []
         self.stack_monitor = None
+        self.child_templates = []
 
         self.boto_session = None
 
@@ -154,6 +155,7 @@ class EnvironmentBase(object):
 
         print 'Writing template to %s\n' % self.globals['output']
 
+        self._add_child_templates()
         # stack_params = self._get_stack_params()
         # estimate_cost_url = self.estimate_cost(stack_params=stack_params)
         # print estimate_cost_url
@@ -586,6 +588,18 @@ class EnvironmentBase(object):
         @param s3_template_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
         @param template_upload_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
         """
+
+        self.child_templates.append(template)
+
+    def _add_child_templates(self):
+        for child_template in self.child_templates:
+            self._add_child_template_helper(child_template)
+
+    def _add_child_template_helper(self, template,
+                           template_bucket=None,
+                           s3_template_prefix=None,
+                           template_upload_acl=None,
+                           depends_on=[]):
         name = template.name
 
         self.add_common_params_to_child_template(template)

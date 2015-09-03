@@ -13,6 +13,7 @@ import resources as res
 from fnmatch import fnmatch
 import utility
 import monitor
+import yaml
 
 # Allow comments in json if you can but at least parse regular json if not
 try:
@@ -419,8 +420,11 @@ class EnvironmentBase(object):
             raise Exception("%s does not exist. Try running the init command to generate it.\n" % self.config_filename)
 
         with open(self.config_filename, 'r') as f:
-            content = f.read()
             try:
+              if re.search('[.]ya?ml$', self.config_filename):
+                config = yaml.load(f)
+              else:
+                content = f.read()
                 config = json.loads(content)
             except ValueError:
                 print '%s could not be parsed' % self.config_filename

@@ -175,7 +175,13 @@ class NetworkBase(EnvironmentBase):
         elif subnet_type == 'private':
             nat_instance_type = self.config['nat']['instance_type']
             nat_enable_ntp = self.config['nat']['enable_ntp']
-            self.template.merge(ha_nat.HaNat(index, nat_instance_type, nat_enable_ntp, name='HaNat%s' % str(index)))
+            extra_user_data = self.config['nat'].get('extra_user_data')
+            self.template.merge(ha_nat.HaNat(
+              index,
+              nat_instance_type,
+              nat_enable_ntp,
+              name='HaNat%s' % str(index),
+              extra_user_data=extra_user_data))
 
     def gateway_hook(self):
         """

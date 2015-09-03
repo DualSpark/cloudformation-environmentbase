@@ -117,6 +117,47 @@ class EnvironmentBaseTestCase(TestCase):
         self.assertEqual(actions_called['deploy'], 1)
         self.assertEqual(actions_called['delete'], 1)
 
+    def test_config_yaml(self):
+        """ Make sure load_config can load yaml files."""
+        with open("config.yaml", 'w') as f:
+            f.write("""
+global:
+  setting: value # We test this setting
+  print_debug: false
+  output: dummy
+  environment_name: test
+network:
+  network_cidr_base: dummy
+  subnet_types:
+    - dummy
+  az_count: 1
+  private_subnet_size: dummy
+  public_subnet_size: dummy
+  network_cidr_size: dummy
+  public_subnet_count: 1
+  private_subnet_count: 1
+template:
+  ami_map_file: dummy
+  template_upload_acl: dummy
+  utility_bucket: dummy
+  description: dummy
+  template_bucket: dummy
+  ec2_key_default: dummy
+  s3_template_prefix: dummy
+nat:
+  instance_type: dummy
+  enable_ntp: false
+""")
+            f.flush()
+
+        fake_cli = self.fake_cli(['create', '--config-file', 'config.yaml'])
+        base = eb.EnvironmentBase(fake_cli)
+        base.load_config()
+
+        self.assertEqual(base.config['global']['setting'], 'value')
+
+
+
     def test_config_override(self):
         """ Make sure local config files overrides default values."""
 

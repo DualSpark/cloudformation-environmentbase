@@ -181,7 +181,7 @@ class NetworkBase(EnvironmentBase):
               nat_instance_type,
               nat_enable_ntp,
               name='HaNat%s' % str(index),
-              extra_user_data))
+              extra_user_data=extra_user_data))
 
     def gateway_hook(self):
         """

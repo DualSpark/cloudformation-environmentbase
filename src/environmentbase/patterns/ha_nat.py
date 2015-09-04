@@ -71,6 +71,13 @@ class HaNat(Template):
             CidrIp='0.0.0.0/0'
         ))
 
+    def get_extra_policy_statements(self):
+        '''
+        Return policy statements for additional permissions you want your NAT
+        to have.
+        '''
+        return []
+
     def add_nat_instance_profile(self):
         '''
         Create the NAT role and instance profile
@@ -110,7 +117,7 @@ class HaNat(Template):
                         "Effect": "Allow",
                         "Action": policy_actions,
                         "Resource": "*"
-                    }]
+                    }] + self.get_extra_policy_statements()
                 }
             )]
         ))

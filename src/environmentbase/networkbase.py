@@ -179,13 +179,31 @@ class NetworkBase(EnvironmentBase):
         elif subnet_type == 'private':
             nat_instance_type = self.config['nat']['instance_type']
             nat_enable_ntp = self.config['nat']['enable_ntp']
-            self.template.merge(ha_nat.HaNat(index, nat_instance_type, nat_enable_ntp, name='HaNat%s' % str(index)))
+            extra_user_data = self.config['nat'].get('extra_user_data')
+            self.template.merge(self.create_nat(
+              index,
+              nat_instance_type,
+              nat_enable_ntp,
+              name='HaNat%s' % str(index),
+              extra_user_data=extra_user_data))
 
     def gateway_hook(self):
         """
         Override to allow subclasses to create VPGs and similar components during network creation
         """
         pass
+
+    def create_nat(self, index, nat_instance_type, enable_ntp, name, extra_user_data=None):
+        """
+        Override to customize your NAT instance. The returned object must be a
+        subclass of ha_nat.HaNat.
+        """
+        return ha_nat.HaNat(
+            index,
+            nat_instance_type,
+            nat_enable_ntp,
+            name=name,
+            extra_user_data=extra_user_data)
 
     def add_network_cidr_mapping(self,
                                  network_config):

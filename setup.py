@@ -70,7 +70,8 @@ setup(
         "docopt==0.6.2",
         "setuptools>=17.1",
         "awacs>=0.5.2",
-        "commentjson"
+        "commentjson",
+        "PyYAML"
     ],
 
     # Optional dependencies

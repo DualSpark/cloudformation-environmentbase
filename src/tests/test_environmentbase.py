@@ -8,6 +8,8 @@ import sys
 import copy
 from tempfile import mkdtemp
 from environmentbase import cli, resources as res, environmentbase as eb
+from environmentbase import networkbase
+import environmentbase.patterns.ha_nat
 from troposphere import ec2
 
 # commentjson is optional, parsing invalid json throws commonjson.JSONLibraryException
@@ -116,6 +118,47 @@ class EnvironmentBaseTestCase(TestCase):
         self.assertEqual(actions_called['create'], 1)
         self.assertEqual(actions_called['deploy'], 1)
         self.assertEqual(actions_called['delete'], 1)
+
+    def test_config_yaml(self):
+        """ Make sure load_config can load yaml files."""
+        with open("config.yaml", 'w') as f:
+            f.write("""
+global:
+  setting: value # We test this setting
+  print_debug: false
+  output: dummy
+  environment_name: test
+network:
+  network_cidr_base: dummy
+  subnet_types:
+    - dummy
+  az_count: 1
+  private_subnet_size: dummy
+  public_subnet_size: dummy
+  network_cidr_size: dummy
+  public_subnet_count: 1
+  private_subnet_count: 1
+template:
+  ami_map_file: dummy
+  template_upload_acl: dummy
+  utility_bucket: dummy
+  description: dummy
+  template_bucket: dummy
+  ec2_key_default: dummy
+  s3_template_prefix: dummy
+nat:
+  instance_type: dummy
+  enable_ntp: false
+""")
+            f.flush()
+
+        fake_cli = self.fake_cli(['create', '--config-file', 'config.yaml'])
+        base = eb.EnvironmentBase(fake_cli)
+        base.load_config()
+
+        self.assertEqual(base.config['global']['setting'], 'value')
+
+
 
     def test_config_override(self):
         """ Make sure local config files overrides default values."""
@@ -347,6 +390,53 @@ class EnvironmentBaseTestCase(TestCase):
             self.assertTrue('ec2instance' in template['Resources'])
 
             # print json.dumps(template, indent=4)
+
+    def test_nat_role_customization(self):
+        """ Example of out to subclass the Controller to provide additional resources """
+        class MyNat(environmentbase.patterns.ha_nat.HaNat):
+            def get_extra_policy_statements(self):
+              return [{
+                  "Effect": "Allow",
+                  "Action": ["DummyAction"],
+                  "Resource": "*"
+              }]
+
+        class MyController(networkbase.NetworkBase):
+            def __init__(self, view):
+                # Run parent initializer
+                networkbase.NetworkBase.__init__(self, view)
+
+            def create_nat(self, index, nat_instance_type, enable_ntp, name, extra_user_data=None):
+                return MyNat(index, nat_instance_type, enable_ntp, name, extra_user_data)
+
+            def create_action(self):
+                self.initialize_template()
+                self.construct_network()
+
+                # This triggers serialization of the template and any child stacks
+                self.write_template_to_file()
+
+        # Initialize the the controller with faked 'create' CLI parameter
+        with patch.object(sys, 'argv', ['environmentbase', 'init']):
+            ctrlr = MyController(cli.CLI(quiet=True))
+            ctrlr.load_config()
+            ctrlr.create_action()
+
+            # Load the generated output template
+            template_path = ctrlr._ensure_template_dir_exists()
+            with open(template_path, 'r') as f:
+                template = json.load(f)
+
+            # Verify that the ec2 instance is in the output
+            self.assertIn('Nat0Role', template['Resources'])
+            self.assertIn('Properties', template['Resources']['Nat0Role'])
+            self.assertIn('Policies', template['Resources']['Nat0Role']['Properties'])
+            self.assertEqual(len(template['Resources']['Nat0Role']['Properties']['Policies']), 1)
+            policy = template['Resources']['Nat0Role']['Properties']['Policies'][0];
+            self.assertIn('PolicyDocument', policy)
+            self.assertIn('Statement', policy['PolicyDocument'])
+            self.assertEqual(len(policy['PolicyDocument']['Statement']), 2)
+            self.assertEqual(policy['PolicyDocument']['Statement'][1]['Action'], ['DummyAction'])
 
 
     # Cloudformation doesn't currently support a dry run, so this test would create a live stack

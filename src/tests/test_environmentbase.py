@@ -432,18 +432,11 @@ nat:
             self.assertIn('Properties', template['Resources']['Nat0Role'])
             self.assertIn('Policies', template['Resources']['Nat0Role']['Properties'])
             self.assertEqual(len(template['Resources']['Nat0Role']['Properties']['Policies']), 1)
-            self.assertIn(
-              'PolicyDocument',
-              template['Resources']['Nat0Role']['Properties']['Policies'][0])
-            self.assertIn(
-              'Statement',
-              template['Resources']['Nat0Role']['Properties']['Policies'][0]['PolicyDocument'])
-            self.assertEqual(
-              len(template['Resources']['Nat0Role']['Properties']['Policies'][0]['PolicyDocument']['Statement']),
-              2)
-            self.assertEqual(
-              template['Resources']['Nat0Role']['Properties']['Policies'][0]['PolicyDocument']['Statement'][1]['Action'],
-              ['DummyAction'])
+            policy = template['Resources']['Nat0Role']['Properties']['Policies'][0];
+            self.assertIn('PolicyDocument', policy)
+            self.assertIn('Statement', policy['PolicyDocument'])
+            self.assertEqual(len(policy['PolicyDocument']['Statement']), 2)
+            self.assertEqual(policy['PolicyDocument']['Statement'][1]['Action'], ['DummyAction'])
 
 
     # Cloudformation doesn't currently support a dry run, so this test would create a live stack

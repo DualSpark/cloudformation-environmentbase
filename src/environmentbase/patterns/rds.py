@@ -20,7 +20,7 @@ class RDS(Template):
                 'master_db_name': 'mydb',
                 'volume_size': 100,
                 'backup_retention_period': 30,
-                'rds_engine': 'mysql',
+                'rds_engine': 'MySQL',
                 # 5.6.19 is no longer supported
                 'rds_engine_version': '5.6.22',
                 'preferred_backup_window': '02:00-02:30',
@@ -281,7 +281,7 @@ if __name__ == '__main__':
             'master_db_name': 'mydb',
             'volume_size': 100,
             'backup_retention_period': 30,
-            'rds_engine': 'mysql',
+            'rds_engine': 'MySQL',
             # 5.6.19 is no longer supported
             'rds_engine_version': '5.6.22',
             'preferred_backup_window': '02:00-02:30',
@@ -298,7 +298,7 @@ if __name__ == '__main__':
             'master_db_name': 'mydb2',
             'volume_size': 100,
             'backup_retention_period': 30,
-            'rds_engine': 'mysql',
+            'rds_engine': 'MySQL',
             # 5.6.19 is no longer supported
             'rds_engine_version': '5.6.22',
             'preferred_backup_window': '02:00-02:30',

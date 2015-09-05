@@ -201,7 +201,7 @@ class NetworkBase(EnvironmentBase):
         return ha_nat.HaNat(
             index,
             nat_instance_type,
-            nat_enable_ntp,
+            enable_ntp,
             name=name,
             extra_user_data=extra_user_data)
 

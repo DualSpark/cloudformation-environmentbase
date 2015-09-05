@@ -128,6 +128,7 @@ global:
   print_debug: false
   output: dummy
   environment_name: test
+  monitor_stack: false
 network:
   network_cidr_base: dummy
   subnet_types:

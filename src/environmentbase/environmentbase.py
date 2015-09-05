@@ -63,6 +63,7 @@ class EnvironmentBase(object):
 
         self.config_filename = config_filename
         self.env_config = env_config
+        self.config_file_override = config_file_override
         self.config = {}
         self.globals = {}
         self.template_args = {}
@@ -416,19 +417,25 @@ class EnvironmentBase(object):
         if not view:
             view = self.view
 
-        if not os.path.isfile(self.config_filename):
-            raise Exception("%s does not exist. Try running the init command to generate it.\n" % self.config_filename)
+        # Allow overriding of the entire config object
+        if self.config_file_override:
+            config = self.config_file_override
 
-        with open(self.config_filename, 'r') as f:
-            try:
-              if re.search('[.]ya?ml$', self.config_filename):
-                config = yaml.load(f)
-              else:
-                content = f.read()
-                config = json.loads(content)
-            except ValueError:
-                print '%s could not be parsed' % self.config_filename
-                raise
+        # Else read from file
+        else:
+            if not os.path.isfile(self.config_filename):
+                raise Exception("%s does not exist. Try running the init command to generate it.\n" % self.config_filename)
+
+            with open(self.config_filename, 'r') as f:
+                try:
+                  if re.search('[.]ya?ml$', self.config_filename):
+                    config = yaml.load(f)
+                  else:
+                    content = f.read()
+                    config = json.loads(content)
+                except ValueError:
+                    print '%s could not be parsed' % self.config_filename
+                    raise
 
         # Load in cli config overrides
         view.update_config(config)

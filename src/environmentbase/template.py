@@ -106,12 +106,12 @@ class Template(t.Template):
         return m.hexdigest()
 
     def merge(self, other_template):
-        '''
+        """
         Experimental merge function
         1. This passes all the initialized attributes to the other template
         2. Calls the other template's build_hook()
         3. Copies the generated troposphere attributes back into this template
-        '''
+        """
         other_template.copy_attributes_from(self)
 
         other_template.build_hook()
@@ -123,12 +123,21 @@ class Template(t.Template):
         self.parameters.update(other_template.parameters)
         self.resources.update(other_template.resources)
 
+    # def attach_template(self, template):
+        # az_count = self.config['network']['az_count']
+        # subnet_types = self.config['network']['subnet_types']
+        # ec2_key = self.config.get('template').get('ec2_key_default', 'default-key')
+        # template.add_common_parameters(subnet_types, ec2_key, az_count)
+        #
+        # ami_cache = self.load_ami_cache()
+        # template.add_ami_mapping(ami_cache)
+
     def copy_attributes_from(self, other_template):
-        '''
+        """
         Copies all attributes from the other template into this one
         These typically get initialized for a template when add_child_template is called
         from the controller, but that never happens when merging two templates
-        '''
+        """
         self._vpc_cidr              = other_template._vpc_cidr
         self._vpc_id                = other_template._vpc_id
         self._common_security_group = other_template._common_security_group
@@ -230,8 +239,7 @@ class Template(t.Template):
         """
         return json.dumps(json.loads(self.to_json()), separators=(',', ':'))
 
-    def add_parameter_idempotent(self,
-                                 troposphere_parameter):
+    def add_parameter_idempotent(self, troposphere_parameter):
         """
         Idempotent add (add only if not exists) for parameters within the template
         @param [Troposphere.Parameter] Troposphere Parameter to add to this template
@@ -260,7 +268,13 @@ class Template(t.Template):
                 Path='/' + path_prefix + '/',
                 Roles=[Ref(iam_role)]))
 
-    def add_common_parameters(self, subnet_types, az_count=2):
+    def add_common_parameters_from_parent(self, parent):
+        ec2_key = parent._ec2_key.Default
+        subnet_types = parent._subnets.keys()
+        az_count = len(parent._azs)
+        self.add_common_parameters(ec2_key, subnet_types, az_count)
+
+    def add_common_parameters(self, ec2_key, subnet_types, az_count=2):
         """
         Adds parameters to template for use as a child stack:
             vpcCidr,
@@ -296,6 +310,17 @@ class Template(t.Template):
             'internetGateway',
             Description='Name of the internet gateway used by the vpc',
             Type='String'))
+
+        self._ec2_key = self.add_parameter(Parameter(
+           'ec2Key',
+            Type='String',
+            Default=ec2_key,
+            Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
+            AllowedPattern=res.get_str('ec2_key'),
+            MinLength=1,
+            MaxLength=255,
+            ConstraintDescription=res.get_str('ec2_key_message')
+        ))
 
         for subnet_type in subnet_types:
             if subnet_type not in self._subnets:
@@ -365,32 +390,6 @@ class Template(t.Template):
             if not line.startswith('#~'):
                 ret_val.append(line.replace("\n", ""))
         return ret_val
-
-    def load_ami_cache(self):
-        """
-        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
-        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
-        """
-        file_path = None
-
-        # Users can provide override ami_cache in their project root
-        local_amicache = os.path.join(os.getcwd(), res.DEFAULT_AMI_CACHE_FILENAME)
-
-        if os.path.isfile(local_amicache):
-            file_path = local_amicache
-
-        # Or sibling to the executing class
-        elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
-            file_path = res.DEFAULT_AMI_CACHE_FILENAME
-
-        if file_path:
-            with open(file_path, 'r') as json_file:
-                json_data = json.load(json_file)
-        else:
-            print "%s does not exist. Try running the init command to generate it.\n" % res.DEFAULT_AMI_CACHE_FILENAME
-            sys.exit()
-
-        self.add_ami_mapping(json_data)
 
     def add_ami_mapping(self, json_data):
         """

@@ -139,9 +139,9 @@ class HaNat(Template):
             user_data.append(open(self.extra_user_data).read())
 
         nat_asg_name = "Nat%sASG" % str(self.subnet_index)
-        user_data = Join('', [
-            user_data,
-            '\n',
+
+        user_data.extend([
+            "\n",
             "cfn-signal -s true",
             " --resource ", nat_asg_name,
             " --stack ", {"Ref": "AWS::StackName"},
@@ -150,7 +150,7 @@ class HaNat(Template):
  
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),
-            UserData=Base64(Join('\n', user_data)),
+            UserData=Base64(Join('', user_data)),
             ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
             KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(self.sg)],

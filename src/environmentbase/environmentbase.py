@@ -74,7 +74,8 @@ class EnvironmentBase(object):
         self.stack_outputs = {}
         self._config_handlers = []
         self.stack_monitor = None
-        self.child_templates = []
+        self.child_templates = {}
+        self._ami_cache = None
 
         self.boto_session = None
 
@@ -157,7 +158,12 @@ class EnvironmentBase(object):
 
         print 'Writing template to %s\n' % self.globals['output']
 
-        self._add_child_templates()
+        # Process each child template
+        for (temp, settings) in self.child_templates.iteritems():
+            merge = settings['merge']
+            depends_on = settings['depends_on']
+            self.process_child_template(temp, merge=merge, depends_on=depends_on)
+
         # stack_params = self._get_stack_params()
         # estimate_cost_url = self.estimate_cost(stack_params=stack_params)
         # print estimate_cost_url
@@ -289,7 +295,7 @@ class EnvironmentBase(object):
                 sns_topic=topic,
                 stack_params=self.deploy_parameter_bindings)
 
-            if is_successful:
+            if self.stack_monitor and is_successful:
                 self.stack_monitor.start_stack_monitor(queue, stack_name, debug=self.globals['print_debug'])
 
         except KeyboardInterrupt:
@@ -513,8 +519,25 @@ class EnvironmentBase(object):
         self.template = Template(self.globals.get('output', 'default_template'))
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
-        self.init_root_template(self.template_args)
-        self.template.load_ami_cache()
+
+        ec2_key = self.config.get('template').get('ec2_key_default', 'default-key')
+        self.template._ec2_key = self.template.add_parameter(Parameter(
+           'ec2Key',
+            Type='String',
+            Default=ec2_key,
+            Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
+            AllowedPattern=res.get_str('ec2_key'),
+            MinLength=1,
+            MaxLength=255,
+            ConstraintDescription=res.get_str('ec2_key_message')
+        ))
+
+        self.template.add_utility_bucket(
+            name=self.template_args.get('utility_bucket'),
+            param_binding_map=self.manual_parameter_bindings)
+
+        ami_cache = self.load_ami_cache()
+        self.template.add_ami_mapping(ami_cache)
 
     def generate_ami_cache(self):
         """
@@ -530,44 +553,11 @@ class EnvironmentBase(object):
             f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
             print "Generated AMI cache file at %s\n" % res.DEFAULT_AMI_CACHE_FILENAME
 
-    def init_root_template(self, template_config):
-        """
-        Adds common parameters for instance creation to the CloudFormation template
-        @param template_config [dict] collection of template-level configuration values to drive the setup of this method
-        """
-        self.template.add_parameter_idempotent(Parameter('ec2Key',
-                Type='String',
-                Default=template_config.get('ec2_key_default', 'default-key'),
-                Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
-                AllowedPattern=res.get_str('ec2_key'),
-                MinLength=1,
-                MaxLength=255,
-                ConstraintDescription=res.get_str('ec2_key_message')))
-
-        self.template.add_utility_bucket(
-            name=template_config.get('utility_bucket'),
-            param_binding_map=self.manual_parameter_bindings)
-
     def to_json(self):
         """
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
         """
         return self.template.to_template_json()
-
-    def add_common_params_to_child_template(self, template):
-        az_count = self.config['network']['az_count']
-        subnet_types = self.config['network']['subnet_types']
-        template.add_common_parameters(subnet_types, az_count)
-
-        template.add_parameter_idempotent(Parameter(
-            'ec2Key',
-            Type='String',
-            Default=self.config.get('template').get('ec2_key_default', 'default-key'),
-            Description='Name of an existing EC2 KeyPair to enable SSH access to the instances',
-            AllowedPattern=res.get_str('ec2_key'),
-            MinLength=1,
-            MaxLength=255,
-            ConstraintDescription=res.get_str('ec2_key_message')))
 
     # Called after add_child_template() has attached common parameters and some instance attributes:
     # - RegionMap: Region to AMI map, allows template to be deployed in different regions without updating AMI ids
@@ -586,12 +576,48 @@ class EnvironmentBase(object):
     # - self.utility_bucket
     # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
     # - self.azs: List of parameter references
-    def add_child_template(self,
-                           template,
-                           template_bucket=None,
-                           s3_template_prefix=None,
-                           template_upload_acl=None,
-                           depends_on=[]):
+    def add_child_template(self, template, depends_on=[], merge=False):
+        """
+        Saves reference to provided template. References are processed in write_template_to_file().
+        :param template: The Environmentbase Template you want to associate with the current instances
+        :param depends_on: List of upstream resources that must be processes before the provided template
+        :param merge: Determines whether the resource is attached as a child template or all of its resources merged
+        into the current template
+        """
+        self.child_templates[template] = {
+            "depends_on": depends_on,
+            "merge": merge
+        }
+
+    def load_ami_cache(self):
+        """
+        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
+        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
+        """
+        if not self._ami_cache:
+            file_path = None
+
+            # Users can provide override ami_cache in their project root
+            local_amicache = os.path.join(os.getcwd(), res.DEFAULT_AMI_CACHE_FILENAME)
+
+            if os.path.isfile(local_amicache):
+                file_path = local_amicache
+
+            # Or sibling to the executing class
+            elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
+                file_path = res.DEFAULT_AMI_CACHE_FILENAME
+
+            if file_path:
+                with open(file_path, 'r') as json_file:
+                    json_data = json.load(json_file)
+            else:
+                raise Exception("%s does not exist. Try running the init command to generate it.\n" %
+                                res.DEFAULT_AMI_CACHE_FILENAME)
+            self._ami_cache = json_data
+
+        return self._ami_cache
+
+    def process_child_template(self, template, merge=False, depends_on=[]):
         """
         Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
         @param template [Troposphere.Template] Troposphere Template object to add as a child to this object's template
@@ -600,35 +626,20 @@ class EnvironmentBase(object):
         @param template_upload_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
         """
 
-        self.child_templates.append(template)
+        template.add_common_parameters_from_parent(self.template)
 
-    def _add_child_templates(self):
-        for child_template in self.child_templates:
-            self._add_child_template_helper(child_template)
-
-    def _add_child_template_helper(self, template,
-                           template_bucket=None,
-                           s3_template_prefix=None,
-                           template_upload_acl=None,
-                           depends_on=[]):
-        name = template.name
-
-        self.add_common_params_to_child_template(template)
-
-        template.load_ami_cache()
+        ami_cache = self.load_ami_cache()
+        template.add_ami_mapping(ami_cache)
 
         template.build_hook()
 
-        stack_url = self.upload_template(
-            template,
-            template_bucket=template_bucket,
-            s3_template_prefix=s3_template_prefix,
-            template_upload_acl=template_upload_acl)
+        stack_url = self.upload_template(template)
 
         # stack_params = self._get_stack_params()
         # estimate_cost_url = self.estimate_cost(stack_params=stack_params, template_url=stack_url)
         # print estimate_cost_url
 
+        name = template.name
         if name not in self.stack_outputs:
             self.stack_outputs[name] = []
 

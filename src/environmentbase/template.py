@@ -272,9 +272,10 @@ class Template(t.Template):
         ec2_key = parent._ec2_key.Default
         subnet_types = parent._subnets.keys()
         az_count = len(parent._azs)
-        self.add_common_parameters(ec2_key, subnet_types, az_count)
+        region_map = parent.mappings['RegionMap']
+        self.add_common_parameters(ec2_key, subnet_types, region_map, az_count)
 
-    def add_common_parameters(self, ec2_key, subnet_types, az_count=2):
+    def add_common_parameters(self, ec2_key, subnet_types, region_map, az_count=2):
         """
         Adds parameters to template for use as a child stack:
             vpcCidr,
@@ -322,6 +323,8 @@ class Template(t.Template):
             ConstraintDescription=res.get_str('ec2_key_message')
         ))
 
+        self.mappings['RegionMap'] = region_map
+
         for subnet_type in subnet_types:
             if subnet_type not in self._subnets:
                 self._subnets[subnet_type] = []
@@ -343,6 +346,8 @@ class Template(t.Template):
                 Type='String')
             self.add_parameter(az_param)
             self._azs.append(az_param)
+
+
 
     @staticmethod
     def build_bootstrap(bootstrap_files=None,

@@ -628,9 +628,6 @@ class EnvironmentBase(object):
 
         template.add_common_parameters_from_parent(self.template)
 
-        ami_cache = self.load_ami_cache()
-        template.add_ami_mapping(ami_cache)
-
         template.build_hook()
 
         stack_url = self.upload_template(template)

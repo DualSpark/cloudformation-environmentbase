@@ -181,7 +181,10 @@ class EnvironmentBase(object):
             print "Successfully issued update stack command for %s\n" % stack_name
 
         # Else stack doesn't currently exist, create a new stack
-        except botocore.exceptions.ClientError as e:
+        # This excepted exception is too broad, pls narrow it as you come accross 
+        # exceptions that should be raised up
+        except botocore.exceptions.ClientError as update_error:
+            logging.warning('Error during update_stack: {!r}'.format( update_error))
             try:
                 cfn_conn.create_stack(
                     StackName=stack_name,
@@ -193,8 +196,11 @@ class EnvironmentBase(object):
                     TimeoutInMinutes=TIMEOUT)
                 is_successful = True
                 print "Successfully issued create stack command for %s\n" % stack_name
-            except botocore.exceptions.ClientError as e:
-                print "Create failed: \n\n%s\n" % e.message
+            except botocore.exceptions.ClientError as create_error:
+                logging.error("Create failed: \n\n{!e}\n".format(create_error))
+                # Raise update_error because that one is more likely to explain why the 
+                # entire operation failed. 
+                raise update_error
 
         return is_successful
 

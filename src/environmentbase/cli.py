@@ -77,11 +77,4 @@ class CLI(object):
         """
         print
 
-        if self.args.get('--debug'):
-            self._process_request_helper(controller)
-
-        else:
-            try:
-                self._process_request_helper(controller)
-            except Exception as e:
-                print e.message
+        self._process_request_helper(controller)

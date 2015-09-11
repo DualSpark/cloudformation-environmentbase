@@ -62,14 +62,14 @@ setup(
     package_dir={"": "src"},
 
     install_requires=[
-        "troposphere>=1.1.2",
-        "boto>=2.38.0",
-        "botocore>=1.1.1",
-        "boto3>=1.1.0",
+        "troposphere==1.1.2",
+        "boto==2.38.0",
+        "botocore==1.1.1",
+        "boto3==1.1.0",
         "ipcalc==1.1.2",
         "docopt==0.6.2",
-        "setuptools>=17.1",
-        "awacs>=0.5.2",
+        "setuptools==17.1",
+        "awacs==0.5.2",
         "commentjson",
         "PyYAML"
     ],
@@ -102,8 +102,8 @@ setup(
     # Test runner and required testing packages
     test_suite='nose2.collector.collector',
     tests_require=[
-        'nose2>=0.5.0',
-        'unittest2>=1.1.0',
-        'mock>=1.1.2'
+        'nose2==0.5.0',
+        'unittest2==1.1.0',
+        'mock==1.1.2'
     ]
 )

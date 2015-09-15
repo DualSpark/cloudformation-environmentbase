@@ -1,17 +1,18 @@
-from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain
+from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select
 from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs
 from awacs import logs as awacs_logs, aws
 from awacs.helpers.trust import make_simple_assume_statement
 import troposphere as t
 import troposphere.constants as tpc
 import troposphere.elasticloadbalancing as elb
+import troposphere.cloudformation as cf
 import hashlib
 import json
 import os
-import sys
+import time
 from datetime import datetime
 import resources as res
-
+import utility
 
 class Template(t.Template):
     """
@@ -20,7 +21,22 @@ class Template(t.Template):
     consistency since it was generated.
     """
 
-    def __init__(self, template_name):
+    """
+    Class variable for S3 destination, set once by controller for use across all template w/in an environment
+    """
+    s3_path_prefix = ''
+
+    """
+    S3 bucket name
+    """
+    template_bucket = ''
+
+    """
+    Child stack timeout
+    """
+    stack_timeout = '60'
+
+    def __init__(self, template_name, root_template=False):
         """
         Init method for environmentbase.Template class
         @param template_name [string] - name of this template, used when identifying this template when uploading, etc.
@@ -34,12 +50,17 @@ class Template(t.Template):
         self._common_security_group = None
         self._utility_bucket = None
         self._igw = None
+        self._child_templates = []
+        self.manual_parameter_bindings = {}
+        self._resource_path = ''
 
         self._azs = []
         self._subnets = {
             'public': [],
             'private': []
         }
+
+        self._is_root_template = root_template
 
     def _ref_maybe(self, item):
         """
@@ -97,6 +118,16 @@ class Template(t.Template):
     def subnets(self):
         return self._ref_maybe(self._subnets)
 
+    @property
+    def resource_path(self):
+        if not self._resource_path:
+            include_timestamp = not self._is_root_template
+            self._resource_path = utility.template_s3_resource_path(
+                Template.s3_path_prefix,
+                self.name,
+                include_timestamp=include_timestamp)
+        return self._resource_path
+
     def __get_template_hash(self):
         """
         Private method holds process for hashing this template for future validation.
@@ -122,15 +153,6 @@ class Template(t.Template):
         self.outputs.update(other_template.outputs)
         self.parameters.update(other_template.parameters)
         self.resources.update(other_template.resources)
-
-    # def attach_template(self, template):
-        # az_count = self.config['network']['az_count']
-        # subnet_types = self.config['network']['subnet_types']
-        # ec2_key = self.config.get('template').get('ec2_key_default', 'default-key')
-        # template.add_common_parameters(subnet_types, ec2_key, az_count)
-        #
-        # ami_cache = self.load_ami_cache()
-        # template.add_ami_mapping(ami_cache)
 
     def copy_attributes_from(self, other_template):
         """
@@ -198,6 +220,8 @@ class Template(t.Template):
         """
         Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
         """
+        self.process_child_templates()
+
         # strip existing values
         for output_key in ['dateGenerated', 'templateValidationHash']:
             if output_key in self.outputs:
@@ -905,14 +929,13 @@ class Template(t.Template):
 
         return vpcflowlogs_role
 
-    def add_utility_bucket(self, name=None, param_binding_map={}):
+    def add_utility_bucket(self, name=None):
         """
         Method adds a bucket to be used for infrastructure utility purposes such as backups
         @param name [str] friendly name to prepend to the CloudFormation asset name
         """
         if name:
             self._utility_bucket = name
-            param_binding_map['utilityBucket'] = name
         else:
             self._utility_bucket = self.add_resource(s3.Bucket(
                 name.lower() + 'UtilityBucket',
@@ -925,8 +948,6 @@ class Template(t.Template):
                     Bucket=self.utility_bucket,
                     PolicyDocument=bucket_policy_statements))
 
-            param_binding_map['utilityBucket'] = self.utility_bucket
-
         log_group_name = 'DefaultLogGroup'
         self.add_resource(logs.LogGroup(
             log_group_name,
@@ -934,3 +955,83 @@ class Template(t.Template):
         ))
 
         self.add_resource(self.create_vpcflowlogs_role())
+
+        self.manual_parameter_bindings['utilityBucket'] = self.utility_bucket
+
+    def add_child_template(self, child_template, merge=False, depends_on=[]):
+        child_template_entry = (child_template, merge, depends_on)
+        self._child_templates.append(child_template_entry)
+
+    def process_child_templates(self):
+        stack_outputs = {}
+        for (child_template, merge, depends_on) in self._child_templates:
+
+            self.process_child_template(child_template, merge, depends_on)
+
+            # # TODO: output autowiring feature, disambiguation of output sources
+            # for output in child_template.outputs:
+            #     stack_outputs[output.name] = child_template
+
+
+    def match_stack_parameters(self, child_template):
+        stack_params = {}
+
+        for parameter in child_template.parameters.keys():
+
+            # Manual parameter bindings single-namespace
+            if parameter in self.manual_parameter_bindings:
+                manual_match = self.manual_parameter_bindings[parameter]
+                stack_params[parameter] = manual_match
+
+            # Naming scheme for identifying the AZ of a subnet
+            elif parameter.startswith('availabilityZone'):
+                index = int(parameter[-1:])
+                stack_params[parameter] = Select(index, t.GetAZs(Ref(t.AWS_REGION)))
+                # stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone', ''), 'AvailabilityZone')
+
+            # Match any child stack parameters that have the same name as this stacks **parameters**
+            elif parameter in self.parameters.keys():
+                param_match = self.parameters.get(parameter)
+                stack_params[parameter] = Ref(param_match)
+
+            # Match any child stack parameters that have the same name as this stacks **resources**
+            elif parameter in self.resources.keys():
+                resource_match = self.resources.get(parameter)
+                stack_params[parameter] = Ref(resource_match)
+
+            # # Match any child stack parameters that have the same name as a top-level **stack_output**
+            # TODO: Enable Output autowiring
+            # elif parameter in self.stack_outputs:
+            #     stack_params[parameter] = GetAtt(self.stack_outputs[parameter], 'Outputs.' + parameter)
+
+            # Finally if nothing else matches copy the child templates parameter to this template's parameter list
+            # so the value will pass through this stack down to the child.
+            else:
+                new_param = self.add_parameter(child_template.parameters[parameter])
+                stack_params[parameter] = Ref(new_param)
+
+        return stack_params
+
+    def process_child_template(self, child_template, merge, depends_on):
+        if merge:
+            self.merge(child_template)
+            return
+
+        child_template.add_common_parameters_from_parent(self)
+        child_template.build_hook()
+
+        # assemble parameters
+        stack_params = self.match_stack_parameters(child_template)
+
+        # assemble template path
+        full_s3_path = utility.template_s3_url(Template.template_bucket, child_template.resource_path)
+
+        # create stack
+        stack_obj = cf.Stack(
+            child_template.name + 'Stack',
+            TemplateURL=full_s3_path,
+            Parameters=stack_params,
+            TimeoutInMinutes=Template.stack_timeout,
+            DependsOn=depends_on)
+
+        return self.add_resource(stack_obj)

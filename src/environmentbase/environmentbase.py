@@ -1,12 +1,9 @@
 import os
 import os.path
 import copy
-import sys
-import time
 import re
 import botocore.exceptions
-import troposphere.cloudformation as cf
-from troposphere import Ref, Parameter, GetAtt
+from troposphere import Parameter
 from template import Template
 import cli
 import resources as res
@@ -74,7 +71,6 @@ class EnvironmentBase(object):
         self.stack_outputs = {}
         self._config_handlers = []
         self.stack_monitor = None
-        self.child_templates = {}
         self._ami_cache = None
 
         self.boto_session = None
@@ -141,54 +137,78 @@ class EnvironmentBase(object):
         self.generate_config()
         self.generate_ami_cache()
 
-    def _ensure_template_dir_exists(self, filename=None):
+    def _ensure_template_dir_exists(self):
         parent_dir = TEMPLATES_PATH
         if not os.path.exists(parent_dir):
             os.makedirs(parent_dir)
+        return TEMPLATES_PATH
 
-        if not filename:
-            filename = self.globals['output']
-        return os.path.join(TEMPLATES_PATH, filename)
+    @staticmethod
+    def serialize_templates_helper(template, s3_client, template_upload_acl, local_template_dir=None):
+        resource_path = template.resource_path
+        raw_json = template.to_template_json()
 
-    def write_template_to_file(self):
-        """
-        Serializes self.template to string and writes it to the file named in config['global']['output']
-        """
-        local_path = self._ensure_template_dir_exists()
+        for child, _, _ in template._child_templates:
+            EnvironmentBase.serialize_templates_helper(child, s3_client, template_upload_acl, local_template_dir)
 
-        print 'Writing template to %s\n' % self.globals['output']
+        s3_client.Bucket(Template.template_bucket).put_object(
+            Key=resource_path,
+            Body=raw_json,
+            ACL=template_upload_acl
+        )
 
-        # Process each child template
-        for (temp, settings) in self.child_templates.iteritems():
-            merge = settings['merge']
-            depends_on = settings['depends_on']
-            self.process_child_template(temp, merge=merge, depends_on=depends_on)
+        stack_url = utility.template_s3_url(Template.template_bucket, resource_path)
+        print "Writing template to", stack_url
 
-        # stack_params = self._get_stack_params()
-        # estimate_cost_url = self.estimate_cost(stack_params=stack_params)
-        # print estimate_cost_url
+        if local_template_dir:
+            local_file_name = template.name + '.template'
+            local_file_path = os.path.join(local_template_dir, local_file_name)
+            with open(local_file_path, 'w') as output_file:
+                reloaded_template = pure_json.loads(raw_json)
+                pure_json.dump(reloaded_template, output_file, indent=4, separators=(',', ':'))
 
-        with open(local_path, 'w') as output_file:
-            # Here to_json() loads child templates into S3
-            raw_json = self.template.to_template_json()
+                print "Local:", local_file_path
 
-            reloaded_template = pure_json.loads(raw_json)
-            pure_json.dump(reloaded_template, output_file, indent=4, separators=(',', ':'))
+        print
+
+    def serialize_templates(self):
+        s3_client = utility.get_boto_resource(self.config, 's3')
+
+        local_file_path = None
+        if self.globals['print_debug']:
+            local_file_path = self._ensure_template_dir_exists()
+
+        EnvironmentBase.serialize_templates_helper(
+            self.template, s3_client,
+            self.template_args.get('template_upload_acl'),
+            local_template_dir=local_file_path)
 
     def estimate_cost(self, template_name=None, template_url=None, stack_params=None):
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
 
-        if template_url:
-            estimate_cost_url = cfn_conn.estimate_template_cost(
-                TemplateURL=template_url,
-                Parameters=stack_params)
-        else:
-            template_body = self._load_template(template_name)
-            estimate_cost_url = cfn_conn.estimate_template_cost(
-                TemplateBody=template_body,
-                Parameters=stack_params)
+        if not template_url:
+            return None
+
+        estimate_cost_url = cfn_conn.estimate_template_cost(
+            TemplateURL=template_url,
+            Parameters=stack_params)
+        # else:
+        #     template_body = self._load_template(template_name)
+        #     estimate_cost_url = cfn_conn.estimate_template_cost(
+        #         TemplateBody=template_body,
+        #         Parameters=stack_params)
 
         return estimate_cost_url.get('Url')
+
+    def _template_url(self):
+        environment_name = self.globals['environment_name']
+        prefix = self.template_args["s3_template_prefix"]
+        template_resource_path = utility.template_s3_resource_path(prefix, environment_name, include_timestamp=False)
+
+        bucket = self.template_args['template_bucket']
+        template_url = utility.template_s3_url(bucket, template_resource_path)
+
+        return template_url
 
     def create_action(self):
         """
@@ -196,28 +216,13 @@ class EnvironmentBase(object):
         Initializes a new template instance, and write it to file.
         """
         self.load_config()
+
         self.initialize_template()
 
         # Do custom troposphere resource creation in your overridden copy of this method
         self.create_hook()
 
-        self.write_template_to_file()
-
-    def _load_template(self, template_name=None):
-        if not template_name:
-            template_name = self.config['global']['output']
-
-        # Validate existence of and read in the template file
-        cfn_template_filename = os.path.join(TEMPLATES_PATH, template_name)
-        if os.path.isfile(cfn_template_filename):
-            with open(cfn_template_filename, 'r') as cfn_template_file:
-                cfn_template = cfn_template_file.read()
-            white_space = re.compile(r'\s+')
-            cfn_template = re.sub(white_space, ' ', cfn_template)
-        else:
-            raise ValueError('Template at: %s not found\n' % cfn_template_filename)
-
-        return cfn_template
+        self.serialize_templates()
 
     def _ensure_stack_is_deployed(self, stack_name='UnnamedStack', sns_topic=None, stack_params=[]):
         is_successful = False
@@ -226,12 +231,13 @@ class EnvironmentBase(object):
         if sns_topic:
             notification_arns.append(sns_topic.arn)
 
-        cfn_template = self._load_template()
+        template_url = self._template_url()
+
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         try:
             cfn_conn.update_stack(
                 StackName=stack_name,
-                TemplateBody=cfn_template,
+                TemplateURL=template_url,
                 Parameters=stack_params,
                 NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'])
@@ -239,20 +245,23 @@ class EnvironmentBase(object):
             print "Successfully issued update stack command for %s\n" % stack_name
 
         # Else stack doesn't currently exist, create a new stack
-        except botocore.exceptions.ClientError as e:
-            try:
-                cfn_conn.create_stack(
-                    StackName=stack_name,
-                    TemplateBody=cfn_template,
-                    Parameters=stack_params,
-                    NotificationARNs=notification_arns,
-                    Capabilities=['CAPABILITY_IAM'],
-                    DisableRollback=True,
-                    TimeoutInMinutes=TIMEOUT)
-                is_successful = True
-                print "Successfully issued create stack command for %s\n" % stack_name
-            except botocore.exceptions.ClientError as e:
-                print "Create failed: \n\n%s\n" % e.message
+        except botocore.exceptions.ClientError as update_e:
+            if "does not exist" in update_e.message:
+                try:
+                    cfn_conn.create_stack(
+                        StackName=stack_name,
+                        TemplateURL=template_url,
+                        Parameters=stack_params,
+                        NotificationARNs=notification_arns,
+                        Capabilities=['CAPABILITY_IAM'],
+                        DisableRollback=True,
+                        TimeoutInMinutes=TIMEOUT)
+                    is_successful = True
+                    print "Successfully issued create stack command for %s\n" % stack_name
+                except botocore.exceptions.ClientError as create_e:
+                    print "Deploy failed: \n\n%s\n" % create_e.message
+            else:
+                raise
 
         return is_successful
 
@@ -511,12 +520,18 @@ class EnvironmentBase(object):
             self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
             self.stack_monitor.add_handler(self)
 
+        # configure Template class with S3 settings
+        Template.template_bucket = self.template_args.get('template_bucket')
+        Template.s3_path_prefix = self.template_args.get("s3_template_prefix")
+        Template.stack_timeout = self.template_args.get("timeout_in_minutes")
+
     def initialize_template(self):
         """
         Create new Template instance, set description and common parameters and load AMI cache.
         """
         print 'Generating template for %s stack\n' % self.globals['environment_name']
-        self.template = Template(self.globals.get('output', 'default_template'))
+
+        self.template = Template(self.globals.get('environment_name', 'default_template'), root_template=True)
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
 
@@ -533,8 +548,9 @@ class EnvironmentBase(object):
         ))
 
         self.template.add_utility_bucket(
-            name=self.template_args.get('utility_bucket'),
-            param_binding_map=self.manual_parameter_bindings)
+            name=self.template_args.get('utility_bucket'))
+
+        self.manual_parameter_bindings['utilityBucket'] = self.template.utility_bucket
 
         ami_cache = self.load_ami_cache()
         self.template.add_ami_mapping(ami_cache)
@@ -576,7 +592,7 @@ class EnvironmentBase(object):
     # - self.utility_bucket
     # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
     # - self.azs: List of parameter references
-    def add_child_template(self, template, depends_on=[], merge=False):
+    def add_child_template(self, child_template, merge=False, depends_on=[]):
         """
         Saves reference to provided template. References are processed in write_template_to_file().
         :param template: The Environmentbase Template you want to associate with the current instances
@@ -584,10 +600,7 @@ class EnvironmentBase(object):
         :param merge: Determines whether the resource is attached as a child template or all of its resources merged
         into the current template
         """
-        self.child_templates[template] = {
-            "depends_on": depends_on,
-            "merge": merge
-        }
+        self.template.add_child_template(child_template, merge=merge, depends_on=depends_on)
 
     def load_ami_cache(self):
         """
@@ -616,108 +629,3 @@ class EnvironmentBase(object):
             self._ami_cache = json_data
 
         return self._ami_cache
-
-    def process_child_template(self, template, merge=False, depends_on=[]):
-        """
-        Method adds a child template to this object's template and binds the child template parameters to properties, resources and other stack outputs
-        @param template [Troposphere.Template] Troposphere Template object to add as a child to this object's template
-        @param template_bucket [str] name of the bucket to upload keys to - will default to value in template_args if not present
-        @param s3_template_prefix [str] s3 key name prefix to prepend to s3 key path - will default to value in template_args if not present
-        @param template_upload_acl [str] name of the s3 canned acl to apply to templates uploaded to S3 - will default to value in template_args if not present
-        """
-
-        template.add_common_parameters_from_parent(self.template)
-
-        template.build_hook()
-
-        stack_url = self.upload_template(template)
-
-        # stack_params = self._get_stack_params()
-        # estimate_cost_url = self.estimate_cost(stack_params=stack_params, template_url=stack_url)
-        # print estimate_cost_url
-
-        name = template.name
-        if name not in self.stack_outputs:
-            self.stack_outputs[name] = []
-
-        stack_params = {}
-
-        for parameter in template.parameters.keys():
-            # Manual parameter bindings single-namespace
-            if parameter in self.manual_parameter_bindings:
-                stack_params[parameter] = self.manual_parameter_bindings[parameter]
-
-            # Naming scheme for identifying the AZ of a subnet (not sure if this is even used anywhere)
-            elif parameter.startswith('availabilityZone'):
-                stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone', ''), 'AvailabilityZone')
-
-            # Match any child stack parameters that have the same name as this stacks **parameters**
-            elif parameter in self.template.parameters.keys():
-                stack_params[parameter] = Ref(self.template.parameters.get(parameter))
-
-            # Match any child stack parameters that have the same name as this stacks **resources**
-            elif parameter in self.template.resources.keys():
-                stack_params[parameter] = Ref(self.template.resources.get(parameter))
-
-            # Match any child stack parameters that have the same name as this stacks **outputs**
-            # TODO: Does this even work? Child runs after parent completes?
-            elif parameter in self.stack_outputs:
-                stack_params[parameter] = GetAtt(self.stack_outputs[parameter], 'Outputs.' + parameter)
-
-            # Finally if nothing else matches copy the child templates parameter to this template's parameter list
-            # so the value will pass through this stack down to the child.
-            else:
-                stack_params[parameter] = Ref(self.template.add_parameter(template.parameters[parameter]))
-        stack_name = name + 'Stack'
-
-        stack_obj = cf.Stack(
-            stack_name,
-            TemplateURL=stack_url,
-            Parameters=stack_params,
-            TimeoutInMinutes=self.template_args.get('timeout_in_minutes', '60'),
-            DependsOn=depends_on)
-
-        return self.template.add_resource(stack_obj)
-
-    def upload_template(self,
-                        template,
-                        template_bucket=None,
-                        s3_template_prefix=None,
-                        template_upload_acl=None):
-        """
-        Upload helper to upload this template to S3 for consumption by other templates or end users.
-        @param template [Template] object to be uploaded to s3.
-        @param template_bucket [string] name of the AWS S3 bucket to upload this template to.
-        @param s3_template_prefix [string] key name prefix to prepend to the key name for the upload of this template.
-        @param template_upload_acl [string] S3 canned ACL string value to use when setting permissions on uploaded key.
-        """
-        key_serial = str(int(time.time()))
-
-        if s3_template_prefix is None:
-            s3_template_prefix = self.template_args.get("s3_template_prefix")
-
-        if template_bucket is None:
-            template_bucket = self.template_args.get('template_bucket')
-
-        if template_upload_acl is None:
-            template_upload_acl = self.template_args.get('template_upload_acl')
-
-        template_name = "%s.%s.template" % (template.name, key_serial)
-        s3_path = "%s/%s" % (s3_template_prefix, template_name)
-        local_path = self._ensure_template_dir_exists(template_name)
-
-        if self.config['global']['print_debug']:
-            print 'Saving copy of %s to %s' % (template.name, local_path)
-            with open(local_path, 'w') as f:
-                f.write(template.to_json())
-
-        s3 = utility.get_boto_resource(self.config, 's3')
-
-        s3.Bucket(template_bucket).put_object(
-            Key=s3_path,
-            Body=template.to_json(),
-            ACL=template_upload_acl
-        )
-
-        stack_url = 'https://%s.s3.amazonaws.com/%s' % (template_bucket, s3_path)
-        return stack_url

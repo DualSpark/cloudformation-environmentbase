@@ -52,7 +52,7 @@ class CLI(object):
 
         template_file = self.args.get('--template-file')
         if template_file is not None:
-            config['global']['output'] = template_file
+            config['global']['environment_name'] = template_file
 
     def _process_request_helper(self, controller):
         if self.args.get('init', False):

@@ -67,7 +67,7 @@ class NetworkBase(EnvironmentBase):
         self.initialize_template()
         self.construct_network()
         self.create_hook()
-        self.write_template_to_file()
+        self.serialize_templates()
 
     def add_vpc_az_mapping(self,
                            boto_config,
@@ -161,9 +161,9 @@ class NetworkBase(EnvironmentBase):
                     RouteTableId=Ref(route_table),
                     SubnetId=self.template.subnets[subnet_type][index]))
 
-        self.manual_parameter_bindings['vpcId'] = self.template.vpc_id
-        self.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
-        self.manual_parameter_bindings['internetGateway'] = self.template.igw
+        self.template.manual_parameter_bindings['vpcId'] = self.template.vpc_id
+        self.template.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
+        self.template.manual_parameter_bindings['internetGateway'] = self.template.igw
 
     def create_subnet_egress(self, index, route_table, igw_title, subnet_type):
         """

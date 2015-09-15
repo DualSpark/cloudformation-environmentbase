@@ -1,8 +1,6 @@
 {
     "global": {
-        // External template name: *output* filename when running create, *input* filename when running deploy
-        "output": "basestring",
-        // Name of top-level stack when deploying template
+        // Name of top-level stack and root template file.
         "environment_name": "basestring",
         // Prints extra information useful for debugging
         "print_debug": "bool",
@@ -23,6 +21,8 @@
         "utility_bucket": "basestring",
         // Description to use for top-level template
         "description": "basestring",
+        // Cloudformation create/update timeout
+        "timeout_in_minutes": "basestring",
 
         "ec2_key_default": "basestring"
     },

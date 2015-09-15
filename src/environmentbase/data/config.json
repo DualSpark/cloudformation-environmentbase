@@ -1,8 +1,7 @@
 {
   "global": {
     "print_debug": false,
-    "environment_name": "environmentbase2",
-    "output": "environmentbase.template",
+    "environment_name": "environmentbase",
     "monitor_stack": false
   },
   "template": {
@@ -12,7 +11,7 @@
     "template_bucket": "dualspark",
     "s3_template_prefix": "templates",
     "template_upload_acl": "public-read",
-
+    "timeout_in_minutes": "60",
     "ec2_key_default": "dualspark_rsa"
   },
   "logging": {

@@ -70,14 +70,11 @@ setup(
         "docopt==0.6.2",
         "setuptools>=17.1",
         "awacs>=0.5.2",
-        "commentjson",
-        "PyYAML"
+        "PyYAML==3.11"
     ],
 
     # Optional dependencies
-    extras_require={
-        'rst': ["commentjson"],
-    },
+    extras_require={},
 
     # This section is required for setuptools to auto-gen the cross platform wrapper script
     # i.e. 'environmentbase --version' instead of 'python -m environmentbase --version'

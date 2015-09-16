@@ -942,11 +942,15 @@ class Template(t.Template):
                 AccessControl=s3.BucketOwnerFullControl,
                 DeletionPolicy=Retain))
 
-            bucket_policy_statements = self.get_logging_bucket_policy_document(self.utility_bucket, elb_log_prefix=res.get_str('elb_log_prefix',''), cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
+            bucket_policy_statements = self.get_logging_bucket_policy_document(
+                self.utility_bucket,
+                elb_log_prefix=res.get_str('elb_log_prefix', ''),
+                cloudtrail_log_prefix=res.get_str('cloudtrail_log_prefix', ''))
 
-            self.add_resource(s3.BucketPolicy(name.lower() + 'UtilityBucketLoggingPolicy',
-                    Bucket=self.utility_bucket,
-                    PolicyDocument=bucket_policy_statements))
+            self.add_resource(s3.BucketPolicy(
+                name.lower() + 'UtilityBucketLoggingPolicy',
+                Bucket=self.utility_bucket,
+                PolicyDocument=bucket_policy_statements))
 
         log_group_name = 'DefaultLogGroup'
         self.add_resource(logs.LogGroup(

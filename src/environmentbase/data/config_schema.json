@@ -1,27 +1,27 @@
 {
     "global": {
-        // Name of top-level stack and root template file.
+        # Name of top-level stack and root template file.
         "environment_name": "basestring",
-        // Prints extra information useful for debugging
+        # Prints extra information useful for debugging
         "print_debug": "bool",
-        // Enable monitoring of stack event stream
+        # Enable monitoring of stack event stream
         "monitor_stack": "bool"
     },
     "template": {
-        // Name of json file containing mapping labels to AMI ids
+        # Name of json file containing mapping labels to AMI ids
         "ami_map_file": "basestring",
-        // Canned ACL permissions for the template file upload
-        // Legal values: private, public-read, public-read-write, authenticated-read, bucket-owner-read, bucket-owner-full-control
+        # Canned ACL permissions for the template file upload
+        # Legal values: private, public-read, public-read-write, authenticated-read, bucket-owner-read, bucket-owner-full-control
         "template_upload_acl": "basestring",
-        // Name of the bucket to use to upload child templates to
+        # Name of the bucket to use to upload child templates to
         "template_bucket": "basestring",
-        // Prefix (subdirectories) to use when storing child templates
+        # Prefix (subdirectories) to use when storing child templates
         "s3_template_prefix": "basestring",
-        // Name of the bucket to use for storing log files
+        # Name of the bucket to use for storing log files
         "utility_bucket": "basestring",
-        // Description to use for top-level template
+        # Description to use for top-level template
         "description": "basestring",
-        // Cloudformation create/update timeout
+        # Cloudformation create/update timeout
         "timeout_in_minutes": "basestring",
 
         "ec2_key_default": "basestring"

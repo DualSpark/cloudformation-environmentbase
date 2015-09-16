@@ -12,13 +12,6 @@ import utility
 import monitor
 import yaml
 
-# Allow comments in json if you can but at least parse regular json if not
-try:
-    import commentjson as json
-    from commentjson import JSONLibraryException as ValueError
-except ImportError:
-    import json
-
 # If you run into compatibility issues, use the regular json library instead:
 import json as pure_json
 
@@ -46,7 +39,7 @@ class EnvironmentBase(object):
     def __init__(self,
                  view=None,
                  env_config=EnvConfig(),
-                 config_filename=res.DEFAULT_CONFIG_FILENAME,
+                 config_filename=(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0]),
                  config_file_override=None):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
@@ -465,7 +458,7 @@ class EnvironmentBase(object):
             config.update(handler.get_factory_defaults())
 
         with open(self.config_filename, 'w') as f:
-            f.write(json.dumps(config, indent=4, sort_keys=True, separators=(',', ': ')))
+            f.write(yaml.dump(config, indent=4, sort_keys=True, separators=(',', ': ')))
             print 'Generated config file at %s\n' % self.config_filename
 
     def load_config(self, view=None, config=None):
@@ -484,19 +477,7 @@ class EnvironmentBase(object):
 
         # Else read from file
         else:
-            if not os.path.isfile(self.config_filename):
-                raise Exception("%s does not exist. Try running the init command to generate it.\n" % self.config_filename)
-
-            with open(self.config_filename, 'r') as f:
-                try:
-                  if re.search('[.]ya?ml$', self.config_filename):
-                    config = yaml.load(f)
-                  else:
-                    content = f.read()
-                    config = json.loads(content)
-                except ValueError:
-                    print '%s could not be parsed' % self.config_filename
-                    raise
+            config = res.load_file('', self.config_filename)
 
         # Load in cli config overrides
         view.update_config(config)
@@ -552,7 +533,7 @@ class EnvironmentBase(object):
 
         self.manual_parameter_bindings['utilityBucket'] = self.template.utility_bucket
 
-        ami_cache = self.load_ami_cache()
+        ami_cache = res.load_file('', res.DEFAULT_AMI_CACHE_FILENAME)
         self.template.add_ami_mapping(ami_cache)
 
     def generate_ami_cache(self):
@@ -566,7 +547,7 @@ class EnvironmentBase(object):
                 return
 
         with open(res.DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
-            f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
+            f.write(yaml.dump(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
             print "Generated AMI cache file at %s\n" % res.DEFAULT_AMI_CACHE_FILENAME
 
     def to_json(self):
@@ -601,31 +582,3 @@ class EnvironmentBase(object):
         into the current template
         """
         self.template.add_child_template(child_template, merge=merge, depends_on=depends_on)
-
-    def load_ami_cache(self):
-        """
-        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
-        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
-        """
-        if not self._ami_cache:
-            file_path = None
-
-            # Users can provide override ami_cache in their project root
-            local_amicache = os.path.join(os.getcwd(), res.DEFAULT_AMI_CACHE_FILENAME)
-
-            if os.path.isfile(local_amicache):
-                file_path = local_amicache
-
-            # Or sibling to the executing class
-            elif os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
-                file_path = res.DEFAULT_AMI_CACHE_FILENAME
-
-            if file_path:
-                with open(file_path, 'r') as json_file:
-                    json_data = json.load(json_file)
-            else:
-                raise Exception("%s does not exist. Try running the init command to generate it.\n" %
-                                res.DEFAULT_AMI_CACHE_FILENAME)
-            self._ami_cache = json_data
-
-        return self._ami_cache

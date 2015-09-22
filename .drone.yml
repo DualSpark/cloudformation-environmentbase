@@ -4,6 +4,8 @@ git:
     path: github.com/DualSpark/cloudformation-environmentbase
 
 script:
+    - python --version
     - python setup.py -q install
     - python setup.py -q test
+    - environmentbase init
     - environmentbase create

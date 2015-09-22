@@ -71,7 +71,8 @@ setup(
         "setuptools==17.1",
         "awacs==0.5.3",
         "commentjson==0.6",
-        "PyYAML==3.11"
+        "PyYAML==3.11",
+        'pbr==1.8.0'
     ],
 
     # Optional dependencies
@@ -104,7 +105,6 @@ setup(
     tests_require=[
         'nose2==0.5.0',
         'unittest2==1.1.0',
-        'mock==1.3.0',
-        'pbr==1.8.0'
+        'mock==1.3.0'
     ]
 )

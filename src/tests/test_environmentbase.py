@@ -3,7 +3,7 @@ import mock
 from mock import patch
 import os
 import shutil
-import json
+import yaml
 import sys
 import copy
 from tempfile import mkdtemp
@@ -11,14 +11,6 @@ from environmentbase import cli, resources as res, environmentbase as eb
 from environmentbase import networkbase
 import environmentbase.patterns.ha_nat
 from troposphere import ec2
-
-# commentjson is optional, parsing invalid json throws commonjson.JSONLibraryException
-# if not present parsing invalid json throws __builtin__.ValueError.
-# Make them the same and don't worry about it
-try:
-    from commentjson import JSONLibraryException as ValueError
-except ImportError:
-    pass
 
 
 class EnvironmentBaseTestCase(TestCase):
@@ -176,7 +168,7 @@ nat:
         config['global']['environment_name'] = original_value + 'dummy'
 
         with open(res.DEFAULT_CONFIG_FILENAME, 'w') as f:
-            f.write(json.dumps(config))
+            f.write(yaml.dump(config))
             f.flush()
 
         fake_cli = self.fake_cli(['create'])
@@ -198,7 +190,7 @@ nat:
         self.assertFalse(os.path.isfile(res.DEFAULT_CONFIG_FILENAME))
 
         with open(config_filename, 'w') as f:
-            f.write(json.dumps(config))
+            f.write(yaml.dump(config))
             f.flush()
             base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]))
             base.load_config()
@@ -296,14 +288,14 @@ nat:
         self.assertEquals(controller.config['new_section']['new_key'], 'value')
 
         with open(res.DEFAULT_CONFIG_FILENAME, 'r') as f:
-            external_config = json.load(f)
+            external_config = yaml.load(f)
             self.assertEquals(external_config['new_section']['new_key'], 'value')
 
         # Check extended validation
         # recreate config file without 'new_section' and make sure it fails validation
         os.remove(res.DEFAULT_CONFIG_FILENAME)
         dummy_config = self._create_dummy_config()
-        self._create_local_file(res.DEFAULT_CONFIG_FILENAME, json.dumps(dummy_config, indent=4))
+        self._create_local_file(res.DEFAULT_CONFIG_FILENAME, yaml.dump(dummy_config, indent=4))
 
         with self.assertRaises(eb.ValidationError):
             base = MyEnvBase(view=view, env_config=env_config)
@@ -385,7 +377,7 @@ nat:
             # Load the generated output template
             template_path = ctrlr._ensure_template_dir_exists()
             with open(template_path, 'r') as f:
-                template = json.load(f)
+                template = yaml.load(f)
 
             # Verify that the ec2 instance is in the output
             self.assertTrue('ec2instance' in template['Resources'])
@@ -426,7 +418,7 @@ nat:
             # Load the generated output template
             template_path = ctrlr._ensure_template_dir_exists()
             with open(template_path, 'r') as f:
-                template = json.load(f)
+                template = yaml.load(f)
 
             # Verify that the ec2 instance is in the output
             self.assertIn('Nat0Role', template['Resources'])

@@ -8,7 +8,7 @@ from tempfile import mkdtemp
 from environmentbase import cli, template, utility
 import troposphere as tropo
 from troposphere import ec2
-import json
+import yaml
 
 
 class TemplateTestCase(TestCase):
@@ -62,7 +62,7 @@ class TemplateTestCase(TestCase):
 
         # Basic test
         template_snippet = template.Template.build_bootstrap([file1_name], prepend_line='')
-        generated_json = json.loads(utility.tropo_to_string(template_snippet))
+        generated_json = yaml.load(utility.tropo_to_string(template_snippet))
         expected_json_1 = {"Fn::Base64": {"Fn::Join": ["\n", ["line1", "line2", "line3"]]}}
         self.assertEqual(generated_json, expected_json_1)
 
@@ -82,7 +82,7 @@ class TemplateTestCase(TestCase):
             variable_declarations=['var_dec_line_1', 'var_dec_line_2'],
             cleanup_commands=['cleanup_line_1', 'cleanup_line_2'])
 
-        generated_json = json.loads(utility.tropo_to_string(template_snippet))
+        generated_json = yaml.load(utility.tropo_to_string(template_snippet))
         expected_json_2 = {
             "Fn::Base64": {"Fn::Join": [
                 "\n", [

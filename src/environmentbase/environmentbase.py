@@ -14,6 +14,7 @@ from fnmatch import fnmatch
 import utility
 import monitor
 import yaml
+import logging
 
 # Allow comments in json if you can but at least parse regular json if not
 try:

@@ -185,7 +185,6 @@ class EnvironmentBase(object):
         # This excepted exception is too broad, pls narrow it as you come accross 
         # exceptions that should be raised up
         except botocore.exceptions.ClientError as update_error:
-            logging.warning('Error during update_stack: {!r}'.format( update_error))
             try:
                 cfn_conn.create_stack(
                     StackName=stack_name,

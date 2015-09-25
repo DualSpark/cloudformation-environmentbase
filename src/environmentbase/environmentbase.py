@@ -12,9 +12,7 @@ import utility
 import monitor
 import yaml
 import logging
-
-# If you run into compatibility issues, use the regular json library instead:
-import json as pure_json
+import json
 
 TIMEOUT = 60
 TEMPLATES_PATH = 'templates'
@@ -158,8 +156,8 @@ class EnvironmentBase(object):
             local_file_name = template.name + '.template'
             local_file_path = os.path.join(local_template_dir, local_file_name)
             with open(local_file_path, 'w') as output_file:
-                reloaded_template = pure_json.loads(raw_json)
-                pure_json.dump(reloaded_template, output_file, indent=4, separators=(',', ':'))
+                reloaded_template = json.loads(raw_json)
+                json.dumps(reloaded_template, output_file, indent=4, separators=(',', ':'))
 
                 print "Local:", local_file_path
 
@@ -459,7 +457,7 @@ class EnvironmentBase(object):
             config.update(handler.get_factory_defaults())
 
         with open(self.config_filename, 'w') as f:
-            f.write(yaml.dump(config, indent=4, sort_keys=True, separators=(',', ': ')))
+            f.write(json.dumps(config, indent=4, sort_keys=True, separators=(',', ': ')))
             print 'Generated config file at %s\n' % self.config_filename
 
     def load_config(self, view=None, config=None):
@@ -548,7 +546,7 @@ class EnvironmentBase(object):
                 return
 
         with open(res.DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
-            f.write(yaml.dump(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
+            f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
             print "Generated AMI cache file at %s\n" % res.DEFAULT_AMI_CACHE_FILENAME
 
     def to_json(self):

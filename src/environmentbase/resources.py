@@ -48,7 +48,7 @@ def get_resource(resource_name, relative_to_module_name=__name__):
     file_content = resource_string(relative_to_module_name, file_path)
     return file_content
 
-EXTENSIONS = ['.yaml', '.yml', '.json']
+EXTENSIONS = ['.json', '.yaml', '.yml']
 
 DEFAULT_CONFIG_FILENAME = 'config'
 FACTORY_DEFAULT_CONFIG = get_yaml_resource(DEFAULT_CONFIG_FILENAME)

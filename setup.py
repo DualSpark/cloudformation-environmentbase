@@ -4,6 +4,7 @@ from os.path import dirname
 from os.path import join
 from setuptools import find_packages
 from setuptools import setup
+from multiprocessing import util
 
 execfile('src/environmentbase/version.py')
 
@@ -62,15 +63,18 @@ setup(
     package_dir={"": "src"},
 
     install_requires=[
-        "troposphere>=1.1.2",
-        "boto>=2.38.0",
-        "botocore>=1.1.1",
-        "boto3>=1.1.0",
+        "troposphere==1.1.2",
+        "jmespath==0.7.1",
+        "boto==2.38.0",
+        "botocore==1.1.1",
+        "boto3==1.1.0",
         "ipcalc==1.1.2",
         "docopt==0.6.2",
-        "setuptools>=17.1",
-        "awacs>=0.5.2",
-        "PyYAML==3.11"
+        "setuptools==17.1",
+        "awacs==0.5.3",
+        "commentjson==0.6",
+        "PyYAML==3.11",
+        'pbr==1.8.0'
     ],
 
     # Optional dependencies
@@ -99,8 +103,8 @@ setup(
     # Test runner and required testing packages
     test_suite='nose2.collector.collector',
     tests_require=[
-        'nose2>=0.5.0',
-        'unittest2>=1.1.0',
-        'mock>=1.1.2'
+        'nose2==0.5.0',
+        'unittest2==1.1.0',
+        'mock==1.3.0'
     ]
 )

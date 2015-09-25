@@ -82,4 +82,3 @@ class CLI(object):
                 self._process_request_helper(controller)
             except Exception as e:
                 print e.message
-

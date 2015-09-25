@@ -11,6 +11,7 @@ from fnmatch import fnmatch
 import utility
 import monitor
 import yaml
+import logging
 
 # If you run into compatibility issues, use the regular json library instead:
 import json as pure_json

@@ -64,6 +64,11 @@ class Bastion(Template):
             Value=GetAtt(bastion_elb, 'DNSName')
         ))
 
+        self.add_output(Output(
+            'BastionSecurityGroupId',
+            Value=Ref(security_groups['bastion'])
+        ))
+
     @staticmethod
     def get_factory_defaults():
         return {"bastion": {

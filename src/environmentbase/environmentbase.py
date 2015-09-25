@@ -539,15 +539,17 @@ class EnvironmentBase(object):
         """
         Generate ami_cache.json file from defaults
         """
-        if os.path.isfile(res.DEFAULT_AMI_CACHE_FILENAME):
-            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % res.DEFAULT_AMI_CACHE_FILENAME).lower()
+        ami_cache_filename = res.DEFAULT_AMI_CACHE_FILENAME + res.EXTENSIONS[0]
+
+        if os.path.isfile(ami_cache_filename):
+            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % ami_cache_filename).lower()
             print
             if not overwrite == 'y':
                 return
 
-        with open(res.DEFAULT_AMI_CACHE_FILENAME, 'w') as f:
+        with open(ami_cache_filename, 'w') as f:
             f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
-            print "Generated AMI cache file at %s\n" % res.DEFAULT_AMI_CACHE_FILENAME
+            print "Generated AMI cache file at %s\n" % ami_cache_filename
 
     def to_json(self):
         """

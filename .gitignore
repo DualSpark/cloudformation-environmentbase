@@ -9,8 +9,8 @@
 /build
 /dist
 src/cfn_environment_base.egg-info/
-ami_cache.json
-config.json
+ami_cache.*
+config.*
 .DS_Store
 .idea/
 .eggs

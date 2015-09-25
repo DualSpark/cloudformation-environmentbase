@@ -12,7 +12,7 @@ def _test_filelike(parent, basename, validator):
     """
     (basename, provided_suffix) = os.path.splitext(basename)
     suffix_list = EXTENSIONS
-    if not provided_suffix or provided_suffix not in suffix_list:
+    if provided_suffix == '' or provided_suffix not in suffix_list:
         suffix_list = [provided_suffix] + EXTENSIONS
 
     for extension in suffix_list:

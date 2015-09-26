@@ -65,6 +65,11 @@ class Bastion(Template):
         ))
 
         self.add_output(Output(
+            'BastionELBDNSZoneId',
+             Value=GetAtt(bastion_elb, 'CanonicalHostedZoneNameID')
+         ))
+
+        self.add_output(Output(
             'BastionSecurityGroupId',
             Value=Ref(security_groups['bastion'])
         ))

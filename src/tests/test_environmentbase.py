@@ -4,6 +4,7 @@ from mock import patch
 import os
 import shutil
 import yaml
+import json
 import sys
 import copy
 from tempfile import mkdtemp
@@ -139,6 +140,7 @@ template:
   template_bucket: dummy
   ec2_key_default: dummy
   s3_template_prefix: dummy
+  timeout_in_minutes: "60"
 nat:
   instance_type: dummy
   enable_ntp: false
@@ -158,7 +160,7 @@ nat:
 
         # We don't care about the AMI cache for this test,
         # but the file has to exist and to contain valid json
-        self._create_local_file(res.DEFAULT_AMI_CACHE_FILENAME, '{}')
+        self._create_local_file(res.DEFAULT_AMI_CACHE_FILENAME + res.EXTENSIONS[0], '{}')
 
         # Create a local config file and verify that it overrides the factory default
         config = self._create_dummy_config()
@@ -167,7 +169,7 @@ nat:
         original_value = config['global']['environment_name']
         config['global']['environment_name'] = original_value + 'dummy'
 
-        with open(res.DEFAULT_CONFIG_FILENAME, 'w') as f:
+        with open(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0], 'w') as f:
             f.write(yaml.dump(config))
             f.flush()
 
@@ -186,8 +188,8 @@ nat:
             base.load_config()
 
         # remove config.json and create the alternate config file
-        os.remove(res.DEFAULT_CONFIG_FILENAME)
-        self.assertFalse(os.path.isfile(res.DEFAULT_CONFIG_FILENAME))
+        os.remove(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0])
+        self.assertFalse(os.path.isfile(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0]))
 
         with open(config_filename, 'w') as f:
             f.write(yaml.dump(config))
@@ -287,15 +289,15 @@ nat:
         # Make sure the runtime config and the file saved to disk have the new parameter
         self.assertEquals(controller.config['new_section']['new_key'], 'value')
 
-        with open(res.DEFAULT_CONFIG_FILENAME, 'r') as f:
+        with open(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0], 'r') as f:
             external_config = yaml.load(f)
             self.assertEquals(external_config['new_section']['new_key'], 'value')
 
         # Check extended validation
         # recreate config file without 'new_section' and make sure it fails validation
-        os.remove(res.DEFAULT_CONFIG_FILENAME)
+        os.remove(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0])
         dummy_config = self._create_dummy_config()
-        self._create_local_file(res.DEFAULT_CONFIG_FILENAME, yaml.dump(dummy_config, indent=4))
+        self._create_local_file(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0], json.dumps(dummy_config, indent=4))
 
         with self.assertRaises(eb.ValidationError):
             base = MyEnvBase(view=view, env_config=env_config)
@@ -311,8 +313,8 @@ nat:
         base.load_config()
         self.assertEqual(base.config['global']['print_debug'],
                          res.FACTORY_DEFAULT_CONFIG['global']['print_debug'])
-        self.assertEqual(base.config['global']['output'],
-                         res.FACTORY_DEFAULT_CONFIG['global']['output'])
+        self.assertEqual(base.config['global']['environment_name'],
+                         res.FACTORY_DEFAULT_CONFIG['global']['environment_name'])
 
     def test_template_file_flag(self):
         # verify that the --template-file flag changes the config value
@@ -320,7 +322,7 @@ nat:
         base = eb.EnvironmentBase(self.fake_cli(['create', '--template-file', dummy_value]))
         base.init_action()
         base.load_config()
-        self.assertEqual(base.config['global']['output'], dummy_value)
+        self.assertEqual(base.config['global']['environment_name'], dummy_value + '.template')
         
     def test_config_file_flag(self):
         dummy_value = 'dummy'
@@ -336,8 +338,8 @@ nat:
 
 
         # Create refs to files that should be created and make sure they don't already exists
-        config_file = os.path.join(self.temp_dir, res.DEFAULT_CONFIG_FILENAME)
-        ami_cache_file = os.path.join(self.temp_dir, res.DEFAULT_AMI_CACHE_FILENAME)
+        config_file = os.path.join(self.temp_dir, res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0])
+        ami_cache_file = os.path.join(self.temp_dir, res.DEFAULT_AMI_CACHE_FILENAME + res.EXTENSIONS[0])
         self.assertFalse(os.path.isfile(config_file))
         self.assertFalse(os.path.isfile(ami_cache_file))
 
@@ -358,15 +360,11 @@ nat:
                 # Run parent initializer
                 eb.EnvironmentBase.__init__(self, view)
 
-            def create_action(self):
-                self.initialize_template()
-
-                # Add some stuff
+            # Add some stuff
+            def create_hook(self):
                 res = ec2.Instance("ec2instance", InstanceType="m3.medium", ImageId="ami-951945d0")
                 self.template.add_resource(res)
 
-                # This triggers serialization of the template and any child stacks
-                self.write_template_to_file()
 
         # Initialize the the controller with faked 'create' CLI parameter
         with patch.object(sys, 'argv', ['environmentbase', 'init']):
@@ -375,7 +373,8 @@ nat:
             ctrlr.create_action()
 
             # Load the generated output template
-            template_path = ctrlr._ensure_template_dir_exists()
+            template_path = os.path.join(ctrlr._ensure_template_dir_exists(), ctrlr.config['global']['environment_name'] + '.template')
+
             with open(template_path, 'r') as f:
                 template = yaml.load(f)
 
@@ -395,41 +394,33 @@ nat:
               }]
 
         class MyController(networkbase.NetworkBase):
-            def __init__(self, view):
-                # Run parent initializer
-                networkbase.NetworkBase.__init__(self, view)
 
             def create_nat(self, index, nat_instance_type, enable_ntp, name, extra_user_data=None):
                 return MyNat(index, nat_instance_type, enable_ntp, name, extra_user_data)
 
-            def create_action(self):
-                self.initialize_template()
-                self.construct_network()
-
-                # This triggers serialization of the template and any child stacks
-                self.write_template_to_file()
-
         # Initialize the the controller with faked 'create' CLI parameter
-        with patch.object(sys, 'argv', ['environmentbase', 'init']):
-            ctrlr = MyController(cli.CLI(quiet=True))
-            ctrlr.load_config()
-            ctrlr.create_action()
+        
+        ctrlr = MyController((self.fake_cli(['init'])))
+        ctrlr.init_action()
+        ctrlr.load_config()
+        ctrlr.create_action()
 
-            # Load the generated output template
-            template_path = ctrlr._ensure_template_dir_exists()
-            with open(template_path, 'r') as f:
-                template = yaml.load(f)
+        # Load the generated output template
+        template_path = os.path.join(ctrlr._ensure_template_dir_exists(), ctrlr.config['global']['environment_name'] + '.template')
 
-            # Verify that the ec2 instance is in the output
-            self.assertIn('Nat0Role', template['Resources'])
-            self.assertIn('Properties', template['Resources']['Nat0Role'])
-            self.assertIn('Policies', template['Resources']['Nat0Role']['Properties'])
-            self.assertEqual(len(template['Resources']['Nat0Role']['Properties']['Policies']), 1)
-            policy = template['Resources']['Nat0Role']['Properties']['Policies'][0];
-            self.assertIn('PolicyDocument', policy)
-            self.assertIn('Statement', policy['PolicyDocument'])
-            self.assertEqual(len(policy['PolicyDocument']['Statement']), 2)
-            self.assertEqual(policy['PolicyDocument']['Statement'][1]['Action'], ['DummyAction'])
+        with open(template_path, 'r') as f:
+            template = yaml.load(f)
+
+        # Verify that the ec2 instance is in the output
+        self.assertIn('Nat0Role', template['Resources'])
+        self.assertIn('Properties', template['Resources']['Nat0Role'])
+        self.assertIn('Policies', template['Resources']['Nat0Role']['Properties'])
+        self.assertEqual(len(template['Resources']['Nat0Role']['Properties']['Policies']), 1)
+        policy = template['Resources']['Nat0Role']['Properties']['Policies'][0];
+        self.assertIn('PolicyDocument', policy)
+        self.assertIn('Statement', policy['PolicyDocument'])
+        self.assertEqual(len(policy['PolicyDocument']['Statement']), 2)
+        self.assertEqual(policy['PolicyDocument']['Statement'][1]['Action'], ['DummyAction'])
 
 
     # Cloudformation doesn't currently support a dry run, so this test would create a live stack

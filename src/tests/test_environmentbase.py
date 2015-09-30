@@ -322,7 +322,7 @@ nat:
         base = eb.EnvironmentBase(self.fake_cli(['create', '--template-file', dummy_value]))
         base.init_action()
         base.load_config()
-        self.assertEqual(base.config['global']['environment_name'], dummy_value + '.template')
+        self.assertEqual(base.config['global']['environment_name'], dummy_value)
         
     def test_config_file_flag(self):
         dummy_value = 'dummy'

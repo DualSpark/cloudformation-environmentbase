@@ -9,17 +9,19 @@ class Bastion(Template):
     Adds a bastion host within a given deployment based on environemntbase.
     """
 
-    def __init__(self, name='bastion', ingress_port='2222', access_cidr='0.0.0.0/0'):
+    def __init__(self, name='bastion', ingress_port='2222', access_cidr='0.0.0.0/0', user_data=None):
         """
         Method initializes bastion host in a given environment deployment
         @param name [string] - name of the tier to assign
         @param ingress_port [number] - port to allow ingress on. Must be a valid ELB ingress port. More info here: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-listener.html
         @param access_cidr [string] - CIDR notation for external access to this tier.
+        @param user_data [string] - User data to to initialize the bastion hosts.
         """
 
         self.name = name
         self.ingress_port = ingress_port
         self.access_cidr = access_cidr
+        self.user_data = user_data
 
         super(Bastion, self).__init__(template_name=name)
 
@@ -40,6 +42,7 @@ class Bastion(Template):
     # - self.utility_bucket
     # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
     # - self.azs: List of parameter references
+    # - self.user_data: User data for launch configuration
     def build_hook(self):
         """
         Hook to add tier-specific assets within the build stage of initializing this class.
@@ -56,13 +59,19 @@ class Bastion(Template):
         bastion_asg = self.add_asg(
             layer_name=self.name,
             security_groups=[security_groups['bastion'], self.common_security_group],
-            load_balancer=bastion_elb
+            load_balancer=bastion_elb,
+            user_data=self.user_data
         )
 
         self.add_output(Output(
             'BastionELBDNSName',
             Value=GetAtt(bastion_elb, 'DNSName')
         ))
+
+        self.add_output(Output(
+            'BastionELBDNSZoneId',
+             Value=GetAtt(bastion_elb, 'CanonicalHostedZoneNameID')
+         ))
 
         self.add_output(Output(
             'BastionSecurityGroupId',

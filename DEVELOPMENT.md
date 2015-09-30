@@ -51,20 +51,17 @@ Here is a simple EnvironmentBase project that utilizes one of the packaged patte
 ```python
 from environmentbase.environmentbase import EnvConfig
 from environmentbase.networkbase import NetworkBase
-from environmentbase.patterns import bastion
+from environmentbase.patterns.bastion import Bastion
 
 
 class MyEnv(NetworkBase):
-    def create_action(self):
-        self.initialize_template()
-        self.construct_network()
 
-        self.add_child_template(bastion.Bastion())
+    def create_hook(self):
 
-        self.write_template_to_file()
+        self.add_child_template(Bastion())
 
 if __name__ == '__main__':
-    my_config = EnvConfig(config_handlers=[bastion.Bastion])
+    my_config = EnvConfig(config_handlers=[Bastion])
     MyEnv(env_config=my_config)
 
 ```
@@ -76,7 +73,7 @@ This will look at the patterns passed into the EnvConfig object and generate a c
 `template : ec2_key_default` - SSH key used to log into your EC2 instances  
 `template : template_bucket` - S3 bucket used to upload the generated cloudformation templates  
 
-Next run `python my_env.py create` to generate the cloudformation template using the updated config. 
+Next run `python my_env.py create` to generate the cloudformation template using the updated config. Since we overrode environmentbase's `create_hook` function, this will hook into environmentbase's create action and add the bastion stack and any other resources you specified.
 
 Then run `python my_env.py deploy` to create the stack on [cloudformation](https://console.aws.amazon.com/cloudformation/)
 

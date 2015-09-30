@@ -57,21 +57,14 @@ class MyEnvClass(NetworkBase):
     Class creates a VPC and common network components for the environment
     '''
 
-    def create_action(self):
-
-        self.initialize_template()
-        self.construct_network()
+    def create_hook(self):
 
         # Do custom troposphere resource creation here
 
-        self.write_template_to_file()
 
-
-    def deploy_action(self):
+    def deploy_hook(self):
 
         # Do custom deploy steps here
-
-        super(MyEnvClass, self).deploy_action()
 
 
 if __name__ == '__main__':
@@ -79,7 +72,7 @@ if __name__ == '__main__':
     MyEnvClass()
 ```
 
-See the [Development](DEVELOPMENT.md) documentation for more detailed examples, including how to integrate the pre-packaged patterns
+Overriding these two functions allows you to hook into the template generation and stack creation processes of environmentbase to inject the resources and deployment steps for your environment. See the [Development](DEVELOPMENT.md) documentation for more detailed examples, including how to integrate a pre-packaged pattern.
 
 Documentation within the class takes a modified usage of the
 [doxygen](http://www.stack.nl/~dimitri/doxygen/manual/docblocks.html#pythonblocks)

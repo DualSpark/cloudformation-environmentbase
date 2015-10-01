@@ -1,41 +1,43 @@
 {
-  "global": {
-    "print_debug": false,
-    "environment_name": "environmentbase",
-    "monitor_stack": false
-  },
-  "template": {
-    "ami_map_file": "ami_cache.json",
-    "description": "Environment Generator Base deployment.",
-    "utility_bucket": "dualspark",
-    "template_bucket": "dualspark",
-    "s3_template_prefix": "templates",
-    "template_upload_acl": "public-read",
-    "timeout_in_minutes": "60",
-    "ec2_key_default": "dualspark_rsa"
-  },
-  "logging": {
-    "cloudtrail_log_prefix": "cloudtrail_logs",
-    "elb_log_prefix": "elb_logs"
-  },
-  "boto": {
-    "region_name": "us-west-2",
-    "aws_access_key_id": null,
-    "aws_secret_access_key": null
-  },
-  "network": {
-    "az_count": 3,
-    "subnet_types": ["public","private","protected"],
-    "public_subnet_count": 3,
-    "private_subnet_count": 3,
-    "public_subnet_size": "21",
-    "protected_subnet_size": "20",
-    "private_subnet_size": "19",
-    "network_cidr_base": "10.0.0.0",
-    "network_cidr_size": "16"
-  },
-  "nat": {
-    "instance_type": "t2.micro",
-    "enable_ntp": false
-  }
+    "global": {
+        "print_debug": false,
+        "environment_name": "environmentbase",
+        "monitor_stack": false
+    },
+    "template": {
+        "ami_map_file": "ami_cache.json",
+        "description": "Environment Generator Base deployment.",
+        "utility_bucket": "dualspark",
+        "template_bucket": "dualspark",
+        "s3_template_prefix": "templates",
+        "template_upload_acl": "public-read",
+        "timeout_in_minutes": "60",
+        "ec2_key_default": "dualspark_rsa"
+    },
+    "logging": {
+        "cloudtrail_log_prefix": "cloudtrail_logs",
+        "elb_log_prefix": "elb_logs"
+    },
+    "boto": {
+        "region_name": "us-west-2",
+        "aws_access_key_id": null,
+        "aws_secret_access_key": null
+    },
+    "network": {
+        "network_cidr_base": "10.0.0.0",
+        "network_cidr_size": "16",
+        "az_count": 3,
+        "subnet_types": [
+            "public",
+            "private"
+        ],
+        "public_subnet_count": 3,
+        "private_subnet_count": 3,
+        "public_subnet_size": "21",
+        "private_subnet_size": "19"
+    },
+    "nat": {
+        "instance_type": "t2.micro",
+        "enable_ntp": false
+    }
 }

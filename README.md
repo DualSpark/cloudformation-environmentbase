@@ -121,7 +121,7 @@ This initialization command will generate two files: `config.json` and `ami_cach
 You should now look at the generated `config.json` file and fill out at least the following fields:
 
 `template : ec2_key_default` - SSH key used to log into your EC2 instances  
-`template : template_bucket` - S3 bucket used to upload the generated cloudformation templates
+`template : s3_bucket` - S3 bucket used to upload the generated cloudformation templates
 
 You may also edit the other fields to customize the environment to your liking. After you have configured your environment, run:
 

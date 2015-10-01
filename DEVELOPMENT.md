@@ -71,7 +71,7 @@ To generate the cloudformation template for this python code, save the above sni
 This will look at the patterns passed into the EnvConfig object and generate a config.json file with the relevant fields added. Fill this config file out, adding values for at least the following fields:  
 
 `template : ec2_key_default` - SSH key used to log into your EC2 instances  
-`template : template_bucket` - S3 bucket used to upload the generated cloudformation templates  
+`template : s3_bucket` - S3 bucket used to upload the generated cloudformation templates  
 
 Next run `python my_env.py create` to generate the cloudformation template using the updated config. Since we overrode environmentbase's `create_hook` function, this will hook into environmentbase's create action and add the bastion stack and any other resources you specified.
 

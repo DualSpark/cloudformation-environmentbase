@@ -12,19 +12,21 @@
         "ami_map_file": "basestring",
         # Canned ACL permissions for the template file upload
         # Legal values: private, public-read, public-read-write, authenticated-read, bucket-owner-read, bucket-owner-full-control
-        "template_upload_acl": "basestring",
+        "s3_upload_acl": "basestring",
         # Name of the bucket to use to upload child templates to
-        "template_bucket": "basestring",
+        "s3_bucket": "basestring",
         # Prefix (subdirectories) to use when storing child templates
-        "s3_template_prefix": "basestring",
-        # Name of the bucket to use for storing log files
-        "utility_bucket": "basestring",
+        "s3_prefix": "basestring",
         # Description to use for top-level template
         "description": "basestring",
         # Cloudformation create/update timeout
         "timeout_in_minutes": "basestring",
-
+        # Name of EC2 Key on AWS
         "ec2_key_default": "basestring"
+    },
+    "logging": {
+        # Name of the bucket to use for storing log files
+        "s3_bucket": "basestring"
     },
     "network": {
         "az_count": "int",

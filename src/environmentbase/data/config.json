@@ -6,15 +6,15 @@
     },
     "template": {
         "ami_map_file": "ami_cache.json",
-        "description": "Environment Generator Base deployment.",
-        "utility_bucket": "dualspark",
-        "template_bucket": "dualspark",
-        "s3_template_prefix": "templates",
-        "template_upload_acl": "public-read",
+        "description": "Environment Generator Base deployment",
+        "s3_bucket": "dualspark",
+        "s3_prefix": "templates",
+        "s3_upload_acl": "public-read",
         "timeout_in_minutes": "60",
         "ec2_key_default": "dualspark_rsa"
     },
     "logging": {
+        "s3_bucket": "dualspark",
         "cloudtrail_log_prefix": "cloudtrail_logs",
         "elb_log_prefix": "elb_logs"
     },

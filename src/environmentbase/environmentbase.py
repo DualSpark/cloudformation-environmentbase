@@ -172,7 +172,7 @@ class EnvironmentBase(object):
 
         EnvironmentBase.serialize_templates_helper(
             self.template, s3_client,
-            self.template_args.get('template_upload_acl'),
+            self.template_args.get('s3_upload_acl'),
             local_template_dir=local_file_path)
 
     def estimate_cost(self, template_name=None, template_url=None, stack_params=None):
@@ -194,10 +194,10 @@ class EnvironmentBase(object):
 
     def _template_url(self):
         environment_name = self.globals['environment_name']
-        prefix = self.template_args["s3_template_prefix"]
+        prefix = self.template_args["s3_prefix"]
         template_resource_path = utility.template_s3_resource_path(prefix, environment_name, include_timestamp=False)
 
-        bucket = self.template_args['template_bucket']
+        bucket = self.template_args['s3_bucket']
         template_url = utility.template_s3_url(bucket, template_resource_path)
 
         return template_url
@@ -501,8 +501,8 @@ class EnvironmentBase(object):
             self.stack_monitor.add_handler(self)
 
         # configure Template class with S3 settings
-        Template.template_bucket = self.template_args.get('template_bucket')
-        Template.s3_path_prefix = self.template_args.get("s3_template_prefix")
+        Template.template_bucket = self.template_args.get('s3_bucket')
+        Template.s3_path_prefix = self.template_args.get("s3_prefix")
         Template.stack_timeout = self.template_args.get("timeout_in_minutes")
 
     def initialize_template(self):
@@ -528,7 +528,7 @@ class EnvironmentBase(object):
         ))
 
         self.template.add_utility_bucket(
-            name=self.template_args.get('utility_bucket'))
+            name=self.config.get('logging').get('s3_bucket'))
 
         self.manual_parameter_bindings['utilityBucket'] = self.template.utility_bucket
 

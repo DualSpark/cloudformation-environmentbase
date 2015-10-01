@@ -134,13 +134,14 @@ network:
   private_subnet_count: 1
 template:
   ami_map_file: dummy
-  template_upload_acl: dummy
-  utility_bucket: dummy
+  s3_upload_acl: dummy
   description: dummy
-  template_bucket: dummy
+  s3_bucket: dummy
+  s3_prefix: dummy
   ec2_key_default: dummy
-  s3_template_prefix: dummy
   timeout_in_minutes: "60"
+logging:
+  s3_bucket: dummy
 nat:
   instance_type: dummy
   enable_ntp: false

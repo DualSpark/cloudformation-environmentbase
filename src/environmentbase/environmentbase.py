@@ -157,7 +157,7 @@ class EnvironmentBase(object):
             local_file_path = os.path.join(local_template_dir, local_file_name)
             with open(local_file_path, 'w') as output_file:
                 reloaded_template = json.loads(raw_json)
-                json.dumps(reloaded_template, output_file, indent=4, separators=(',', ':'))
+                output_file.write(json.dumps(reloaded_template, indent=4, separators=(',', ':')))
 
                 print "Local:", local_file_path
 

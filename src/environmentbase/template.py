@@ -725,16 +725,10 @@ class Template(t.Template):
         if isinstance(to_port, unicode):
             to_port = to_port.encode('ascii', 'ignore')
         if from_port == to_port:
-            if isinstance(from_port, str):
-                label_suffix = ip_protocol.capitalize() + from_port
-            else:
-                label_suffix = ip_protocol.capitalize() + 'Mapped'
+            label_suffix = ip_protocol.capitalize() + str(from_port)
         else:
-            if isinstance(from_port, str) and isinstance(to_port, str):
-                label_suffix = ip_protocol.capitalize() + from_port + 'To' + to_port
-            else:
-                label_suffix = ip_protocol.capitalize() + 'MappedPorts'
-
+            label_suffix = ip_protocol.capitalize() + str(from_port) + 'To' + str(to_port)
+            
         # A Ref cannot be created from an object that is already a GetAtt
         # and possibly some other CFN types, so expand this list if you discover another one
         CFN_TYPES = [GetAtt]

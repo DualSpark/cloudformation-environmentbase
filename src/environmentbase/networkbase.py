@@ -141,8 +141,6 @@ class NetworkBase(EnvironmentBase):
                 subnet_name = subnet_config.get('name')
 
                 AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
-                # CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type)
-                # CidrBlock='{base_cidr}/{size}'.format(base_cidr=network_cidr_base, size=subnet_size)
                 CidrBlock = subnet_cidr
 
                 if subnet_type not in self.template.subnets:
@@ -156,7 +154,9 @@ class NetworkBase(EnvironmentBase):
                     AvailabilityZone=AvailabilityZone,
                     VpcId=self.template.vpc_id,
                     CidrBlock=CidrBlock,
-                    Tags=[ec2.Tag(key='network', value=subnet_type)]))
+                    Tags=[ec2.Tag(key='network', value=subnet_type), 
+                            ec2.Tag(key='name', value=' '.join([subnet_name, str(index)])),
+                        ]))
 
                 self.template._subnets[subnet_type].append(subnet)  ## why are we doing this? 
 

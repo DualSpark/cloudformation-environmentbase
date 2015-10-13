@@ -105,6 +105,7 @@ class NetworkBase(EnvironmentBase):
         Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
         @param network_config [dict] collection of network parameters for creating the VPC network
         """
+        ## make VPC
         if 'network_name' in network_config:
             network_name = network_config.get('network_name')
         else:
@@ -120,6 +121,7 @@ class NetworkBase(EnvironmentBase):
 
         self.template._igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
 
+        ## add IGW
         igw_title = 'igwVpcAttachment'
         self.template.add_resource(ec2.VPCGatewayAttachment(
             igw_title,
@@ -128,24 +130,35 @@ class NetworkBase(EnvironmentBase):
 
         self.gateway_hook()
 
+        ## make Subnets
+        network_cidr_base = str(network_config.get('network_cidr_base', '172.16.0.0'))
+
         # Iterate through each subnet type for each AZ and add subnets, routing tables, routes, and NATs as necessary
         for index in range(0, int(network_config.get('az_count', 2))):
-            for subnet_type in network_config.get('subnet_types', ['public', 'private']):
+            for subnet_config in network_config.get('subnet_config', {}):
+                subnet_type = subnet_config.get('type', 'private')
+                subnet_cidr = subnet_config.get('cidr', '172.16.0.0/19')
+                subnet_name = subnet_config.get('name')
+
+                AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
+                # CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type)
+                # CidrBlock='{base_cidr}/{size}'.format(base_cidr=network_cidr_base, size=subnet_size)
+                CidrBlock = subnet_cidr
 
                 if subnet_type not in self.template.subnets:
-                    self.template._subnets[subnet_type] = []
+                    self.template._subnets[subnet_type] = []  # what is this for? 
                 if subnet_type not in self.template.mappings['networkAddresses']['subnet' + str(index)]:
                     continue
 
                 # Create the subnet
                 subnet = self.template.add_resource(ec2.Subnet(
                     subnet_type + 'Subnet' + str(index),
-                    AvailabilityZone=FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name'),
+                    AvailabilityZone=AvailabilityZone,
                     VpcId=self.template.vpc_id,
-                    CidrBlock=FindInMap('networkAddresses', 'subnet' + str(index), subnet_type),
+                    CidrBlock=CidrBlock,
                     Tags=[ec2.Tag(key='network', value=subnet_type)]))
 
-                self.template._subnets[subnet_type].append(subnet)
+                self.template._subnets[subnet_type].append(subnet)  ## why are we doing this? 
 
                 # Create the routing table
                 route_table = self.template.add_resource(ec2.RouteTable(

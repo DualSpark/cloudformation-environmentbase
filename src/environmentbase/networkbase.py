@@ -136,13 +136,14 @@ class NetworkBase(EnvironmentBase):
         # Iterate through each subnet type for each AZ and add subnets, routing tables, routes, and NATs as necessary
         for index in range(int(network_config.get('az_count', 2))):
             az = index
+            az_key = 'AZ{}'.format(az)
 
             for ind, subnet_config in enumerate(network_config.get('subnet_config', {})):
                 subnet_type = subnet_config.get('type', 'private')
                 subnet_name = subnet_config.get('name')
 
                 AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
-                CidrBlock = self.template.mappings['networkAddresses'][az][subnet_name][subnet_type]
+                CidrBlock = self.template.mappings['networkAddresses'][az_key][subnet_name]
 
                 if subnet_type not in self.template.subnets:
                     self.template._subnets[subnet_type] = []  # what is this for? 
@@ -240,6 +241,7 @@ class NetworkBase(EnvironmentBase):
         current_base_address = first_network_address_block
 
         for az in range(int(network_config.get('az_count', 2))):
+            az_key = 'AZ{}'.format(az)
             for index, subnet_config in enumerate(network_config.get('subnet_config', {})):
                 subnet_type = subnet_config.get('type', 'private')
                 subnet_size = subnet_config.get('size', 'private')
@@ -255,11 +257,11 @@ class NetworkBase(EnvironmentBase):
                 ip_info = Network(current_base_address + '/' + str(subnet_size))
                 range_info = ip_info.network().to_tuple()
 
-                if az not in ret_val:
-                    ret_val[az] = dict()
-                if subnet_name not in ret_val[az]:
-                    ret_val[az][subnet_name] = dict()
-                ret_val[az][subnet_name][subnet_type] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
+                if az_key not in ret_val:
+                    ret_val[az_key] = dict()
+                if subnet_name not in ret_val[az_key]:
+                    ret_val[az_key][subnet_name] = dict()
+                ret_val[az_key][subnet_name] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
                 current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
 
         return self.template.add_mapping('networkAddresses', ret_val)

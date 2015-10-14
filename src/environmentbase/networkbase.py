@@ -134,18 +134,18 @@ class NetworkBase(EnvironmentBase):
         network_cidr_base = str(network_config.get('network_cidr_base', '172.16.0.0'))
 
         # Iterate through each subnet type for each AZ and add subnets, routing tables, routes, and NATs as necessary
-        for index in range(0, int(network_config.get('az_count', 2))):
+        for index in range(int(network_config.get('az_count', 2))):
+            az = index
+
             for ind, subnet_config in enumerate(network_config.get('subnet_config', {})):
                 subnet_type = subnet_config.get('type', 'private')
                 subnet_name = subnet_config.get('name')
 
                 AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
-                CidrBlock = self.template.mappings['networkAddresses']['subnet' + str(index)][subnet_type]
+                CidrBlock = self.template.mappings['networkAddresses'][az][subnet_name][subnet_type]
 
                 if subnet_type not in self.template.subnets:
                     self.template._subnets[subnet_type] = []  # what is this for? 
-                if subnet_type not in self.template.mappings['networkAddresses']['subnet' + str(index)]:
-                    continue
 
                 # Create the subnet
                 subnet = self.template.add_resource(ec2.Subnet(
@@ -239,25 +239,27 @@ class NetworkBase(EnvironmentBase):
         ret_val['vpcBase'] = {'cidr': base_cidr}
         current_base_address = first_network_address_block
 
-        subnet_types = network_config.get('subnet_types', ['public', 'private'])
+        for az in range(int(network_config.get('az_count', 2))):
+            for index, subnet_config in enumerate(network_config.get('subnet_config', {})):
+                subnet_type = subnet_config.get('type', 'private')
+                subnet_size = subnet_config.get('size', 'private')
+                subnet_name = subnet_config.get('name', 'private')
+                
+                if index != 0:
+                    range_reset = Network(current_base_address + '/' + str(subnet_size))
+                    ## calculate the end of range IP for next time we need a new block of IPs
+                    current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
 
-        for index, subnet_config in enumerate(network_config.get('subnet_config', {})):
-            subnet_type = subnet_config.get('type', 'private')
-            subnet_size = subnet_config.get('size', 'private')
-            
-            if index != 0:
-                range_reset = Network(current_base_address + '/' + str(subnet_size))
-                ## calculate the end of range IP for next time we need a new block of IPs
-                current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
-
-            for subnet_id in range(0, az_count):
                 if not cidr_info.check_collision(current_base_address):
                     raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(index + 1) + ' when creating ' + subnet_type + ' subnet cidrs')
                 ip_info = Network(current_base_address + '/' + str(subnet_size))
                 range_info = ip_info.network().to_tuple()
-                if 'subnet' + str(subnet_id) not in ret_val:
-                    ret_val['subnet' + str(subnet_id)] = dict()
-                ret_val['subnet' + str(subnet_id)][subnet_type] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
+
+                if az not in ret_val:
+                    ret_val[az] = dict()
+                if subnet_name not in ret_val[az]:
+                    ret_val[az][subnet_name] = dict()
+                ret_val[az][subnet_name][subnet_type] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
                 current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
 
         return self.template.add_mapping('networkAddresses', ret_val)

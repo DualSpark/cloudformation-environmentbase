@@ -31,6 +31,18 @@
             "public",
             "private"
         ],
+        "subnet_config": [
+            {
+                "type": "public", 
+                "size": "18",
+                "name": "rhino"
+            },
+            {
+                "type": "private", 
+                "size": "22",
+                "name": "koala"
+            },
+        ],
         "public_subnet_count": 3,
         "private_subnet_count": 3,
         "public_subnet_size": "21",

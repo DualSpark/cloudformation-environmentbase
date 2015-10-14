@@ -135,13 +135,12 @@ class NetworkBase(EnvironmentBase):
 
         # Iterate through each subnet type for each AZ and add subnets, routing tables, routes, and NATs as necessary
         for index in range(0, int(network_config.get('az_count', 2))):
-            for subnet_config in network_config.get('subnet_config', {}):
+            for ind, subnet_config in enumerate(network_config.get('subnet_config', {})):
                 subnet_type = subnet_config.get('type', 'private')
-                subnet_cidr = subnet_config.get('cidr', '172.16.0.0/19')
                 subnet_name = subnet_config.get('name')
 
                 AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
-                CidrBlock = subnet_cidr
+                CidrBlock = self.template.mappings['networkAddresses']['subnet' + str(index)][subnet_type]
 
                 if subnet_type not in self.template.subnets:
                     self.template._subnets[subnet_type] = []  # what is this for? 
@@ -150,19 +149,19 @@ class NetworkBase(EnvironmentBase):
 
                 # Create the subnet
                 subnet = self.template.add_resource(ec2.Subnet(
-                    subnet_type + 'Subnet' + str(index),
+                    subnet_type + 'Subnet' + str(ind) + 'AZ' + str(index),
                     AvailabilityZone=AvailabilityZone,
                     VpcId=self.template.vpc_id,
                     CidrBlock=CidrBlock,
                     Tags=[ec2.Tag(key='network', value=subnet_type), 
-                            ec2.Tag(key='name', value=' '.join([subnet_name, str(index)])),
+                            ec2.Tag(key='name', value=' '.join([subnet_name, str(ind), 'AZ:', str(index)])),
                         ]))
 
                 self.template._subnets[subnet_type].append(subnet)  ## why are we doing this? 
 
                 # Create the routing table
                 route_table = self.template.add_resource(ec2.RouteTable(
-                    subnet_type + 'Subnet' + str(index) + 'RouteTable',
+                    subnet_type + 'Subnet' + str(ind) + 'AZ' + str(index) + 'RouteTable',
                     VpcId=self.template.vpc_id))
 
                 # Create the NATs and egress rules
@@ -170,7 +169,7 @@ class NetworkBase(EnvironmentBase):
 
                 # Associate the routing table with the subnet
                 self.template.add_resource(ec2.SubnetRouteTableAssociation(
-                    subnet_type + 'Subnet' + str(index) + 'EgressRouteTableAssociation',
+                    subnet_type + 'Subnet' + str(ind) + 'AZ' + str(index) + 'EgressRouteTableAssociation',
                     RouteTableId=Ref(route_table),
                     SubnetId=self.template.subnets[subnet_type][index]))
 
@@ -193,12 +192,17 @@ class NetworkBase(EnvironmentBase):
             nat_instance_type = self.config['nat']['instance_type']
             nat_enable_ntp = self.config['nat']['enable_ntp']
             extra_user_data = self.config['nat'].get('extra_user_data')
-            self.template.merge(self.create_nat(
-              index,
-              nat_instance_type,
-              nat_enable_ntp,
-              name='HaNat%s' % str(index),
-              extra_user_data=extra_user_data))
+            hanat = self.create_nat(
+                index,
+                nat_instance_type,
+                nat_enable_ntp,
+                name='HaNat' + str(index),
+                extra_user_data=extra_user_data)
+            try:
+                self.template.merge(hanat)
+            except ValueError as e:
+                if "duplicate key" in e.message:
+                    print 'Warning: multiple private subnets detected: {!r}'.format(e)
 
     def gateway_hook(self):
         """
@@ -237,12 +241,13 @@ class NetworkBase(EnvironmentBase):
 
         subnet_types = network_config.get('subnet_types', ['public', 'private'])
 
-        for index in range(0, len(subnet_types)):
-            subnet_type = subnet_types[index]
-            subnet_size = network_config.get(subnet_type + '_subnet_size', '22')
-
+        for index, subnet_config in enumerate(network_config.get('subnet_config', {})):
+            subnet_type = subnet_config.get('type', 'private')
+            subnet_size = subnet_config.get('size', 'private')
+            
             if index != 0:
                 range_reset = Network(current_base_address + '/' + str(subnet_size))
+                ## calculate the end of range IP for next time we need a new block of IPs
                 current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
 
             for subnet_id in range(0, az_count):

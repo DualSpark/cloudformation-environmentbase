@@ -124,14 +124,12 @@ global:
   monitor_stack: false
 network:
   network_cidr_base: dummy
+  subnet_config: 
+    - dummy 
   subnet_types:
     - dummy
   az_count: 1
-  private_subnet_size: dummy
-  public_subnet_size: dummy
   network_cidr_size: dummy
-  public_subnet_count: 1
-  private_subnet_count: 1
 template:
   ami_map_file: dummy
   s3_upload_acl: dummy

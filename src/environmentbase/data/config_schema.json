@@ -31,13 +31,7 @@
     "network": {
         "az_count": "int",
         "subnet_types": "list",
-        "subnet_config": [
-            {
-                "type": "public", 
-                "size": "18",
-                "name": "rhino"
-            },
-        ],
+        "subnet_config": "list",
         "network_cidr_base": "basestring",
         "network_cidr_size": "basestring"
     },

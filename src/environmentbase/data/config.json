@@ -43,10 +43,6 @@
                 "name": "koala"
             },
         ],
-        "public_subnet_count": 3,
-        "private_subnet_count": 3,
-        "public_subnet_size": "21",
-        "private_subnet_size": "19"
     },
     "nat": {
         "instance_type": "t2.micro",

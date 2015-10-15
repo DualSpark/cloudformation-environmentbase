@@ -177,7 +177,7 @@ class NetworkBase(EnvironmentBase):
                 self.template.add_resource(ec2.SubnetRouteTableAssociation(
                     subnet_type + 'Subnet' + str(ind) + 'AZ' + str(index) + 'EgressRouteTableAssociation',
                     RouteTableId=Ref(route_table),
-                    SubnetId=self.template.subnets[subnet_type][index]))
+                    SubnetId=Ref(subnet)))
 
         self.template.manual_parameter_bindings['vpcId'] = self.template.vpc_id
         self.template.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr

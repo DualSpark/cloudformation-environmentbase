@@ -164,7 +164,7 @@ class HaNat(Template):
             nat_asg_name,
             DesiredCapacity=1,
             Tags=[
-                Tag("Name", Join("-", [self.vpc_id, "NAT"]), True),
+                Tag("Name", Join("-", ["NAT", self.subnet_index,]), True),
                 Tag("isNat", "true", True)
             ],
             MinSize=1,

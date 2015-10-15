@@ -160,7 +160,7 @@ class NetworkBase(EnvironmentBase):
                     VpcId=self.template.vpc_id,
                     CidrBlock=CidrBlock,
                     Tags=[ec2.Tag(key='network', value=subnet_type), 
-                            ec2.Tag(key='name', value=' '.join([subnet_name, str(ind), 'AZ:', str(index)])),
+                            ec2.Tag(key='Name', value=' '.join([subnet_name, str(ind), 'AZ:', str(index)])),
                         ]))
 
                 self.template._subnets[subnet_type].append(subnet)  ## why are we doing this? 
@@ -249,7 +249,6 @@ class NetworkBase(EnvironmentBase):
         
         grouped_subnet = groupby('size', self._get_subnet_config_w_az(network_config))
         subnet_groups = sorted(grouped_subnet.items())
-        print subnet_groups
         available_cidrs = []
 
         for subnet_size, subnet_configs in subnet_groups:

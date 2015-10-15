@@ -60,7 +60,7 @@ class HaCluster(Template):
         """
 
         # Create security groups for the ASG and ELB and connect them together
-        security_groups = self.add_security_groups()
+        self.security_groups = self.add_security_groups()
 
         # Determine the subnet layer of the ELB based on the scheme -- public if it's internet facing, else use the same subnet layer as the ASG
         elb_subnet_layer = 'public' if self.elb_scheme == SCHEME_INTERNET_FACING else self.subnet_layer
@@ -68,7 +68,7 @@ class HaCluster(Template):
         # This creates the ELB, opens the specified ports, and attaches the security group and logging bucket
         ha_cluster_elb = self.add_elb(
             resource_name=self.name,
-            security_groups=[security_groups['elb']],
+            security_groups=[self.security_groups['elb']],
             ports=self.elb_ports,
             utility_bucket=self.utility_bucket,
             subnet_layer=elb_subnet_layer,
@@ -83,7 +83,7 @@ class HaCluster(Template):
 
         ha_cluster_asg = self.add_asg(
             layer_name=self.name,
-            security_groups=[security_groups['ha_cluster'], self.common_security_group],
+            security_groups=[self.security_groups['ha_cluster'], self.common_security_group],
             load_balancer=ha_cluster_elb,
             ami_name=self.ami_name,
             user_data=user_data,
@@ -99,7 +99,12 @@ class HaCluster(Template):
 
         self.add_output(Output(
             '%sSecurityGroupId' % self.name,
-            Value=Ref(security_groups['ha_cluster'])
+            Value=Ref(self.security_groups['ha_cluster'])
+        ))
+
+        self.add_output(Output(
+            '%sElbSecurityGroupId' % self.name,
+            Value=Ref(self.security_groups['elb'])
         ))
 
     def add_security_groups(self):

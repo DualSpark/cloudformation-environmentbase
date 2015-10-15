@@ -1,15 +1,17 @@
 from environmentbase.networkbase import NetworkBase
 from environmentbase.template import Template
 from environmentbase.environmentbase import EnvConfig
+from environmentbase.patterns.bastion import Bastion
 from troposphere import ec2
 
 
-class MyRootTemplate(NetworkBase):
+class Controller(NetworkBase):
     """
     Class creates a VPC and common network components for the environment
     """
     def create_hook(self):
         self.add_child_template(ChildTemplate('Child'))
+        self.add_child_template(Bastion('Bastion'))
 
 
 class ChildTemplate(Template):
@@ -47,4 +49,4 @@ if __name__ == '__main__':
     # get_factory_defaults() and get_config_schema().
     env_config = EnvConfig(config_handlers=[ChildTemplate])
 
-    MyRootTemplate(env_config=env_config)
+    Controller(env_config=env_config)

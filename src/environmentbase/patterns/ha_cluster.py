@@ -20,6 +20,7 @@ class HaCluster(Template):
                  user_data='', 
                  env_vars={},
                  min_size=1, max_size=1,
+                 instance_type='t2.micro',
                  subnet_layer='private',
                  elb_scheme=SCHEME_INTERNET_FACING):
 
@@ -41,6 +42,9 @@ class HaCluster(Template):
         # These define the lower and upper boundaries of the autoscaling group
         self.min_size = min_size
         self.max_size = max_size
+
+        # The type of instance for the autoscaling group
+        self.instance_type = instance_type
         
         # This is the subnet layer that the ASG is in (public, private, ...)
         self.subnet_layer = subnet_layer
@@ -87,6 +91,7 @@ class HaCluster(Template):
             load_balancer=ha_cluster_elb,
             ami_name=self.ami_name,
             user_data=user_data,
+            instance_type=self.instance_type,
             min_size=self.min_size,
             max_size=self.max_size,
             subnet_type=self.subnet_layer

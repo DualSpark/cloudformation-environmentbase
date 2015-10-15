@@ -17,7 +17,7 @@ class HaCluster(Template):
                  name='HaCluster', 
                  ami_name='amazonLinuxAmiId', 
                  elb_ports={80: 80}, 
-                 user_data_file='', 
+                 user_data='', 
                  min_size=1, max_size=1,
                  subnet_layer='private',
                  elb_scheme=SCHEME_INTERNET_FACING):
@@ -31,8 +31,8 @@ class HaCluster(Template):
         # This should be a dictionary mapping ELB ports to Instance ports
         self.elb_ports = elb_ports
 
-        # This is the name of the userdata script file to load from the data folder
-        self.user_data_file = user_data_file
+        # This is the contents of the userdata script as a string
+        self.user_data = user_data
 
         # These define the lower and upper boundaries of the autoscaling group
         self.min_size = min_size
@@ -71,8 +71,7 @@ class HaCluster(Template):
             scheme=self.elb_scheme
         )
 
-        # This loads the userdata file from the data directory to be loaded into the ASG's launch configuration
-        user_data = [resources.get_resource(self.user_data_file)] if self.user_data_file else []
+        user_data = [self.user_data] if self.user_data else []
 
         ha_cluster_asg = self.add_asg(
             layer_name=self.name,

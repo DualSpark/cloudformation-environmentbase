@@ -74,6 +74,8 @@ setup(
         "awacs==0.5.3",
         "commentjson==0.6",
         "PyYAML==3.11",
+        "netaddr==0.7.18",
+        "toolz==0.7.4",
         'pbr==1.8.0'
     ],
 

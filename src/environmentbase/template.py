@@ -294,12 +294,13 @@ class Template(t.Template):
 
     def add_common_parameters_from_parent(self, parent):
         ec2_key = parent._ec2_key.Default
-        subnet_types = parent._subnets.keys()
+        parent_subnets = parent._subnets
+        subnet_types = parent_subnets.keys()
         az_count = len(parent._azs)
         region_map = parent.mappings['RegionMap']
-        self.add_common_parameters(ec2_key, subnet_types, region_map, az_count)
+        self.add_common_parameters(ec2_key, subnet_types, region_map, parent_subnets, az_count)
 
-    def add_common_parameters(self, ec2_key, subnet_types, region_map, az_count=2):
+    def add_common_parameters(self, ec2_key, subnet_types, region_map, parent_subnets, az_count=2):
         """
         Adds parameters to template for use as a child stack:
             vpcCidr,
@@ -349,14 +350,13 @@ class Template(t.Template):
 
         self.mappings['RegionMap'] = region_map
 
-        for subnet_type in subnet_types:
-            if subnet_type not in self._subnets:
-                self._subnets[subnet_type] = []
+        for subnet_type in parent_subnets: 
+            subnets = parent_subnets[subnet_type]
 
-            for index in range(0, az_count):
+            for subnet in subnets:
                 subnet_param = Parameter(
-                    subnet_type.lower() + 'Subnet' + str(index),
-                    Description=subnet_type + ' subnet ' + str(index),
+                    subnet.name,
+                    Description=subnet.name,
                     Type='String')
                 self.add_parameter(subnet_param)
                 self._subnets[subnet_type].append(subnet_param)

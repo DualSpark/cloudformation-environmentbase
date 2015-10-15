@@ -1,3 +1,6 @@
+import json
+from itertools import product, chain
+
 from troposphere import Ref, Parameter, FindInMap
 import troposphere.ec2 as ec2
 import boto.vpc
@@ -6,7 +9,9 @@ from environmentbase import EnvironmentBase
 from ipcalc import IP, Network
 import resources as res
 from patterns import ha_nat
-import json
+
+import netaddr
+from toolz import groupby, assoc
 
 
 class NetworkBase(EnvironmentBase):
@@ -223,6 +228,48 @@ class NetworkBase(EnvironmentBase):
             name=name,
             extra_user_data=extra_user_data)
 
+
+    def _get_subnet_config_w_az(self, network_config):
+        az_count = int(network_config.get('az_count', 2))
+        subnet_config = network_config.get('subnet_config', {})
+
+        for subnet in subnet_config:
+            for az in range(az_count):
+                newsubnet = assoc(subnet, 'AZ', az)
+                yield newsubnet
+
+    def _get_subnet_config_w_cidr(self, network_config):
+        network_cidr_base = str(network_config.get('network_cidr_base', '172.16.0.0'))
+        network_cidr_size = str(network_config.get('network_cidr_size', '20'))
+        first_network_address_block = str(network_config.get('first_network_address_block', network_cidr_base))
+
+        ret_val = {}
+        base_cidr = network_cidr_base + '/' + network_cidr_size
+        net = netaddr.IPNetwork(base_cidr)
+        
+        grouped_subnet = groupby('size', self._get_subnet_config_w_az(network_config))
+        subnet_groups = sorted(grouped_subnet.items())
+        print subnet_groups
+        available_cidrs = []
+
+        for subnet_size, subnet_configs in subnet_groups:
+            newcidrs = net.subnet(int(subnet_size))
+
+            for subnet_config in subnet_configs:
+                try:
+                    cidr = newcidrs.next()
+                except StopIteration as e:
+                    net = chain(*reversed(available_cidrs)).next()
+                    newcidrs = net.subnet(int(subnet_size))
+                    cidr = newcidrs.next()
+
+                new_config = assoc(subnet_config, 'cidr', str(cidr))
+                yield new_config
+            else:
+                net = newcidrs.next()
+                available_cidrs.append(newcidrs)
+
+
     def add_network_cidr_mapping(self,
                                  network_config):
         """
@@ -235,34 +282,29 @@ class NetworkBase(EnvironmentBase):
         first_network_address_block = str(network_config.get('first_network_address_block', network_cidr_base))
 
         ret_val = {}
-        cidr_info = Network(network_cidr_base + '/' + network_cidr_size)
-        base_cidr = cidr_info.network().to_tuple()[0] + '/' + str(cidr_info.to_tuple()[1])
+        base_cidr = network_cidr_base + '/' + network_cidr_size
+        cidr_info = Network(base_cidr)
         ret_val['vpcBase'] = {'cidr': base_cidr}
         current_base_address = first_network_address_block
 
-        for az in range(int(network_config.get('az_count', 2))):
-            az_key = 'AZ{}'.format(az)
-            for index, subnet_config in enumerate(network_config.get('subnet_config', {})):
-                subnet_type = subnet_config.get('type', 'private')
-                subnet_size = subnet_config.get('size', 'private')
-                subnet_name = subnet_config.get('name', 'private')
-                
-                if index != 0:
-                    range_reset = Network(current_base_address + '/' + str(subnet_size))
-                    ## calculate the end of range IP for next time we need a new block of IPs
-                    current_base_address = IP(int(range_reset.host_last().hex(), 16) + 2).to_tuple()[0]
+        subnet_config = self._get_subnet_config_w_cidr(network_config)
+        subnet_config = list(subnet_config)
 
-                if not cidr_info.check_collision(current_base_address):
-                    raise RuntimeError('Cannot continue creating network--current base address is outside the range of the master Cidr block. Found on pass ' + str(index + 1) + ' when creating ' + subnet_type + ' subnet cidrs')
-                ip_info = Network(current_base_address + '/' + str(subnet_size))
-                range_info = ip_info.network().to_tuple()
+        for index, subnet_config in enumerate(subnet_config):
+            subnet_type = subnet_config.get('type', 'private')
+            subnet_size = subnet_config.get('size', '22')
+            subnet_name = subnet_config.get('name', 'subnet')
+            subnet_az = subnet_config.get('AZ', '-1')
+            subnet_cidr = subnet_config.get('cidr', 'ERROR')
+            az_key = 'AZ{}'.format(subnet_az)
+            
+            # TODO: check for subnet collisions
 
-                if az_key not in ret_val:
-                    ret_val[az_key] = dict()
-                if subnet_name not in ret_val[az_key]:
-                    ret_val[az_key][subnet_name] = dict()
-                ret_val[az_key][subnet_name] = ip_info.network().to_tuple()[0] + '/' + str(ip_info.to_tuple()[1])
-                current_base_address = IP(int(ip_info.host_last().hex(), 16) + 2).to_tuple()[0]
+            if az_key not in ret_val:
+                ret_val[az_key] = dict()
+            if subnet_name not in ret_val[az_key]:
+                ret_val[az_key][subnet_name] = dict()
+            ret_val[az_key][subnet_name] = subnet_cidr
 
         return self.template.add_mapping('networkAddresses', ret_val)
 

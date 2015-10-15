@@ -18,6 +18,7 @@ class HaCluster(Template):
                  ami_name='amazonLinuxAmiId', 
                  elb_ports={80: 80}, 
                  user_data='', 
+                 env_vars={},
                  min_size=1, max_size=1,
                  subnet_layer='private',
                  elb_scheme=SCHEME_INTERNET_FACING):
@@ -33,6 +34,9 @@ class HaCluster(Template):
 
         # This is the contents of the userdata script as a string
         self.user_data = user_data
+
+        # This is a dictionary of environment variables to inject into the instances
+        self.env_vars = env_vars
 
         # These define the lower and upper boundaries of the autoscaling group
         self.min_size = min_size
@@ -71,14 +75,18 @@ class HaCluster(Template):
             scheme=self.elb_scheme
         )
 
-        user_data = [self.user_data] if self.user_data else []
+        user_data = {}
+        if self.user_data:
+            user_data = self.build_bootstrap(
+                bootstrap_files=[self.user_data],
+                variable_declarations=["%s=%s" % (k, v) for k,v in self.env_vars.iteritems()])
 
         ha_cluster_asg = self.add_asg(
             layer_name=self.name,
             security_groups=[security_groups['ha_cluster'], self.common_security_group],
             load_balancer=ha_cluster_elb,
             ami_name=self.ami_name,
-            user_data=Base64(Join('', user_data)),
+            user_data=user_data,
             min_size=self.min_size,
             max_size=self.max_size,
             subnet_type=self.subnet_layer

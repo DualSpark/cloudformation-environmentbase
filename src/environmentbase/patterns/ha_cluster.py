@@ -72,7 +72,7 @@ class HaCluster(Template):
         )
 
         # This loads the userdata file from the data directory to be loaded into the ASG's launch configuration
-        user_data = [resources.get_resource(self.user_data_file, __name__)] if self.user_data_file else []
+        user_data = [resources.get_resource(self.user_data_file)] if self.user_data_file else []
 
         ha_cluster_asg = self.add_asg(
             layer_name=self.name,

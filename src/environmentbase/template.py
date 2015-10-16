@@ -111,6 +111,10 @@ class Template(t.Template):
         return self._ref_maybe(self._igw)
 
     @property
+    def ec2_key(self):
+        return self._ref_maybe(self._ec2_key)
+
+    @property
     def azs(self):
         return self._ref_maybe(self._azs)
 

@@ -21,7 +21,14 @@ class ChildTemplate(Template):
 
     # Called from add_child_template() after some common parameters are attached to this instance, see docs for details
     def build_hook(self):
-        self.add_resource(ec2.Instance("ChildEC2", InstanceType="m3.medium", ImageId="ami-e7527ed7"))
+        self.add_resource(ec2.Instance(
+            "ChildEC2",
+            InstanceType="m3.medium",
+            ImageId="ami-e7527ed7",
+            KeyName=self.ec2_key,
+            SubnetId=self.subnets['private'][0],
+            SecurityGroupIds=[self.common_security_group]
+        ))
         self.add_child_template(GrandchildTemplate('Grandchild'))
 
     # When no config.json file exists a new one is created using the 'factory default' file.  This function
@@ -40,7 +47,13 @@ class ChildTemplate(Template):
 
 class GrandchildTemplate(Template):
     def build_hook(self):
-        self.add_resource(ec2.Instance("GrandchildEC2", InstanceType="m3.medium", ImageId="ami-e7527ed7"))
+        self.add_resource(ec2.Instance(
+            "GrandchildEC2",
+            InstanceType="m3.medium",
+            ImageId="ami-e7527ed7",
+            KeyName=self.ec2_key,
+            SubnetId=self.subnets['private'][0],
+            SecurityGroupIds=[self.common_security_group]))
 
 if __name__ == '__main__':
 

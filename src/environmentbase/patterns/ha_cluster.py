@@ -22,7 +22,8 @@ class HaCluster(Template):
                  min_size=1, max_size=1,
                  instance_type='t2.micro',
                  subnet_layer='private',
-                 elb_scheme=SCHEME_INTERNET_FACING):
+                 elb_scheme=SCHEME_INTERNET_FACING,
+                 elb_health_check_port=None):
 
         # This will be the name used in resource names and descriptions
         self.name = name
@@ -52,8 +53,12 @@ class HaCluster(Template):
         # This is the type of ELB: internet-facing gets a publicly accessible DNS, while internal is only accessible to the VPC
         self.elb_scheme = elb_scheme
 
+        # This is the health check port for the cluster
+        # TODO: Implement this functionality in template.add_elb and pass this value through
+        self.elb_health_check_port = elb_health_check_port
+
         # This is an optional DNS entry to create a CNAME in a private hosted zone
-        # TODO: Use template.register_elb_to_dns
+        # TODO: Use template.register_elb_to_dns()
 
         super(HaCluster, self).__init__(template_name=self.name)
 
@@ -64,59 +69,30 @@ class HaCluster(Template):
         """
 
         # Create security groups for the ASG and ELB and connect them together
-        self.security_groups = self.add_security_groups()
+        self.add_security_groups()
 
-        # Determine the subnet layer of the ELB based on the scheme -- public if it's internet facing, else use the same subnet layer as the ASG
-        elb_subnet_layer = 'public' if self.elb_scheme == SCHEME_INTERNET_FACING else self.subnet_layer
+        # Add the IAM role for the autoscaling group
+        self.add_cluster_instance_profile()
 
-        # This creates the ELB, opens the specified ports, and attaches the security group and logging bucket
-        ha_cluster_elb = self.add_elb(
-            resource_name=self.name,
-            security_groups=[self.security_groups['elb']],
-            ports=self.elb_ports,
-            utility_bucket=self.utility_bucket,
-            subnet_layer=elb_subnet_layer,
-            scheme=self.elb_scheme
-        )
+        # Add the ELB for the autoscaling group
+        self.add_cluster_elb()
 
-        user_data = {}
-        if self.user_data:
-            user_data = self.build_bootstrap(
-                bootstrap_files=[self.user_data],
-                variable_declarations=["%s=%s" % (k, v) for k,v in self.env_vars.iteritems()])
+        # Add the userdata for the autoscaling group
+        self.add_user_data()
 
-        ha_cluster_asg = self.add_asg(
-            layer_name=self.name,
-            security_groups=[self.security_groups['ha_cluster'], self.common_security_group],
-            load_balancer=ha_cluster_elb,
-            ami_name=self.ami_name,
-            user_data=user_data,
-            instance_type=self.instance_type,
-            min_size=self.min_size,
-            max_size=self.max_size,
-            subnet_type=self.subnet_layer
-        )
+        # Add the autoscaling group for the cluster
+        self.add_cluster_asg()
 
-        self.add_output(Output(
-            '%sELBDNSName' % self.name,
-            Value=GetAtt(ha_cluster_elb, 'DNSName')
-        ))
+        # Add the outputs for the stack
+        self.add_outputs()
 
-        self.add_output(Output(
-            '%sSecurityGroupId' % self.name,
-            Value=Ref(self.security_groups['ha_cluster'])
-        ))
-
-        self.add_output(Output(
-            '%sElbSecurityGroupId' % self.name,
-            Value=Ref(self.security_groups['elb'])
-        ))
 
     def add_security_groups(self):
         """
-        Wrapper method to encapsulate process of creating security groups for this tier.
+        Wrapper method to encapsulate process of creating security groups for this tier
+        Creates security groups for both ASG and ELB and opens the ports between them
+        Sets self.security_groups as a dictionary with two security_groups: ha_cluster and elb
         """
-
         # Determine ingress rules for ELB security -- open to internet for internet-facing ELB, open to VPC for internal ELB
         access_cidr = PUBLIC_ACCESS_CIDR if self.elb_scheme == SCHEME_INTERNET_FACING else self.vpc_cidr
 
@@ -151,4 +127,73 @@ class HaCluster(Template):
                 ha_cluster_sg, ha_cluster_sg_name,
                 from_port=instance_port)
 
-        return {'ha_cluster': ha_cluster_sg, 'elb': elb_sg}
+        self.security_groups = {'ha_cluster': ha_cluster_sg, 'elb': elb_sg}
+
+        return self.security_groups
+
+
+    def add_cluster_instance_profile(self):
+        """
+        Wrapper method to encapsulate process of adding the IAM role for the autoscaling group
+        Sets self.instance_profile with the IAM Role resource, used in creation of the Launch Configuration
+        """
+        self.instance_profile = None
+
+
+    def add_cluster_elb(self):
+        """
+        Wrapper method to encapsulate process of creating the ELB for the autoscaling group
+        Sets self.cluster_elb with the ELB resource
+        """
+        # Determine the subnet layer of the ELB based on the scheme -- public if it's internet facing, else use the same subnet layer as the ASG
+        elb_subnet_layer = 'public' if self.elb_scheme == SCHEME_INTERNET_FACING else self.subnet_layer
+
+        # This creates the ELB, opens the specified ports, and attaches the security group and logging bucket
+        self.cluster_elb = self.add_elb(
+            resource_name=self.name,
+            security_groups=[self.security_groups['elb']],
+            ports=self.elb_ports,
+            utility_bucket=self.utility_bucket,
+            subnet_layer=elb_subnet_layer,
+            scheme=self.elb_scheme
+        )
+
+
+    def add_user_data(self):
+        """
+        Wrapper method to encapsulate process of constructing userdata for the autoscaling group
+        Sets self.user_data_payload constructed from the passed in user_data and env_vars 
+        """
+        self.user_data_payload = {}
+        if self.user_data:
+            user_data_payload = self.build_bootstrap(
+                bootstrap_files=[self.user_data],
+                variable_declarations=["%s=%s" % (k, v) for k,v in self.env_vars.iteritems()])
+
+
+    def add_cluster_asg(self):
+        """
+        Wrapper method to encapsulate process of creating the autoscaling group
+        Sets self.cluster_asg with the autoscaling group resource
+        """
+        self.cluster_asg = self.add_asg(
+            layer_name=self.name,
+            security_groups=[self.security_groups['ha_cluster'], self.common_security_group],
+            load_balancer=self.cluster_elb,
+            ami_name=self.ami_name,
+            user_data=self.user_data_payload,
+            instance_type=self.instance_type,
+            min_size=self.min_size,
+            max_size=self.max_size,
+            subnet_type=self.subnet_layer,
+            instance_profile=self.instance_profile
+        )
+
+    def add_outputs(self):
+        """
+        Wrapper method to encapsulate creation of stack outputs for this template
+        """
+        self.add_output(Output('%sELBDNSName' % self.name, Value=GetAtt(self.cluster_elb, 'DNSName')))
+        self.add_output(Output('%sSecurityGroupId' % self.name, Value=Ref(self.security_groups['ha_cluster'])))
+        self.add_output(Output('%sElbSecurityGroupId' % self.name, Value=Ref(self.security_groups['elb'])))
+

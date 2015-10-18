@@ -166,7 +166,7 @@ class HaCluster(Template):
         """
         self.user_data_payload = {}
         if self.user_data:
-            user_data_payload = self.build_bootstrap(
+            self.user_data_payload = self.build_bootstrap(
                 bootstrap_files=[self.user_data],
                 variable_declarations=["%s=%s" % (k, v) for k,v in self.env_vars.iteritems()])
 

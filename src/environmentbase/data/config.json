@@ -35,12 +35,12 @@
             {
                 "type": "public", 
                 "size": "18",
-                "name": "rhino"
+                "name": "public"
             },
             {
                 "type": "private", 
                 "size": "22",
-                "name": "koala"
+                "name": "private"
             },
         ],
     },

@@ -641,7 +641,7 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[]):
+    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing'):
         """
         Helper function creates an ELB and attaches it to your template
         Ports should be a dictionary mapping ELB ports to Instance ports
@@ -679,7 +679,7 @@ class Template(t.Template):
 
         elb_obj = elb.LoadBalancer(
             '%sElb' % resource_name,
-            Subnets=self.subnets['public'],
+            Subnets=self.subnets[subnet_layer],
             SecurityGroups=[Ref(sg) for sg in security_groups],
             CrossZone=True,
             LBCookieStickinessPolicy=[stickiness_policy],
@@ -691,7 +691,7 @@ class Template(t.Template):
                 Timeout=5),
             Listeners=listeners,
             Instances=instances,
-            Scheme='internet-facing',
+            Scheme=scheme,
             DependsOn=depends_on
         )
 

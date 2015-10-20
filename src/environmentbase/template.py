@@ -637,7 +637,7 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing', health_check_port=None):
+    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing', health_check_protocol=None, health_check_port=None, health_check_path=''):
         """
         Helper function creates an ELB and attaches it to your template
         Ports should be a dictionary mapping ELB ports to Instance ports
@@ -673,6 +673,20 @@ class Template(t.Template):
             else:
                 health_check_port = ports.values()[0]
 
+        # If health_check_protocol is not passed in, set it based on the port (443 = HTTPS, 80 = HTTP, otherwise TCP)
+        if not health_check_protocol:
+            if health_check_port == tpc.HTTPS_PORT:
+                health_check_protocol = 'HTTPS'
+            elif health_check_port == tpc.HTTP_PORT:
+                health_check_protocol = 'HTTP'
+            else:
+                health_check_protocol = 'TCP'
+
+        if health_check_protocol == 'HTTP' or health_check_protocol == 'HTTPS':
+            health_check_target = "%s:%s/%s" % (health_check_protocol, health_check_port, health_check_path)
+        else:
+            health_check_target = "%s:%s" % (health_check_protocol, health_check_port)
+
         elb_obj = elb.LoadBalancer(
             '%sElb' % resource_name,
             Subnets=self.subnets[subnet_layer],
@@ -683,7 +697,7 @@ class Template(t.Template):
                 HealthyThreshold=3,
                 UnhealthyThreshold=5,
                 Interval=30,
-                Target='TCP:%s' % health_check_port,
+                Target=health_check_target,
                 Timeout=5),
             Listeners=listeners,
             Instances=instances,

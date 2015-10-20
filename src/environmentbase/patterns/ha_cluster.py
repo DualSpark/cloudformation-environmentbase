@@ -25,6 +25,8 @@ class HaCluster(Template):
                  subnet_layer='private',
                  elb_scheme=SCHEME_INTERNET_FACING,
                  elb_health_check_port=None,
+                 elb_health_check_protocol=None,
+                 elb_health_check_path='',
                  cname=''):
 
         # This will be the name used in resource names and descriptions
@@ -66,6 +68,12 @@ class HaCluster(Template):
             else:
                 elb_health_check_port = elb_ports.values()[0]
         self.elb_health_check_port = elb_health_check_port
+
+        # The ELB health check protocol for the cluster (HTTP, HTTPS, TCP, SSL)
+        self.elb_health_check_protocol = elb_health_check_protocol
+
+        # The ELB health check path for the cluster (Only for HTTP and HTTPS)
+        self.elb_health_check_path = elb_health_check_path
 
         # This is an optional fully qualified DNS name to create a CNAME in a private hosted zone
         self.cname = cname
@@ -176,7 +184,9 @@ class HaCluster(Template):
             utility_bucket=self.utility_bucket,
             subnet_layer=elb_subnet_layer,
             scheme=self.elb_scheme,
-            health_check_port=self.elb_health_check_port
+            health_check_port=self.elb_health_check_port,
+            health_check_protocol=self.elb_health_check_protocol,
+            health_check_path=self.elb_health_check_path
         )
 
 

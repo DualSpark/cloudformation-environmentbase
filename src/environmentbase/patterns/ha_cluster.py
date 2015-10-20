@@ -1,6 +1,7 @@
 from environmentbase.template import Template
 from environmentbase import resources
 from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53
+import troposphere.constants as tpc
 
 SCHEME_INTERNET_FACING = 'internet-facing'
 SCHEME_INTERNAL = 'internal'
@@ -54,8 +55,16 @@ class HaCluster(Template):
         # This is the type of ELB: internet-facing gets a publicly accessible DNS, while internal is only accessible to the VPC
         self.elb_scheme = elb_scheme
 
-        # This is the health check port for the cluster
-        # TODO: Implement this functionality in template.add_elb and pass this value through
+        # This is the health check port for the cluster.
+        # If health check port is not passed in, use highest priority available (443 > 80 > anything else)
+        # NOTE: This logic is currently duplicated in template.add_elb, this can be improved
+        if not elb_health_check_port:
+            if tpc.HTTPS_PORT in elb_ports:
+                elb_health_check_port = elb_ports[tpc.HTTPS_PORT]
+            elif tpc.HTTP_PORT in elb_ports:
+                elb_health_check_port = elb_ports[tpc.HTTP_PORT]
+            else:
+                elb_health_check_port = elb_ports.values()[0]
         self.elb_health_check_port = elb_health_check_port
 
         # This is an optional fully qualified DNS name to create a CNAME in a private hosted zone
@@ -131,6 +140,13 @@ class HaCluster(Template):
                 ha_cluster_sg, ha_cluster_sg_name,
                 from_port=instance_port)
 
+        # Create the reciprocal rule for the health check port (assuming it wasn't already created)
+        if self.elb_health_check_port and self.elb_health_check_port not in self.elb_ports.values():
+            self.create_reciprocal_sg(
+                elb_sg, elb_sg_name,
+                ha_cluster_sg, ha_cluster_sg_name,
+                from_port=self.elb_health_check_port)
+
         self.security_groups = {'ha_cluster': ha_cluster_sg, 'elb': elb_sg}
 
         return self.security_groups
@@ -159,7 +175,8 @@ class HaCluster(Template):
             ports=self.elb_ports,
             utility_bucket=self.utility_bucket,
             subnet_layer=elb_subnet_layer,
-            scheme=self.elb_scheme
+            scheme=self.elb_scheme,
+            health_check_port=self.elb_health_check_port
         )
 
 

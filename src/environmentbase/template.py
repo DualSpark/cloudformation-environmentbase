@@ -637,7 +637,7 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing'):
+    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing', health_check_port=None):
         """
         Helper function creates an ELB and attaches it to your template
         Ports should be a dictionary mapping ELB ports to Instance ports
@@ -664,14 +664,14 @@ class Template(t.Template):
             else:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
 
-        # Set the health check port, use highest priority if available (443 > 80 > anything else)
-        # TODO: This could be parameterized
-        if tpc.HTTPS_PORT in ports:
-            health_check_port = ports[tpc.HTTPS_PORT]
-        elif tpc.HTTP_PORT in ports:
-            health_check_port = ports[tpc.HTTP_PORT]
-        else:
-            health_check_port = ports.values()[0]
+        # If health check port is not passed in, use highest priority available (443 > 80 > anything else)
+        if not health_check_port:
+            if tpc.HTTPS_PORT in ports:
+                health_check_port = ports[tpc.HTTPS_PORT]
+            elif tpc.HTTP_PORT in ports:
+                health_check_port = ports[tpc.HTTP_PORT]
+            else:
+                health_check_port = ports.values()[0]
 
         elb_obj = elb.LoadBalancer(
             '%sElb' % resource_name,

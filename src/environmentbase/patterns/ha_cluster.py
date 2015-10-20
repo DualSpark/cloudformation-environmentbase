@@ -194,10 +194,19 @@ class HaCluster(Template):
         Sets self.user_data_payload constructed from the passed in user_data and env_vars 
         """
         self.user_data_payload = {}
-        if self.user_data:
+
+        if self.user_data or self.env_vars:
+
+            variable_declarations = []
+            for k,v in self.env_vars.iteritems():
+                if isinstance(v, basestring):
+                    variable_declarations.append('%s=%s' % (k, v))
+                else:
+                    variable_declarations.append(Join('=', [k, v]))
+
             self.user_data_payload = self.build_bootstrap(
                 bootstrap_files=[self.user_data],
-                variable_declarations=["%s=%s" % (k, v) for k,v in self.env_vars.iteritems()])
+                variable_declarations=variable_declarations)
 
 
     def add_cluster_asg(self):

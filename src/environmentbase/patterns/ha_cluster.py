@@ -1,6 +1,6 @@
 from environmentbase.template import Template
 from environmentbase import resources
-from troposphere import Ref, Base64, Join, Output, GetAtt, ec2
+from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53
 
 SCHEME_INTERNET_FACING = 'internet-facing'
 SCHEME_INTERNAL = 'internal'
@@ -23,7 +23,8 @@ class HaCluster(Template):
                  instance_type='t2.micro',
                  subnet_layer='private',
                  elb_scheme=SCHEME_INTERNET_FACING,
-                 elb_health_check_port=None):
+                 elb_health_check_port=None,
+                 cname=''):
 
         # This will be the name used in resource names and descriptions
         self.name = name
@@ -57,8 +58,8 @@ class HaCluster(Template):
         # TODO: Implement this functionality in template.add_elb and pass this value through
         self.elb_health_check_port = elb_health_check_port
 
-        # This is an optional DNS entry to create a CNAME in a private hosted zone
-        # TODO: Use template.register_elb_to_dns()
+        # This is an optional fully qualified DNS name to create a CNAME in a private hosted zone
+        self.cname = cname
 
         super(HaCluster, self).__init__(template_name=self.name)
 
@@ -76,6 +77,9 @@ class HaCluster(Template):
 
         # Add the ELB for the autoscaling group
         self.add_cluster_elb()
+
+        # Add the CNAME for the ELB
+        self.add_cname()
 
         # Add the userdata for the autoscaling group
         self.add_user_data()
@@ -157,6 +161,31 @@ class HaCluster(Template):
             subnet_layer=elb_subnet_layer,
             scheme=self.elb_scheme
         )
+
+
+    def add_cname(self):
+        """
+        Wrapper method to encapsulate process of creating a CNAME DNS record for the ELB
+        Requires InternalHostedZone parameter
+        Sets self.cname_record with the record resource
+        """
+
+        if not self.cname:
+            return
+
+        hosted_zone = self.add_parameter(Parameter(
+            'InternalHostedZone',
+            Description='Internal Hosted Zone Name',
+            Type='String'))
+
+        self.cname_record = self.add_resource(route53.RecordSetType(
+            self.name.lower() + 'DnsRecord',
+            HostedZoneId=Ref(hosted_zone),
+            Comment='CNAME record for %s' % self.name,
+            Name=self.cname,
+            Type='CNAME',
+            TTL='300',
+            ResourceRecords=[GetAtt(self.cluster_elb, 'DNSName')]))
 
 
     def add_user_data(self):

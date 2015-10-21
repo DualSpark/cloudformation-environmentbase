@@ -111,6 +111,10 @@ class Template(t.Template):
         return self._ref_maybe(self._igw)
 
     @property
+    def vpc_gateway_attachment(self):
+        return self._ref_maybe(self._vpc_gateway_attachment)
+
+    @property
     def azs(self):
         return self._ref_maybe(self._azs)
 
@@ -160,11 +164,12 @@ class Template(t.Template):
         These typically get initialized for a template when add_child_template is called
         from the controller, but that never happens when merging two templates
         """
-        self._vpc_cidr              = other_template._vpc_cidr
-        self._vpc_id                = other_template._vpc_id
-        self._common_security_group = other_template._common_security_group
-        self._utility_bucket        = other_template._utility_bucket
-        self._igw                   = other_template._igw
+        self._vpc_cidr               = other_template._vpc_cidr
+        self._vpc_id                 = other_template._vpc_id
+        self._common_security_group  = other_template._common_security_group
+        self._utility_bucket         = other_template._utility_bucket
+        self._igw                    = other_template._igw
+        self._vpc_gateway_attachment = other_template._vpc_gateway_attachment
 
         self._azs        = list(other_template.azs)
         self._subnets    = other_template.subnets.copy()
@@ -334,6 +339,11 @@ class Template(t.Template):
         self._igw = self.add_parameter(Parameter(
             'internetGateway',
             Description='Name of the internet gateway used by the vpc',
+            Type='String'))
+
+        self._vpc_gateway_attachment = self.add_parameter(Parameter(
+            'igwVpcAttachment',
+            Description='VPCGatewayAttachment for the VPC and IGW',
             Type='String'))
 
         self._ec2_key = self.add_parameter(Parameter(

@@ -121,7 +121,7 @@ class NetworkBase(EnvironmentBase):
         self.template._igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
 
         igw_title = 'igwVpcAttachment'
-        self.template.add_resource(ec2.VPCGatewayAttachment(
+        self.template._vpc_gateway_attachment = self.template.add_resource(ec2.VPCGatewayAttachment(
             igw_title,
             InternetGatewayId=self.template.igw,
             VpcId=self.template.vpc_id))
@@ -164,6 +164,7 @@ class NetworkBase(EnvironmentBase):
         self.template.manual_parameter_bindings['vpcId'] = self.template.vpc_id
         self.template.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
         self.template.manual_parameter_bindings['internetGateway'] = self.template.igw
+        self.template.manual_parameter_bindings['igwVpcAttachment'] = self.template.vpc_gateway_attachment
 
     def create_subnet_egress(self, index, route_table, igw_title, subnet_type):
         """

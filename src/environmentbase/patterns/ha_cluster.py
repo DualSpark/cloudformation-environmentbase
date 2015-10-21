@@ -1,6 +1,7 @@
 from environmentbase.template import Template
 from environmentbase import resources
-from troposphere import Ref, Base64, Join, Output, GetAtt, ec2
+from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53
+import troposphere.constants as tpc
 
 SCHEME_INTERNET_FACING = 'internet-facing'
 SCHEME_INTERNAL = 'internal'
@@ -23,7 +24,10 @@ class HaCluster(Template):
                  instance_type='t2.micro',
                  subnet_layer='private',
                  elb_scheme=SCHEME_INTERNET_FACING,
-                 elb_health_check_port=None):
+                 elb_health_check_port=None,
+                 elb_health_check_protocol=None,
+                 elb_health_check_path='',
+                 cname=''):
 
         # This will be the name used in resource names and descriptions
         self.name = name
@@ -53,12 +57,26 @@ class HaCluster(Template):
         # This is the type of ELB: internet-facing gets a publicly accessible DNS, while internal is only accessible to the VPC
         self.elb_scheme = elb_scheme
 
-        # This is the health check port for the cluster
-        # TODO: Implement this functionality in template.add_elb and pass this value through
+        # This is the health check port for the cluster.
+        # If health check port is not passed in, use highest priority available (443 > 80 > anything else)
+        # NOTE: This logic is currently duplicated in template.add_elb, this can be improved
+        if not elb_health_check_port:
+            if tpc.HTTPS_PORT in elb_ports:
+                elb_health_check_port = elb_ports[tpc.HTTPS_PORT]
+            elif tpc.HTTP_PORT in elb_ports:
+                elb_health_check_port = elb_ports[tpc.HTTP_PORT]
+            else:
+                elb_health_check_port = elb_ports.values()[0]
         self.elb_health_check_port = elb_health_check_port
 
-        # This is an optional DNS entry to create a CNAME in a private hosted zone
-        # TODO: Use template.register_elb_to_dns()
+        # The ELB health check protocol for the cluster (HTTP, HTTPS, TCP, SSL)
+        self.elb_health_check_protocol = elb_health_check_protocol
+
+        # The ELB health check path for the cluster (Only for HTTP and HTTPS)
+        self.elb_health_check_path = elb_health_check_path
+
+        # This is an optional fully qualified DNS name to create a CNAME in a private hosted zone
+        self.cname = cname
 
         super(HaCluster, self).__init__(template_name=self.name)
 
@@ -76,6 +94,9 @@ class HaCluster(Template):
 
         # Add the ELB for the autoscaling group
         self.add_cluster_elb()
+
+        # Add the CNAME for the ELB
+        self.add_cname()
 
         # Add the userdata for the autoscaling group
         self.add_user_data()
@@ -127,6 +148,13 @@ class HaCluster(Template):
                 ha_cluster_sg, ha_cluster_sg_name,
                 from_port=instance_port)
 
+        # Create the reciprocal rule for the health check port (assuming it wasn't already created)
+        if self.elb_health_check_port and self.elb_health_check_port not in self.elb_ports.values():
+            self.create_reciprocal_sg(
+                elb_sg, elb_sg_name,
+                ha_cluster_sg, ha_cluster_sg_name,
+                from_port=self.elb_health_check_port)
+
         self.security_groups = {'ha_cluster': ha_cluster_sg, 'elb': elb_sg}
 
         return self.security_groups
@@ -155,8 +183,36 @@ class HaCluster(Template):
             ports=self.elb_ports,
             utility_bucket=self.utility_bucket,
             subnet_layer=elb_subnet_layer,
-            scheme=self.elb_scheme
+            scheme=self.elb_scheme,
+            health_check_port=self.elb_health_check_port,
+            health_check_protocol=self.elb_health_check_protocol,
+            health_check_path=self.elb_health_check_path
         )
+
+
+    def add_cname(self):
+        """
+        Wrapper method to encapsulate process of creating a CNAME DNS record for the ELB
+        Requires InternalHostedZone parameter
+        Sets self.cname_record with the record resource
+        """
+
+        if not self.cname:
+            return
+
+        hosted_zone = self.add_parameter(Parameter(
+            'InternalHostedZone',
+            Description='Internal Hosted Zone Name',
+            Type='String'))
+
+        self.cname_record = self.add_resource(route53.RecordSetType(
+            self.name.lower() + 'DnsRecord',
+            HostedZoneId=Ref(hosted_zone),
+            Comment='CNAME record for %s' % self.name,
+            Name=self.cname,
+            Type='CNAME',
+            TTL='300',
+            ResourceRecords=[GetAtt(self.cluster_elb, 'DNSName')]))
 
 
     def add_user_data(self):
@@ -165,10 +221,19 @@ class HaCluster(Template):
         Sets self.user_data_payload constructed from the passed in user_data and env_vars 
         """
         self.user_data_payload = {}
-        if self.user_data:
+
+        if self.user_data or self.env_vars:
+
+            variable_declarations = []
+            for k,v in self.env_vars.iteritems():
+                if isinstance(v, basestring):
+                    variable_declarations.append('%s=%s' % (k, v))
+                else:
+                    variable_declarations.append(Join('=', [k, v]))
+
             self.user_data_payload = self.build_bootstrap(
                 bootstrap_files=[self.user_data],
-                variable_declarations=["%s=%s" % (k, v) for k,v in self.env_vars.iteritems()])
+                variable_declarations=variable_declarations)
 
 
     def add_cluster_asg(self):

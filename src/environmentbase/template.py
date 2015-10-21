@@ -115,6 +115,10 @@ class Template(t.Template):
         return self._ref_maybe(self._ec2_key)
 
     @property
+    def vpc_gateway_attachment(self):
+        return self._ref_maybe(self._vpc_gateway_attachment)
+
+    @property
     def azs(self):
         return self._ref_maybe(self._azs)
 
@@ -164,11 +168,12 @@ class Template(t.Template):
         These typically get initialized for a template when add_child_template is called
         from the controller, but that never happens when merging two templates
         """
-        self._vpc_cidr              = other_template._vpc_cidr
-        self._vpc_id                = other_template._vpc_id
-        self._common_security_group = other_template._common_security_group
-        self._utility_bucket        = other_template._utility_bucket
-        self._igw                   = other_template._igw
+        self._vpc_cidr               = other_template._vpc_cidr
+        self._vpc_id                 = other_template._vpc_id
+        self._common_security_group  = other_template._common_security_group
+        self._utility_bucket         = other_template._utility_bucket
+        self._igw                    = other_template._igw
+        self._vpc_gateway_attachment = other_template._vpc_gateway_attachment
 
         self._azs        = list(other_template.azs)
         self._subnets    = other_template.subnets.copy()
@@ -339,6 +344,11 @@ class Template(t.Template):
         self._igw = self.add_parameter(Parameter(
             'internetGateway',
             Description='Name of the internet gateway used by the vpc',
+            Type='String'))
+
+        self._vpc_gateway_attachment = self.add_parameter(Parameter(
+            'igwVpcAttachment',
+            Description='VPCGatewayAttachment for the VPC and IGW',
             Type='String'))
 
         self._ec2_key = self.add_parameter(Parameter(
@@ -641,7 +651,7 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing'):
+    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing', health_check_protocol=None, health_check_port=None, health_check_path=''):
         """
         Helper function creates an ELB and attaches it to your template
         Ports should be a dictionary mapping ELB ports to Instance ports
@@ -668,14 +678,28 @@ class Template(t.Template):
             else:
                 listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
 
-        # Set the health check port, use highest priority if available (443 > 80 > anything else)
-        # TODO: This could be parameterized
-        if tpc.HTTPS_PORT in ports:
-            health_check_port = ports[tpc.HTTPS_PORT]
-        elif tpc.HTTP_PORT in ports:
-            health_check_port = ports[tpc.HTTP_PORT]
+        # If health check port is not passed in, use highest priority available (443 > 80 > anything else)
+        if not health_check_port:
+            if tpc.HTTPS_PORT in ports:
+                health_check_port = ports[tpc.HTTPS_PORT]
+            elif tpc.HTTP_PORT in ports:
+                health_check_port = ports[tpc.HTTP_PORT]
+            else:
+                health_check_port = ports.values()[0]
+
+        # If health_check_protocol is not passed in, set it based on the port (443 = HTTPS, 80 = HTTP, otherwise TCP)
+        if not health_check_protocol:
+            if health_check_port == tpc.HTTPS_PORT:
+                health_check_protocol = 'HTTPS'
+            elif health_check_port == tpc.HTTP_PORT:
+                health_check_protocol = 'HTTP'
+            else:
+                health_check_protocol = 'TCP'
+
+        if health_check_protocol == 'HTTP' or health_check_protocol == 'HTTPS':
+            health_check_target = "%s:%s/%s" % (health_check_protocol, health_check_port, health_check_path)
         else:
-            health_check_port = ports.values()[0]
+            health_check_target = "%s:%s" % (health_check_protocol, health_check_port)
 
         elb_obj = elb.LoadBalancer(
             '%sElb' % resource_name,
@@ -687,7 +711,7 @@ class Template(t.Template):
                 HealthyThreshold=3,
                 UnhealthyThreshold=5,
                 Interval=30,
-                Target='TCP:%s' % health_check_port,
+                Target=health_check_target,
                 Timeout=5),
             Listeners=listeners,
             Instances=instances,

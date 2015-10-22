@@ -32,6 +32,9 @@ class NetworkBase(EnvironmentBase):
 
         self.stack_outputs = {}
 
+        # Simple mapping of AZs to NATs, to prevent creating duplicates
+        self.az_nat_mapping = {}
+        
         self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network_components(network_config=network_config)
@@ -194,27 +197,38 @@ class NetworkBase(EnvironmentBase):
         Override to create egress routes for other subnet types
         Creates the NAT instances in the public subnets
         """
+
+        # For public subnets, create the route to the IGW
         if subnet_type == 'public':
             self.template.add_resource(ec2.Route(subnet_layer + 'AZ' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
                 DestinationCidrBlock='0.0.0.0/0',
                 GatewayId=self.template.igw,
                 RouteTableId=Ref(route_table)))
+
+        # For private subnets, create a NAT instance in a public subnet in the same AZ
         elif subnet_type == 'private':
+
+            # If we have already created a NAT in this AZ, skip it
+            if self.az_nat_mapping.get(index):
+                return
+
             nat_instance_type = self.config['nat']['instance_type']
             nat_enable_ntp = self.config['nat']['enable_ntp']
             extra_user_data = self.config['nat'].get('extra_user_data')
-            hanat = self.create_nat(
+            ha_nat = self.create_nat(
                 index,
                 nat_instance_type,
                 nat_enable_ntp,
                 name='HaNat' + str(index),
                 extra_user_data=extra_user_data)
-            try:
-                self.template.merge(hanat)
-            except ValueError as e:
-                if self.config['global']['print_debug'] == True and "duplicate key" in e.message:
-                    print 'Warning: multiple private subnets detected: {!r}'.format(e)
+
+            # We merge the NAT template into the root template
+            self.template.merge(ha_nat)
+
+            # Save the reference to the HA NAT, so we don't recreate it if we hit another private subnet in this AZ
+            self.az_nat_mapping[index] = ha_nat
+
 
     def gateway_hook(self):
         """

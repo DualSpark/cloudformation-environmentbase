@@ -145,37 +145,41 @@ class NetworkBase(EnvironmentBase):
 
             for ind, subnet_config in enumerate(network_config.get('subnet_config', {})):
                 subnet_type = subnet_config.get('type', 'private')
-                subnet_name = subnet_config.get('name')
+                subnet_layer = subnet_config.get('name')
 
                 AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
-                CidrBlock = self.template.mappings['networkAddresses'][az_key][subnet_name]
+                CidrBlock = self.template.mappings['networkAddresses'][az_key][subnet_layer]
 
-                if subnet_type not in self.template.subnets:
-                    self.template._subnets[subnet_type] = []  # what is this for? 
+                # Save the subnet references to the template object
+                if subnet_type not in self.template._subnets:
+                    self.template._subnets[subnet_type] = {}
+
+                if subnet_layer not in self.template._subnets[subnet_type]:
+                    self.template._subnets[subnet_type][subnet_layer] = []
 
                 # Create the subnet
                 subnet = self.template.add_resource(ec2.Subnet(
-                    subnet_type + 'Subnet' + str(ind) + 'AZ' + str(index),
+                    subnet_layer + 'AZ' + str(index),
                     AvailabilityZone=AvailabilityZone,
                     VpcId=self.template.vpc_id,
                     CidrBlock=CidrBlock,
                     Tags=[ec2.Tag(key='network', value=subnet_type), 
-                            ec2.Tag(key='Name', value=' '.join([subnet_name, str(ind), 'AZ:', str(index)])),
+                          ec2.Tag(key='Name', value=' '.join([subnet_layer, 'AZ:', str(index)])),
                         ]))
 
-                self.template._subnets[subnet_type].append(subnet)  ## why are we doing this? 
+                self.template._subnets[subnet_type][subnet_layer].append(subnet)
 
                 # Create the routing table
                 route_table = self.template.add_resource(ec2.RouteTable(
-                    subnet_type + 'Subnet' + str(ind) + 'AZ' + str(index) + 'RouteTable',
+                    subnet_layer + 'AZ' + str(index) + 'RouteTable',
                     VpcId=self.template.vpc_id))
 
                 # Create the NATs and egress rules
-                self.create_subnet_egress(index, route_table, igw_title, subnet_type)
+                self.create_subnet_egress(index, route_table, igw_title, subnet_type, subnet_layer)
 
                 # Associate the routing table with the subnet
                 self.template.add_resource(ec2.SubnetRouteTableAssociation(
-                    subnet_type + 'Subnet' + str(ind) + 'AZ' + str(index) + 'EgressRouteTableAssociation',
+                    subnet_layer + 'AZ' + str(index) + 'EgressRouteTableAssociation',
                     RouteTableId=Ref(route_table),
                     SubnetId=Ref(subnet)))
 
@@ -184,13 +188,13 @@ class NetworkBase(EnvironmentBase):
         self.template.manual_parameter_bindings['internetGateway'] = self.template.igw
         self.template.manual_parameter_bindings['igwVpcAttachment'] = self.template.vpc_gateway_attachment
 
-    def create_subnet_egress(self, index, route_table, igw_title, subnet_type):
+    def create_subnet_egress(self, index, route_table, igw_title, subnet_type, subnet_layer):
         """
         Create an egress route for the a subnet with the given index and type
         Override to create egress routes for other subnet types
         """
         if subnet_type == 'public':
-            self.template.add_resource(ec2.Route(subnet_type + 'Subnet' + str(index) + 'EgressRoute',
+            self.template.add_resource(ec2.Route(subnet_layer + 'AZ' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
                 DestinationCidrBlock='0.0.0.0/0',
                 GatewayId=self.template.igw,
@@ -208,7 +212,7 @@ class NetworkBase(EnvironmentBase):
             try:
                 self.template.merge(hanat)
             except ValueError as e:
-                if "duplicate key" in e.message:
+                if self.config['global']['print_debug'] == True and "duplicate key" in e.message:
                     print 'Warning: multiple private subnets detected: {!r}'.format(e)
 
     def gateway_hook(self):

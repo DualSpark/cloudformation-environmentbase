@@ -55,10 +55,7 @@ class Template(t.Template):
         self._resource_path = ''
 
         self._azs = []
-        self._subnets = {
-            'public': [],
-            'private': []
-        }
+        self._subnets = {}
 
         self._is_root_template = root_template
 
@@ -304,12 +301,11 @@ class Template(t.Template):
     def add_common_parameters_from_parent(self, parent):
         ec2_key = parent._ec2_key.Default
         parent_subnets = parent._subnets
-        subnet_types = parent_subnets.keys()
         az_count = len(parent._azs)
         region_map = parent.mappings['RegionMap']
-        self.add_common_parameters(ec2_key, subnet_types, region_map, parent_subnets, az_count)
+        self.add_common_parameters(ec2_key, region_map, parent_subnets, az_count)
 
-    def add_common_parameters(self, ec2_key, subnet_types, region_map, parent_subnets, az_count=2):
+    def add_common_parameters(self, ec2_key, region_map, parent_subnets, az_count=2):
         """
         Adds parameters to template for use as a child stack:
             vpcCidr,
@@ -364,16 +360,19 @@ class Template(t.Template):
 
         self.mappings['RegionMap'] = region_map
 
-        for subnet_type in parent_subnets: 
-            subnets = parent_subnets[subnet_type]
+        for subnet_type in parent_subnets:
+            if subnet_type not in self._subnets:
+                self._subnets[subnet_type] = {}
 
-            for subnet in subnets:
-                subnet_param = Parameter(
-                    subnet.name,
-                    Description=subnet.name,
-                    Type='String')
-                self.add_parameter(subnet_param)
-                self._subnets[subnet_type].append(subnet_param)
+            for subnet_layer in parent_subnets[subnet_type]: 
+                if subnet_layer not in self._subnets[subnet_type]:
+                    self._subnets[subnet_type][subnet_layer] = []
+
+                for subnet in parent_subnets[subnet_type][subnet_layer]:
+                    self._subnets[subnet_type][subnet_layer].append(self.add_parameter(Parameter(
+                        subnet.name,
+                        Description=subnet.name,
+                        Type='String')))
 
         self._azs = []
 
@@ -489,7 +488,8 @@ class Template(t.Template):
                 custom_tags=None,
                 load_balancer=None,
                 instance_monitoring=False,
-                subnet_type='private',
+                subnet_layer=None,
+                associate_public_ip=None,
                 launch_config_metadata=None,
                 creation_policy=None,
                 update_policy=None,
@@ -512,11 +512,8 @@ class Template(t.Template):
         @param custom_tags [Troposphere.autoscaling.Tag[]] Collection of Auto Scaling tags to be assigned to the Auto Scaling Group
         @param load_balancer [Troposphere.elasticloadbalancing.LoadBalancer] Object reference to an ELB to be assigned to this auto scaling group
         @param instance_monitoring [Boolean] indicates that detailed monitoring should be turned on for all instnaces launched within this Auto Scaling group
-        @param subnet_type [string {'public', 'private'}] string indicating which type of subnet (public or private) instances should be launched into
+        @param subnet_layer [string] string indicating which subnet layer instances are being launched into
         """
-
-        if subnet_type not in ['public', 'private']:
-            raise RuntimeError('Unable to determine which type of subnet instances should be launched into. ' + str(subnet_type) + ' is not one of ["public", "private"].')
 
         # Ensure that all the passed in parameters are Ref objects
         if ec2_key and type(ec2_key) != Ref:
@@ -538,6 +535,19 @@ class Template(t.Template):
         if not instance_profile:
             instance_profile = self.add_instance_profile(layer_name, [self.get_cfn_policy()], self.name)
 
+        # If subnet_layer isn't passed in, try a private subnet if available, else a public subnet
+        if not subnet_layer:
+            if len(self._subnets.get('private')) > 0:
+                subnet_layer = self._subnets['private'].keys()[0]
+            else:
+                subnet_layer = self._subnets['public'].keys()[0]
+
+        subnet_type = self.get_subnet_type(subnet_layer)
+
+        # If associate_public_ip is not passed in, set it based on the subnet_type
+        if not associate_public_ip:
+            associate_public_ip = True if subnet_type == 'public' else False
+
         launch_config_obj = autoscaling.LaunchConfiguration(
             layer_name + 'LaunchConfiguration',
             IamInstanceProfile=Ref(instance_profile),
@@ -545,7 +555,7 @@ class Template(t.Template):
             InstanceType=instance_type,
             SecurityGroups=sg_list,
             KeyName=ec2_key,
-            AssociatePublicIpAddress=True if subnet_type == 'public' else False,
+            AssociatePublicIpAddress=associate_public_ip,
             InstanceMonitoring=instance_monitoring)
 
         if launch_config_metadata:
@@ -611,7 +621,7 @@ class Template(t.Template):
             MaxSize=max_size,
             MinSize=min_size,
             DesiredCapacity=min(min_size, max_size),
-            VPCZoneIdentifier=self.subnets[subnet_type.lower()],
+            VPCZoneIdentifier=self.subnets[subnet_type][subnet_layer.lower()],
             TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
             DependsOn=depends_on)
 
@@ -651,7 +661,7 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer='public', scheme='internet-facing', health_check_protocol=None, health_check_port=None, health_check_path=''):
+    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer=None, scheme='internet-facing', health_check_protocol=None, health_check_port=None, health_check_path=''):
         """
         Helper function creates an ELB and attaches it to your template
         Ports should be a dictionary mapping ELB ports to Instance ports
@@ -701,9 +711,17 @@ class Template(t.Template):
         else:
             health_check_target = "%s:%s" % (health_check_protocol, health_check_port)
 
+        if subnet_layer:
+            subnet_type = self.get_subnet_type(subnet_layer)
+        else:
+            # If subnet layer is not passed in, determine based on the scheme 
+            # -- Pick a public subnet if it's internet-facing, else pick a private one
+            subnet_type = 'public' if scheme == 'internet-facing' else 'private'
+            subnet_layer = self._subnets[subnet_type].keys()[0]
+
         elb_obj = elb.LoadBalancer(
             '%sElb' % resource_name,
-            Subnets=self.subnets[subnet_layer],
+            Subnets=self.subnets[subnet_type][subnet_layer],
             SecurityGroups=[Ref(sg) for sg in security_groups],
             CrossZone=True,
             LBCookieStickinessPolicy=[stickiness_policy],
@@ -1061,3 +1079,12 @@ class Template(t.Template):
             DependsOn=depends_on)
 
         return self.add_resource(stack_obj)
+
+    # Return the subnet type (public/private) that subnet_layer belongs to
+    def get_subnet_type(self, subnet_layer):
+        for subnet_type in self._subnets:
+            for a_subnet_layer in self._subnets[subnet_type]:
+                if a_subnet_layer == subnet_layer:
+                    return subnet_type
+        return None
+

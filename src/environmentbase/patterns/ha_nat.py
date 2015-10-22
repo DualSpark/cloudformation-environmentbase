@@ -160,6 +160,9 @@ class HaNat(Template):
             AssociatePublicIpAddress=True
         ))
 
+        # Create the NAT in a public subnet
+        subnet_layer = self._subnets['public'].keys()[0]
+
         nat_asg = self.add_resource(AutoScalingGroup(
             nat_asg_name,
             DesiredCapacity=1,
@@ -173,7 +176,7 @@ class HaNat(Template):
             LaunchConfigurationName=Ref(nat_launch_config),
             HealthCheckGracePeriod=30,
             HealthCheckType="EC2",
-            VPCZoneIdentifier=[self.subnets['public'][self.subnet_index]],
+            VPCZoneIdentifier=[self._subnets['public'][subnet_layer][self.subnet_index]],
             CreationPolicy=CreationPolicy(
                 ResourceSignal=ResourceSignal(
                     Count=1,

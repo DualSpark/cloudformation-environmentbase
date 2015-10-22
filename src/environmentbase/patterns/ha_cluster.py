@@ -22,7 +22,7 @@ class HaCluster(Template):
                  env_vars={},
                  min_size=1, max_size=1,
                  instance_type='t2.micro',
-                 subnet_layer='private',
+                 subnet_layer=None,
                  elb_scheme=SCHEME_INTERNET_FACING,
                  elb_health_check_port=None,
                  elb_health_check_protocol=None,
@@ -86,6 +86,9 @@ class HaCluster(Template):
         Hook to add tier-specific assets within the build stage of initializing this class.
         """
 
+        # Set the subnet_layer if it wasn't passed in
+        self.set_subnet_layer()
+
         # Create security groups for the ASG and ELB and connect them together
         self.add_security_groups()
 
@@ -107,6 +110,19 @@ class HaCluster(Template):
         # Add the outputs for the stack
         self.add_outputs()
 
+
+    def set_subnet_layer(self):
+        """
+        If the subnet layer is not passed in, use a private subnet if there are any, otherwise use a public subnet.
+        This needs to happen in the build hook, since subnets is not yet initialized in the constructor. You 
+        probably won't need to override this. This logic is also duplicated in template.add_asg(), but we need to 
+        set it out here so we can pass the same subnet to template.add_elb()
+        """
+        if not self.subnet_layer:
+            if len(self._subnets.get('private')) > 0:
+                self.subnet_layer = self._subnets['private'].keys()[0]
+            else:
+                self.subnet_layer = self._subnets['public'].keys()[0]
 
     def add_security_groups(self):
         """
@@ -173,8 +189,8 @@ class HaCluster(Template):
         Wrapper method to encapsulate process of creating the ELB for the autoscaling group
         Sets self.cluster_elb with the ELB resource
         """
-        # Determine the subnet layer of the ELB based on the scheme -- public if it's internet facing, else use the same subnet layer as the ASG
-        elb_subnet_layer = 'public' if self.elb_scheme == SCHEME_INTERNET_FACING else self.subnet_layer
+        # If the ELB is internal, use the same subnet layer as the ASG
+        elb_subnet_layer = self.subnet_layer if self.elb_scheme == SCHEME_INTERNAL else None
 
         # This creates the ELB, opens the specified ports, and attaches the security group and logging bucket
         self.cluster_elb = self.add_elb(
@@ -250,7 +266,7 @@ class HaCluster(Template):
             instance_type=self.instance_type,
             min_size=self.min_size,
             max_size=self.max_size,
-            subnet_type=self.subnet_layer,
+            subnet_layer=self.subnet_layer,
             instance_profile=self.instance_profile
         )
 

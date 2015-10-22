@@ -572,7 +572,7 @@ class EnvironmentBase(object):
     # - self.vpc_id
     # - self.common_security_group
     # - self.utility_bucket
-    # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
+    # - self.subnets: keyed by type, layer, and AZ index (e.g. self.subnets['public']['web'][1])
     # - self.azs: List of parameter references
     def add_child_template(self, child_template, merge=False, depends_on=[]):
         """

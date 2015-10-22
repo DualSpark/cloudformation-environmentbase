@@ -192,6 +192,7 @@ class NetworkBase(EnvironmentBase):
         """
         Create an egress route for the a subnet with the given index and type
         Override to create egress routes for other subnet types
+        Creates the NAT instances in the public subnets
         """
         if subnet_type == 'public':
             self.template.add_resource(ec2.Route(subnet_layer + 'AZ' + str(index) + 'EgressRoute',

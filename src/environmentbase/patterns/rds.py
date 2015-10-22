@@ -160,10 +160,11 @@ class RDS(Template):
              db_user_name,
              db_user_password) = self.add_parameters(db_label, db_config)
 
+            subnet_type = self.get_subnet_type(self.subnet_set)
             subnet_group = self.add_resource(rds.DBSubnetGroup(
                 db_label.lower() + 'RdsSubnetGroup',
                 DBSubnetGroupDescription='Subnet group for the RDS instance',
-                SubnetIds=self.subnets[self.subnet_set]))
+                SubnetIds=self.subnets[subnet_type][self.subnet_set]))
 
             rds_sg = self.add_resource(
                 ec2.SecurityGroup(
@@ -246,7 +247,7 @@ class Controller(NetworkBase):
         # Create the rds instance pattern (includes standard standard parameters)
         my_db = RDS(
             'dbTier',
-            subnet_set='private',
+            subnet_set=self.template.subnets['private'].keys()[0],
             config_map=db_config)
 
         # Attach pattern as a child template

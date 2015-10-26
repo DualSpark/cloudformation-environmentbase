@@ -706,8 +706,10 @@ class Template(t.Template):
             else:
                 health_check_protocol = 'TCP'
 
+        health_check_protocol = health_check_protocol.upper()
+
         if health_check_protocol == 'HTTP' or health_check_protocol == 'HTTPS':
-            health_check_target = "%s:%s/%s" % (health_check_protocol, health_check_port, health_check_path)
+            health_check_target = "%s:%s/%s" % (health_check_protocol, health_check_port, health_check_path.lstrip('/'))
         else:
             health_check_target = "%s:%s" % (health_check_protocol, health_check_port)
 

@@ -29,8 +29,6 @@ class HaCluster(Template):
                  elb_health_check_path='',
                  cname='',
                  custom_tags={}):
-
-        # take dict translate to tags pass to add_asg
         
         # This will be the name used in resource names and descriptions
         self.name = name

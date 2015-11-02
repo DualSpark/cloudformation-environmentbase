@@ -1,6 +1,6 @@
 from environmentbase.template import Template
 from environmentbase import resources
-from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53
+from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53, autoscaling
 import troposphere.constants as tpc
 
 SCHEME_INTERNET_FACING = 'internet-facing'
@@ -27,8 +27,11 @@ class HaCluster(Template):
                  elb_health_check_port=None,
                  elb_health_check_protocol=None,
                  elb_health_check_path='',
-                 cname=''):
+                 cname='',
+                 custom_tags={}):
 
+        # take dict translate to tags pass to add_asg
+        
         # This will be the name used in resource names and descriptions
         self.name = name
 
@@ -77,6 +80,11 @@ class HaCluster(Template):
 
         # This is an optional fully qualified DNS name to create a CNAME in a private hosted zone
         self.cname = cname
+
+        # Translate the custom_tags dict to a list of autoscaling Tags
+        self.custom_tags = []
+        for key, value in custom_tags.iteritems():
+            self.custom_tags.append(autoscaling.Tag(key, value, True))
 
         super(HaCluster, self).__init__(template_name=self.name)
 
@@ -267,7 +275,8 @@ class HaCluster(Template):
             min_size=self.min_size,
             max_size=self.max_size,
             subnet_layer=self.subnet_layer,
-            instance_profile=self.instance_profile
+            instance_profile=self.instance_profile,
+            custom_tags=self.custom_tags
         )
 
     def add_outputs(self):

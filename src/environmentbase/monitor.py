@@ -110,6 +110,7 @@ class StackMonitor(object):
                     "status": parsed_msg.get('ResourceStatus'),
                     "type": parsed_msg.get('ResourceType'),
                     "name": parsed_msg.get('LogicalResourceId'),
+                    "id": parsed_msg.get('PhysicalResourceId'),
                     "reason": parsed_msg.get('ResourceStatusReason'),
                     "props": parsed_msg.get('ResourceProperties')
                 }

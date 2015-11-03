@@ -114,6 +114,7 @@ class EnvironmentBase(object):
             "status" = "ResourceStatus"
             "type"   = "ResourceType"
             "name"   = "LogicalResourceId"
+            "id"     = "PhysicalResourceId"
             "reason" = "ResourceStatusReason"
             "props"  = "ResourceProperties"
         :return bool: Indicates that processing is complete, false indicates that you are not yet done

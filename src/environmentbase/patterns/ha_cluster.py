@@ -2,6 +2,7 @@ from environmentbase.template import Template
 from environmentbase import resources
 from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53, autoscaling
 import troposphere.constants as tpc
+from troposphere.policies import CreationPolicy, ResourceSignal
 
 SCHEME_INTERNET_FACING = 'internet-facing'
 SCHEME_INTERNAL = 'internal'
@@ -28,7 +29,8 @@ class HaCluster(Template):
                  elb_health_check_protocol=None,
                  elb_health_check_path='',
                  cname='',
-                 custom_tags={}):
+                 custom_tags={},
+                 creation_policy_timeout=None):
         
         # This will be the name used in resource names and descriptions
         self.name = name
@@ -58,6 +60,12 @@ class HaCluster(Template):
         # This is the type of ELB: internet-facing gets a publicly accessible DNS, while internal is only accessible to the VPC
         self.elb_scheme = elb_scheme
 
+        # Add a creation policy with a custom timeout if one was specified
+        if creation_policy_timeout:
+            self.creation_policy = CreationPolicy(ResourceSignal=ResourceSignal(Timeout='PT' + str(creation_policy_timeout) + 'M'))
+        else:
+            self.creation_policy = None
+        
         # This is the health check port for the cluster.
         # If health check port is not passed in, use highest priority available (443 > 80 > anything else)
         # NOTE: This logic is currently duplicated in template.add_elb, this can be improved
@@ -274,7 +282,8 @@ class HaCluster(Template):
             max_size=self.max_size,
             subnet_layer=self.subnet_layer,
             instance_profile=self.instance_profile,
-            custom_tags=self.custom_tags
+            custom_tags=self.custom_tags,
+            creation_policy=self.creation_policy
         )
 
     def add_outputs(self):

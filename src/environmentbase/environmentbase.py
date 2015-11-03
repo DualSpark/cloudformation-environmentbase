@@ -3,6 +3,7 @@ import os.path
 import copy
 import re
 import botocore.exceptions
+from boto import cloudformation, sts
 from troposphere import Parameter
 from template import Template
 import cli
@@ -64,6 +65,8 @@ class EnvironmentBase(object):
         self._config_handlers = []
         self.stack_monitor = None
         self._ami_cache = None
+        self.cfn_connection = None
+        self.sts_credentials = None
 
         self.boto_session = None
 
@@ -592,3 +595,46 @@ class EnvironmentBase(object):
         into the current template
         """
         self.template.add_child_template(child_template, merge=merge, depends_on=depends_on)
+
+
+    def get_stack_output(self, stack_id, output_name):
+        """
+        Given the PhysicalResourceId of a Stack and a specific output key, return the output value
+        Raise an exception if the output key is not found
+        Example:
+            def stack_event_hook(self, event_data):
+                elb_dns_name = self.get_stack_output(event_data['id'], 'ElbDnsName')
+        """
+        # This should return exactly one stack, since we're using the Physical ID
+        stack_obj = self.get_cfn_connection().describe_stacks(stack_id)[0]
+
+        for output in stack_obj.outputs:
+            if output.key == output_name:
+                return output.value
+
+        # If the output wasn't found in the stack, raise an exception
+        raise Exception("%s did not output %s" % (stack_obj.stack_name, output_name))
+
+
+    def get_cfn_connection(self):
+        """
+        We persist the CFN connection so that we don't create a new session with each request
+        """
+        if not self.cfn_connection:
+            self.cfn_connection = cloudformation.connect_to_region(self.config.get('boto').get('region_name'))
+        return self.cfn_connection
+
+
+    def get_sts_credentials(self, role_session_name, role_arn):
+        """
+        We persist the STS credentials so that we don't create a new session with each request
+        """
+        if not self.sts_credentials:
+            sts_connection = sts.STSConnection()
+            assumed_role = sts_connection.assume_role(
+                role_arn=role_arn,
+                role_session_name=role_session_name
+            )
+            self.sts_credentials = assumed_role.credentials
+        return self.sts_credentials
+

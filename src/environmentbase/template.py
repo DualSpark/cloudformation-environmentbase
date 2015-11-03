@@ -385,6 +385,30 @@ class Template(t.Template):
             self._azs.append(az_param)
 
 
+    @staticmethod
+    def construct_user_data(env_vars={}, user_data=''):
+        """
+        Wrapper method to encapsulate process of constructing userdata for a launch configuration
+        @param env_vars [dict] A dictionary containining key value pairs to set as environment variables in the userdata
+        @param user_data [string] Contents of the user data script as a string
+        Returns user_data_payload [string[]] Userdata payload ready to be dropped into a launch configuration
+        """
+        if not (env_vars or user_data):
+            return []
+
+        # If the variable value is not a string, use the Join function (this handles Refs, Parameters, etc. which are evaluated at runtime)
+        variable_declarations = []
+        for k,v in env_vars.iteritems():
+            if isinstance(v, basestring):
+                variable_declarations.append('%s=%s' % (k, v))
+            else:
+                variable_declarations.append(Join('=', [k, v]))
+
+        return Template.build_bootstrap(
+            bootstrap_files=[user_data],
+            variable_declarations=variable_declarations
+        )
+
 
     @staticmethod
     def build_bootstrap(bootstrap_files=None,

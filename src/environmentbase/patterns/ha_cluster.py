@@ -250,20 +250,7 @@ class HaCluster(Template):
         Wrapper method to encapsulate process of constructing userdata for the autoscaling group
         Sets self.user_data_payload constructed from the passed in user_data and env_vars 
         """
-        self.user_data_payload = {}
-
-        if self.user_data or self.env_vars:
-
-            variable_declarations = []
-            for k,v in self.env_vars.iteritems():
-                if isinstance(v, basestring):
-                    variable_declarations.append('%s=%s' % (k, v))
-                else:
-                    variable_declarations.append(Join('=', [k, v]))
-
-            self.user_data_payload = self.build_bootstrap(
-                bootstrap_files=[self.user_data],
-                variable_declarations=variable_declarations)
+        self.user_data_payload = self.construct_user_data(self.env_vars, self.user_data)
 
 
     def add_cluster_asg(self):

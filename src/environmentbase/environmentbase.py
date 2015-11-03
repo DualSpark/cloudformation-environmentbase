@@ -429,6 +429,14 @@ class EnvironmentBase(object):
                 if not env_value:
                     continue
 
+                # TODO: Need better schema validation for non-string values from env vars
+
+                # Convert true/false strings to booleans for schema validation
+                if env_value.lower() == 'true':
+                    env_value = True
+                elif env_value.lower() == 'false':
+                    env_value = False
+
                 default_value = config.get(key)
                 config[key] = env_value if env_value else default_value
 

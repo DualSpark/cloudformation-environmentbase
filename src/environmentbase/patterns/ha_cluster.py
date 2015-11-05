@@ -15,18 +15,23 @@ class HaCluster(Template):
     Contains an ELB, Autoscaling Group, Security Groups, and optional internal DNS record
     """
 
-    def __init__(self, 
-                 name='HaCluster', 
-                 ami_name='amazonLinuxAmiId', 
-                 elb_ports={80: 80}, 
-                 user_data='', 
+    def __init__(self,
+                 name='HaCluster',
+                 ami_name='amazonLinuxAmiId',
+                 user_data='',
                  env_vars={},
                  min_size=1, max_size=1,
                  instance_type='t2.micro',
                  subnet_layer=None,
                  elb_scheme=SCHEME_INTERNET_FACING,
+                 elb_listeners=[
+                    {
+                        'elb_protocol': 'HTTP',
+                        'elb_port': 80
+                    }
+                 ],
                  elb_health_check_port=None,
-                 elb_health_check_protocol=None,
+                 elb_health_check_protocol='TCP',
                  elb_health_check_path='',
                  cname='',
                  custom_tags={},
@@ -37,9 +42,6 @@ class HaCluster(Template):
 
         # This is the name used to identify the AMI from the ami_cache.json file
         self.ami_name = ami_name
-
-        # This should be a dictionary mapping ELB ports to Instance ports
-        self.elb_ports = elb_ports
 
         # This is the contents of the userdata script as a string
         self.user_data = user_data
@@ -60,22 +62,11 @@ class HaCluster(Template):
         # This is the type of ELB: internet-facing gets a publicly accessible DNS, while internal is only accessible to the VPC
         self.elb_scheme = elb_scheme
 
-        # Add a creation policy with a custom timeout if one was specified
-        if creation_policy_timeout:
-            self.creation_policy = CreationPolicy(ResourceSignal=ResourceSignal(Timeout='PT' + str(creation_policy_timeout) + 'M'))
-        else:
-            self.creation_policy = None
-        
-        # This is the health check port for the cluster.
-        # If health check port is not passed in, use highest priority available (443 > 80 > anything else)
-        # NOTE: This logic is currently duplicated in template.add_elb, this can be improved
-        if not elb_health_check_port:
-            if tpc.HTTPS_PORT in elb_ports:
-                elb_health_check_port = elb_ports[tpc.HTTPS_PORT]
-            elif tpc.HTTP_PORT in elb_ports:
-                elb_health_check_port = elb_ports[tpc.HTTP_PORT]
-            else:
-                elb_health_check_port = elb_ports.values()[0]
+        # This should be a list of dictionaries defining each listener for the ELB
+        # Each dictionary can contain elb_port [required], elb_protocol, instance_port, instance_protocol, ssl_cert_name
+        self.elb_listeners = elb_listeners
+
+        # This is the health check port for the cluster
         self.elb_health_check_port = elb_health_check_port
 
         # The ELB health check protocol for the cluster (HTTP, HTTPS, TCP, SSL)
@@ -83,6 +74,12 @@ class HaCluster(Template):
 
         # The ELB health check path for the cluster (Only for HTTP and HTTPS)
         self.elb_health_check_path = elb_health_check_path
+
+        # Add a creation policy with a custom timeout if one was specified
+        if creation_policy_timeout:
+            self.creation_policy = CreationPolicy(ResourceSignal=ResourceSignal(Timeout='PT' + str(creation_policy_timeout) + 'M'))
+        else:
+            self.creation_policy = None
 
         # This is an optional fully qualified DNS name to create a CNAME in a private hosted zone
         self.cname = cname
@@ -149,7 +146,7 @@ class HaCluster(Template):
 
         # Create the ingress rules to the ELB security group
         elb_sg_ingress_rules = []
-        for elb_port in self.elb_ports:
+        for elb_port in [listener.get('elb_port') for listener in self.elb_listeners]:
             elb_sg_ingress_rules.append(ec2.SecurityGroupRule(FromPort=elb_port, ToPort=elb_port, IpProtocol='tcp', CidrIp=access_cidr))
 
         # Create the ELB security group and attach the ingress rules
@@ -171,19 +168,19 @@ class HaCluster(Template):
                 VpcId=self.vpc_id)
         )
 
-        # Create the reciprocal rules between the ELB and the ASG
-        for instance_port in self.elb_ports.values():
-            self.create_reciprocal_sg(
-                elb_sg, elb_sg_name,
-                ha_cluster_sg, ha_cluster_sg_name,
-                from_port=instance_port)
+        # Create the reciprocal rules between the ELB and the ASG for all instance ports
+        # NOTE: The condition in the list comprehension exists because elb_port is used as a default when instance_port is not specified
+        cluster_sg_ingress_ports = [listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in self.elb_listeners]
 
-        # Create the reciprocal rule for the health check port (assuming it wasn't already created)
-        if self.elb_health_check_port and self.elb_health_check_port not in self.elb_ports.values():
+        # Also add the health check port if it's not included in the instance ports
+        if self.elb_health_check_port and self.elb_health_check_port not in cluster_sg_ingress_ports:
+            cluster_sg_ingress_ports.append(self.elb_health_check_port)
+
+        for cluster_sg_ingress_port in cluster_sg_ingress_ports:
             self.create_reciprocal_sg(
                 elb_sg, elb_sg_name,
                 ha_cluster_sg, ha_cluster_sg_name,
-                from_port=self.elb_health_check_port)
+                from_port=cluster_sg_ingress_port)
 
         self.security_groups = {'ha_cluster': ha_cluster_sg, 'elb': elb_sg}
 
@@ -210,7 +207,7 @@ class HaCluster(Template):
         self.cluster_elb = self.add_elb(
             resource_name=self.name,
             security_groups=[self.security_groups['elb']],
-            ports=self.elb_ports,
+            listeners=self.elb_listeners,
             utility_bucket=self.utility_bucket,
             subnet_layer=elb_subnet_layer,
             scheme=self.elb_scheme,

@@ -685,57 +685,48 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    def add_elb(self, resource_name, ports, utility_bucket=None, instances=[], security_groups=[], ssl_cert_name='', depends_on=[], subnet_layer=None, scheme='internet-facing', health_check_protocol=None, health_check_port=None, health_check_path=''):
+    def add_elb(self, resource_name, listeners, utility_bucket=None, instances=[], security_groups=[], depends_on=[], subnet_layer=None, scheme='internet-facing', health_check_protocol='TCP', health_check_port=None, health_check_path=''):
         """
         Helper function creates an ELB and attaches it to your template
-        Ports should be a dictionary mapping ELB ports to Instance ports
-        SSL cert name must be included if using ELB port 443
-        TODO: Parameterize more stuff
+        Listeners should be a list of dictionaries, each containining:
+            elb_port - The port of the incoming connection to the ELB
+            elb_protocol (optional) - The protocol of the incoming connection to the ELB (i.e., 'HTTP', 'HTTPS', 'TCP', 'SSL')
+            instance_port (optional) - The port of the incoming connection to the instances
+            instance_protocol (optional) - The protocol of the incoming connection to the instances (i.e., 'HTTP', 'HTTPS', 'TCP', 'SSL')
+            ssl_cert_name (optional) - The name of the SSL cert in IAM (Only required if the elb_protocol is 'HTTPS' or 'SSL')
         """
-
-        # Create default stickiness policy
-        # TODO: this could be parameterized
+        # Create default session stickiness policy
+        # TODO: Parameterize the policy configuration (per listener?)
         stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
         stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
 
-        # Add the listeners, setting the correct protocol based on port number
-        # Also add the SSL cert if using port 443 (assuming it's already been created and uploaded to IAM)
-        listeners = []
-        for elb_port in ports:
-            if elb_port == tpc.HTTP_PORT:
-                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTP', InstanceProtocol='HTTP',
-                                 PolicyNames=[stickiness_policy_name]))
-            elif elb_port == tpc.HTTPS_PORT:
-                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='HTTPS', InstanceProtocol='HTTPS',
-                                 SSLCertificateId=Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name]),
-                                 PolicyNames=[stickiness_policy_name]))
-            else:
-                listeners.append(elb.Listener(LoadBalancerPort=elb_port, InstancePort=ports[elb_port], Protocol='TCP', InstanceProtocol='TCP'))
+        # Construct the listener objects based on the passed in listeners dictionary
+        elb_listeners = []
+        for listener in listeners:
 
-        # If health check port is not passed in, use highest priority available (443 > 80 > anything else)
-        if not health_check_port:
-            if tpc.HTTPS_PORT in ports:
-                health_check_port = ports[tpc.HTTPS_PORT]
-            elif tpc.HTTP_PORT in ports:
-                health_check_port = ports[tpc.HTTP_PORT]
-            else:
-                health_check_port = ports.values()[0]
+            elb_port = listener.get('elb_port')
+            elb_protocol = listener.get('elb_protocol').upper() if listener.get('elb_protocol') else 'TCP'
 
-        # If health_check_protocol is not passed in, set it based on the port (443 = HTTPS, 80 = HTTP, otherwise TCP)
-        if not health_check_protocol:
-            if health_check_port == tpc.HTTPS_PORT:
-                health_check_protocol = 'HTTPS'
-            elif health_check_port == tpc.HTTP_PORT:
-                health_check_protocol = 'HTTP'
-            else:
-                health_check_protocol = 'TCP'
+            # If back end parameters are not specified, use the values for the front end
+            instance_port = listener.get('instance_port') if listener.get('instance_port') else elb_port
+            instance_protocol = listener.get('instance_protocol').upper() if listener.get('instance_protocol') else elb_protocol
 
-        health_check_protocol = health_check_protocol.upper()
+            elb_listener = elb.Listener(Protocol=elb_protocol,
+                                        LoadBalancerPort=elb_port,
+                                        InstanceProtocol=instance_protocol,
+                                        InstancePort=instance_port)
+            
+            # SSL Cert must be included if using either SSL or HTTPS for elb_protocol
+            ssl_cert_name = listener.get('ssl_cert_name')
+            if ssl_cert_name:
+                elb_listener.SSLCertificateId = Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name])
 
-        if health_check_protocol == 'HTTP' or health_check_protocol == 'HTTPS':
-            health_check_target = "%s:%s/%s" % (health_check_protocol, health_check_port, health_check_path.lstrip('/'))
-        else:
-            health_check_target = "%s:%s" % (health_check_protocol, health_check_port)
+            # Create the default session stickiness policy for HTTP or HTTPS listeners 
+            # TODO: Parameterize whether or not to include this policy
+            if elb_protocol == 'HTTP' or elb_protocol == 'HTTPS':
+                elb_listener.PolicyNames = [stickiness_policy_name]
+
+            elb_listeners.append(elb_listener)
 
         if subnet_layer:
             subnet_type = self.get_subnet_type(subnet_layer)
@@ -751,16 +742,33 @@ class Template(t.Template):
             SecurityGroups=[Ref(sg) for sg in security_groups],
             CrossZone=True,
             LBCookieStickinessPolicy=[stickiness_policy],
-            HealthCheck=elb.HealthCheck(
-                HealthyThreshold=3,
-                UnhealthyThreshold=5,
-                Interval=30,
-                Target=health_check_target,
-                Timeout=5),
-            Listeners=listeners,
+            Listeners=elb_listeners,
             Instances=instances,
             Scheme=scheme,
             DependsOn=depends_on
+        )
+
+        # If the health_check_port was not specified, use the instance port of any of the listeners (elb_port is used if instance_port isn't set)
+        if not health_check_port:
+            health_check_port = [listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in listeners][0]
+
+
+        # Construct the ELB Health Check target based on the passed in health_check_protocol and health_check_port parameters
+        health_check_protocol = health_check_protocol.upper()
+        health_check_target = "%s:%s" % (health_check_protocol, health_check_port)
+
+        # Add the health check path for HTTP/S targets (i.e., '/version', '/about', etc.)
+        if health_check_protocol == 'HTTP' or health_check_protocol == 'HTTPS':
+            # Ensure exactly one '/' at the beginning of the path string
+            health_check_target += "/%s" % health_check_path.lstrip('/')
+
+        # TODO: Parameterize this stuff
+        elb_obj.HealthCheck = elb.HealthCheck(
+            HealthyThreshold=3,
+            UnhealthyThreshold=5,
+            Interval=30,
+            Target=health_check_target,
+            Timeout=5
         )
 
         # If an S3 utility bucket was passed in, set up the ELB access log

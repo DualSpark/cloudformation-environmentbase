@@ -52,7 +52,10 @@ class Bastion(Template):
         bastion_elb = self.add_elb(
             resource_name=self.name,
             security_groups=[security_groups['elb']],
-            ports={self.ingress_port: SSH_PORT},
+            listeners=[{
+                'elb_port': self.ingress_port,
+                'instance_port': SSH_PORT
+            }],
             utility_bucket=self.utility_bucket
         )
 

@@ -28,6 +28,7 @@ class HaCluster(Template):
                  elb_health_check_port=None,
                  elb_health_check_protocol=None,
                  elb_health_check_path='',
+                 elb_idle_timeout=None,
                  cname='',
                  custom_tags={},
                  creation_policy_timeout=None):
@@ -83,6 +84,9 @@ class HaCluster(Template):
 
         # The ELB health check path for the cluster (Only for HTTP and HTTPS)
         self.elb_health_check_path = elb_health_check_path
+
+        # The Idle Timeout for the ELB (how long your connection can stay idle before being terminated)
+        self.elb_idle_timeout = elb_idle_timeout
 
         # This is an optional fully qualified DNS name to create a CNAME in a private hosted zone
         self.cname = cname
@@ -214,6 +218,7 @@ class HaCluster(Template):
             utility_bucket=self.utility_bucket,
             subnet_layer=elb_subnet_layer,
             scheme=self.elb_scheme,
+            idle_timeout=self.elb_idle_timeout,
             health_check_port=self.elb_health_check_port,
             health_check_protocol=self.elb_health_check_protocol,
             health_check_path=self.elb_health_check_path

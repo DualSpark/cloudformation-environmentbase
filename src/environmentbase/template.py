@@ -685,7 +685,7 @@ class Template(t.Template):
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)
 
-    def add_elb(self, resource_name, listeners, utility_bucket=None, instances=[], security_groups=[], depends_on=[], subnet_layer=None, scheme='internet-facing', health_check_protocol='TCP', health_check_port=None, health_check_path=''):
+    def add_elb(self, resource_name, listeners, utility_bucket=None, instances=[], security_groups=[], depends_on=[], subnet_layer=None, scheme='internet-facing', health_check_protocol='TCP', health_check_port=None, health_check_path='', idle_timeout=None):
         """
         Helper function creates an ELB and attaches it to your template
         Listeners should be a list of dictionaries, each containining:
@@ -777,6 +777,10 @@ class Template(t.Template):
                 EmitInterval=5,
                 Enabled=True,
                 S3BucketName=utility_bucket)
+
+        # If the idle_timeout was passed in, create a ConnectionSettings object with the Idle Timeout
+        if idle_timeout:
+            elb_obj.ConnectionSettings = elb.ConnectionSettings(IdleTimeout=idle_timeout)
 
         return self.add_resource(elb_obj)
 

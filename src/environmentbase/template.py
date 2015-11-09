@@ -1,5 +1,5 @@
 from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select
-from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs
+from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs, cloudwatch
 from awacs import logs as awacs_logs, aws
 from awacs.helpers.trust import make_simple_assume_statement
 import troposphere as t
@@ -494,6 +494,46 @@ class Template(t.Template):
             if region_name not in self.mappings['RegionMap']:
                 self.mappings['RegionMap'][region_name] = {}
 
+    def add_scaling_policy(self,
+        metric_name,
+        asg_name,
+        adjustment_type="ChangeInCapacity",
+        cooldown=1,
+        scaling_adjustment=1):
+        policy = autoscaling.ScalingPolicy(
+            metric_name + 'ScalingPolicy',
+            AdjustmentType=adjustment_type,
+            AutoScalingGroupName=Ref(asg_name),
+            Cooldown=cooldown,
+            ScalingAdjustment=str(scaling_adjustment)
+            )
+        return self.add_resource(policy)
+
+    def add_cloudwatch_alarm(self, 
+        layer_name,
+        scaling_policy_name,
+        asg_name,
+        metric_name='CPUUtilization',
+        evaluation_periods=1,
+        statistic='Average',
+        threshold=10,
+        period=60,
+        namespace='AWS/EC2',
+        comparison_operator='GreaterThanThreshold'):
+
+        alarm = cloudwatch.Alarm(
+            layer_name + 'Alarm',
+            EvaluationPeriods=str(evaluation_periods),
+            Statistic=statistic,
+            Threshold=str(threshold),
+            Period=str(period),
+            AlarmActions=[Ref(scaling_policy_name)],
+            Namespace=namespace,
+            Dimensions=[cloudwatch.MetricDimension(Name="AutoScalingGroupName",Value=Ref(asg_name))],
+            ComparisonOperator=comparison_operator,
+            MetricName=metric_name)
+        return self.add_resource(alarm)
+
     def add_asg(self,
                 layer_name,
                 instance_profile=None,
@@ -508,7 +548,8 @@ class Template(t.Template):
                 root_volume_type=None,
                 include_ephemerals=True,
                 number_ephemeral_vols=2,
-                ebs_data_volumes=None,  # [{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}]
+                ebs_data_volumes=None,  # [{'size':'100', 'type':'gp2', 'delete_on_termination': True, 'iops': 4000, 'volume_type': 'io1'}],
+                scaling_policies=None,  # [{'metric_name':'MyCustomMetric', 'comparison_operator':'GreaterThanThreshold', threshold':10, scaling_adjustment: 1}]
                 custom_tags=None,
                 load_balancer=None,
                 instance_monitoring=False,
@@ -533,6 +574,7 @@ class Template(t.Template):
         @param include_ephemerals [Boolean] indicates that ephemeral volumes should be included in the block device mapping of the Launch Configuration
         @param number_ephemeral_vols [int] number of ephemeral volumes to attach within the block device mapping Launch Configuration
         @param ebs_data_volumes [list] dictionary pair of size and type data properties in a list used to create ebs volume attachments
+        @param scaling_policies [list] dictionaries describing scaling policies and their associated cloudwatch alarms
         @param custom_tags [Troposphere.autoscaling.Tag[]] Collection of Auto Scaling tags to be assigned to the Auto Scaling Group
         @param load_balancer [Troposphere.elasticloadbalancing.LoadBalancer] Object reference to an ELB to be assigned to this auto scaling group
         @param instance_monitoring [Boolean] indicates that detailed monitoring should be turned on for all instnaces launched within this Auto Scaling group
@@ -681,6 +723,27 @@ class Template(t.Template):
             auto_scaling_obj.Tags = custom_tags
         else:
             auto_scaling_obj.Tags = []
+
+        if scaling_policies is not None and len(scaling_policies) > 0:
+            for scaling_policy in scaling_policies:
+                policy_obj = self.add_scaling_policy(
+                    scaling_policy.get('metric_name'),
+                    auto_scaling_obj.name,
+                    scaling_adjustment=scaling_policy.get('scaling_adjustment'),
+                    adjustment_type=scaling_policy.get('adjustment_type','ChangeInCapacity'),
+                    cooldown=scaling_policy.get('cooldown',1))
+
+                self.add_cloudwatch_alarm(scaling_policy.get('metric_name'),
+                    policy_obj.name, 
+                    auto_scaling_obj.name,
+                    metric_name=scaling_policy.get('metric_name'),                    
+                    threshold=scaling_policy.get('threshold'),
+                    comparison_operator=scaling_policy.get('comparison_operator','GreaterThanThreshold'),
+                    evaluation_periods=scaling_policy.get('evaluation_periods',1),
+                    statistic=scaling_policy.get('statistic', 'Average'),
+                    period=scaling_policy.get('period', 60),
+                    namespace=scaling_policy.get('namespace','AWS/EC2'),
+                    )
 
         auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
         return self.add_resource(auto_scaling_obj)

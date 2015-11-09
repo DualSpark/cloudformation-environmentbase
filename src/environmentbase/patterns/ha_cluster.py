@@ -36,6 +36,7 @@ class HaCluster(Template):
                  elb_idle_timeout=None,
                  cname='',
                  custom_tags={},
+                 scaling_policies=None,
                  creation_policy_timeout=None):
         
         # This will be the name used in resource names and descriptions
@@ -92,6 +93,9 @@ class HaCluster(Template):
         self.custom_tags = []
         for key, value in custom_tags.iteritems():
             self.custom_tags.append(autoscaling.Tag(key, value, True))
+
+        # A list of dictionaries describing scaling policies to be passed to add_asg
+        self.scaling_policies = scaling_policies
 
         super(HaCluster, self).__init__(template_name=self.name)
 
@@ -272,8 +276,9 @@ class HaCluster(Template):
             subnet_layer=self.subnet_layer,
             instance_profile=self.instance_profile,
             custom_tags=self.custom_tags,
-            creation_policy=self.creation_policy
-        )
+            creation_policy=self.creation_policy,
+            scaling_policies=self.scaling_policies
+        )        
 
     def add_outputs(self):
         """

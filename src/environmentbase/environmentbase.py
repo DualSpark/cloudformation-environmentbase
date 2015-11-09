@@ -605,8 +605,7 @@ class EnvironmentBase(object):
             def stack_event_hook(self, event_data):
                 elb_dns_name = self.get_stack_output(event_data['id'], 'ElbDnsName')
         """
-        # This should return exactly one stack, since we're using the Physical ID
-        stack_obj = self.get_cfn_connection().describe_stacks(stack_id)[0]
+        stack_obj = self.get_cfn_stack_obj(stack_id)
 
         for output in stack_obj.outputs:
             if output.key == output_name:
@@ -614,6 +613,13 @@ class EnvironmentBase(object):
 
         # If the output wasn't found in the stack, raise an exception
         raise Exception("%s did not output %s" % (stack_obj.stack_name, output_name))
+
+
+    def get_cfn_stack_obj(self, stack_id):
+        """
+        Given the unique physical stack ID, return exactly one cloudformation stack object
+        """
+        return self.get_cfn_connection().describe_stacks(stack_id)[0]
 
 
     def get_cfn_connection(self):

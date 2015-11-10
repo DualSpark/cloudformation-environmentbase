@@ -71,6 +71,13 @@ def load_file(parent, basename):
     if not file_path:
         raise Exception("%s does not exist. Try running the init command to generate it.\n" % (basename + EXTENSIONS[0]))
 
+    return load_yaml_file(file_path)
+
+def load_yaml_file(file_path):
+
+    if not os.path.isfile(file_path):
+        raise Exception('{} does not exist'.format(file_path))
+
     with open(file_path, 'r') as f:
         try:
             content = f.read()

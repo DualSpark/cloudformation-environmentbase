@@ -544,7 +544,7 @@ class EnvironmentBase(object):
 
         self.manual_parameter_bindings['utilityBucket'] = self.template.utility_bucket
 
-        ami_cache = res.load_file('', res.DEFAULT_AMI_CACHE_FILENAME)
+        ami_cache = res.load_yaml_file(self.config.get('template').get('ami_map_file'))
         self.template.add_ami_mapping(ami_cache)
 
     def generate_ami_cache(self):

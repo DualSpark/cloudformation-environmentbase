@@ -103,7 +103,7 @@ class StackMonitor(object):
                 msg_body = parsed_msg['Message']
 
                 # parse k='val' into a dict
-                parsed_msg = {k: v.strip("'") for k, v in re.findall(r"(\S+)=('.*?'|\S+)", msg_body)}
+                parsed_msg = {k: v.strip("'") for k, v in re.findall(r"(\S+)=('.*?'|\S+)", msg_body, flags=re.DOTALL)}
 
                 # remember the most interesting outputs
                 data = {
@@ -116,10 +116,14 @@ class StackMonitor(object):
                 }
 
                 # attempt to parse the properties
-                try:
-                    data['props'] = json.loads(data['props'])
-                except ValueError:
-                    pass
+                if data.get('props'):
+                    try:
+                        data['props'] = json.loads(data['props'])
+                    except (ValueError, TypeError):
+                        print "\nFailed to parse properties for event:\n{}\n".format(data['props'])
+                        print "\nRaw Message Body:\n{}\n".format(msg_body)
+                        print "\nParsed Message:\n{}\n".format(parsed_msg)
+                        pass
 
                 if debug:
                     print "New Stack Event --------------\n", \

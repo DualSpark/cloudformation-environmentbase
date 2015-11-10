@@ -8,6 +8,7 @@
 /runpy
 /build
 /dist
+/stack_outputs
 src/cfn_environment_base.egg-info/
 ami_cache.*
 config.*

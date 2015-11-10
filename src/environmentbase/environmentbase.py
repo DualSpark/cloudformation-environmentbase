@@ -106,6 +106,14 @@ class EnvironmentBase(object):
         """
         pass
 
+    def stack_event_hook_wrapper(self, event_data):
+        """
+        Write the stack outputs to file before calling the stack_event_hook that the user overrides
+        """
+        if self.config.get('global').get('write_stack_outputs'):
+            self.write_stack_outputs_to_file(event_data)
+        self.stack_event_hook(event_data)
+
     def stack_event_hook(self, event_data):
         """
         Extension point for reacting to the cloudformation stack event stream.  If global.monitor_stack is enabled in
@@ -595,6 +603,40 @@ class EnvironmentBase(object):
         into the current template
         """
         self.template.add_child_template(child_template, merge=merge, depends_on=depends_on)
+
+
+    def write_stack_outputs_to_file(self, event_data):
+        """
+        Given the stack event data, determine if the stack has finished executing (CREATE_COMPLETE or UPDATE_COMPLETE)
+        If it has, write the stack outputs to file
+        """
+        if event_data['type'] == 'AWS::CloudFormation::Stack' and \
+        (event_data['status'] == 'CREATE_COMPLETE' or event_data['status'] == 'UPDATE_COMPLETE'):
+            self.write_stack_output_to_file(stack_id=event_data['id'], stack_name=event_data['name'])
+
+
+    def write_stack_output_to_file(self, stack_id, stack_name):
+        """
+        Given a CFN stack's physical resource ID, query the stack for its outputs
+        Save outputs to file as JSON at ./stack_outputs/<stack_name>.json
+        """
+        # Grab all the outputs from the cfn stack object as k:v pairs
+        stack_outputs = {}
+        for output in self.get_cfn_stack_obj(stack_id).outputs:
+            stack_outputs[output.key] = output.value
+
+        # Ensure the stack_outputs directory exists
+        stack_outputs_dir = 'stack_outputs'
+        if not os.path.isdir(stack_outputs_dir):
+            os.mkdir(stack_outputs_dir)
+
+        # Write the JSON-formatted stack outputs to ./stack_outputs/<stack_name>.json
+        stack_output_filename = os.path.join(stack_outputs_dir, stack_name + '.json')
+        with open(stack_output_filename, 'w') as output_file:
+            output_file.write(json.dumps(stack_outputs, indent=4, separators=(',', ':')))
+
+        if self.globals['print_debug']:
+            print "Outputs for {0} written to {1}\n".format(stack_name, stack_output_filename)
 
 
     def get_stack_output(self, stack_id, output_name):

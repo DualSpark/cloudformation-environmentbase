@@ -138,7 +138,7 @@ class StackMonitor(object):
                 # process handlers
                 handlers_to_remove = []
                 for handler in self.stack_event_handlers:
-                    if handler.stack_event_hook(data):
+                    if handler.stack_event_hook_wrapper(data):
                         handlers_to_remove.append(handler)
 
                 # once a handlers job is done no need to keep checking for more events

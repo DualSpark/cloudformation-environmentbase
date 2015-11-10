@@ -2,7 +2,8 @@
     "global": {
         "print_debug": false,
         "environment_name": "environmentbase",
-        "monitor_stack": false
+        "monitor_stack": false,
+        "write_stack_outputs": false
     },
     "template": {
         "ami_map_file": "ami_cache.json",

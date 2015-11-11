@@ -449,7 +449,7 @@ class EnvironmentBase(object):
                     env_value = False
 
                 default_value = config.get(key)
-                config[key] = env_value if env_value else default_value
+                config[key] = env_value if env_value is not None else default_value
 
                 if env_value is not None:
                     print "* Updating %s from '%s' to value of '%s'" % (new_path, default_value, env_name)

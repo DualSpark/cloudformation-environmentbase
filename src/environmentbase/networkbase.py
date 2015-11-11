@@ -1,7 +1,7 @@
 import json
 from itertools import product, chain
 
-from troposphere import Ref, Parameter, FindInMap
+from troposphere import Ref, Parameter, FindInMap, Output
 import troposphere.ec2 as ec2
 import boto.vpc
 import boto
@@ -161,8 +161,9 @@ class NetworkBase(EnvironmentBase):
                     self.template._subnets[subnet_type][subnet_layer] = []
 
                 # Create the subnet
+                subnet_name = subnet_layer + 'AZ' + str(index)
                 subnet = self.template.add_resource(ec2.Subnet(
-                    subnet_layer + 'AZ' + str(index),
+                    subnet_name,
                     AvailabilityZone=AvailabilityZone,
                     VpcId=self.template.vpc_id,
                     CidrBlock=CidrBlock,
@@ -171,6 +172,8 @@ class NetworkBase(EnvironmentBase):
                         ]))
 
                 self.template._subnets[subnet_type][subnet_layer].append(subnet)
+
+                self.template.add_output(Output(subnet_name, Value=CidrBlock))
 
                 # Create the routing table
                 route_table = self.template.add_resource(ec2.RouteTable(

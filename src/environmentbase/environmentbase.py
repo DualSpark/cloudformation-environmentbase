@@ -4,7 +4,7 @@ import copy
 import re
 import botocore.exceptions
 from boto import cloudformation, sts
-from troposphere import Parameter
+from troposphere import Parameter, Output
 from template import Template
 import cli
 import resources as res
@@ -547,8 +547,10 @@ class EnvironmentBase(object):
             ConstraintDescription=res.get_str('ec2_key_message')
         ))
 
-        self.template.add_utility_bucket(
-            name=self.config.get('logging').get('s3_bucket'))
+        bucket_name = self.config.get('logging').get('s3_bucket')
+
+        self.template.add_utility_bucket(name=bucket_name)
+        self.template.add_output(Output('utilityBucket',Value=bucket_name))
 
         self.manual_parameter_bindings['utilityBucket'] = self.template.utility_bucket
 

@@ -63,6 +63,7 @@ class NetworkBase(EnvironmentBase):
                         ToPort='22',
                         IpProtocol='tcp',
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
+        self.template.add_output(Output('commonSecurityGroupId', Value=self.template.common_security_group))
 
         for x in range(0, az_count):
             self.template._azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
@@ -124,6 +125,8 @@ class NetworkBase(EnvironmentBase):
                 EnableDnsSupport=True,
                 EnableDnsHostnames=True,
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
+
+        self.template.add_output(Output('vpcId', Value=self.template.vpc_id))
 
         self.template._vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 

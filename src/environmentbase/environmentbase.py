@@ -437,7 +437,7 @@ class EnvironmentBase(object):
                 if print_debug:
                     print "Checking %s (%s)" % (env_name, new_path)
 
-                if not env_value:
+                if env_value is None:
                     continue
 
                 # TODO: Need better schema validation for non-string values from env vars
@@ -451,7 +451,7 @@ class EnvironmentBase(object):
                 default_value = config.get(key)
                 config[key] = env_value if env_value else default_value
 
-                if env_value:
+                if env_value is not None:
                     print "* Updating %s from '%s' to value of '%s'" % (new_path, default_value, env_name)
 
             else:

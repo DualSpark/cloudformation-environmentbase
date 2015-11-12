@@ -52,7 +52,6 @@ class Template(t.Template):
         self._igw = None
         self._child_templates = []
         self.manual_parameter_bindings = {}
-        self.resource_path = ''
 
         self._azs = []
         self._subnets = {}
@@ -1146,31 +1145,43 @@ class Template(t.Template):
         return stack_params
 
     def process_child_template(self, child_template, merge, depends_on):
+
+        # This merges all attributes from the two stacks together, so all this parameter binding is unnecessary
         if merge:
             self.merge(child_template)
             return
 
+        # Add parameters from parent stack before executing build_hook
         child_template.add_common_parameters_from_parent(self)
         child_template.build_hook()
 
-        # assemble parameters
+        # Match the stack parameters with parent stack parameter values and manual parameter bindings
         stack_params = self.match_stack_parameters(child_template)
 
-        # assemble template path
-        full_s3_path = utility.get_template_s3_url(Template.template_bucket, child_template.resource_path)
+        # Construct the resource path based on the prefix + name + timestamp
+        child_template.resource_path = utility.get_template_s3_resource_path(
+            prefix=Template.s3_path_prefix,
+            template_name=child_template.name,
+            include_timestamp=Template.include_timestamp)
+
+        # Construct the template url using the bucket name and resource path
+        template_s3_url = utility.get_template_s3_url(Template.template_bucket, child_template.resource_path)
 
         # create stack
         stack_obj = cf.Stack(
             child_template.name + 'Stack',
-            TemplateURL=full_s3_path,
+            TemplateURL=template_s3_url,
             Parameters=stack_params,
             TimeoutInMinutes=Template.stack_timeout,
             DependsOn=depends_on)
 
         return self.add_resource(stack_obj)
 
-    # Return the subnet type (public/private) that subnet_layer belongs to
+
     def get_subnet_type(self, subnet_layer):
+        """
+        Return the subnet type (public/private) that subnet_layer belongs to
+        """
         for subnet_type in self._subnets:
             for a_subnet_layer in self._subnets[subnet_type]:
                 if a_subnet_layer == subnet_layer:

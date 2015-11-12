@@ -147,34 +147,22 @@ class EnvironmentBase(object):
         return template_dir
 
     @staticmethod
-    def serialize_templates_helper(template, s3_client, template_upload_acl, template_config, is_root_template=False):
+    def serialize_templates_helper(template, s3_client):
 
-        # We can't include the timestamp for the root template because we use
-        # naming conventions to locate it during the deploy command
-        include_timestamp = template_config.get('include_timestamp') and not is_root_template
-
-        # Construct the template path using the bucket name, template_prefix, template_name, and optional timestamp
-        template.resource_path = utility.get_template_s3_resource_path(
-                prefix=template_config.get('s3_prefix'),
-                template_name=template.name,
-                include_timestamp=include_timestamp)
-
+        # Create stack resources for template and all child templates
         raw_json = template.to_template_json()
 
-        # Recursive call for all the child templates
+        # Recursively iterate through each child template to serialize it and process its children
         for child, _, _ in template._child_templates:
             EnvironmentBase.serialize_templates_helper(
                 template=child,
-                s3_client=s3_client,
-                template_upload_acl=template_upload_acl,
-                template_config=template_config,
-                is_root_template=False)
+                s3_client=s3_client)
 
         # Upload the template to the s3 bucket under the template_prefix
         s3_client.Bucket(Template.template_bucket).put_object(
             Key=template.resource_path,
             Body=raw_json,
-            ACL=template_upload_acl
+            ACL=Template.upload_acl
         )
 
         # Save the template locally with the same file hierarchy as on s3
@@ -193,10 +181,7 @@ class EnvironmentBase(object):
 
         EnvironmentBase.serialize_templates_helper(
             template=self.template,
-            s3_client=s3_client,
-            template_upload_acl=self.template_args.get('s3_upload_acl'),
-            template_config=self.config.get('template'),
-            is_root_template=True)
+            s3_client=s3_client)
 
     def estimate_cost(self, template_name=None, template_url=None, stack_params=None):
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
@@ -215,17 +200,24 @@ class EnvironmentBase(object):
 
         return estimate_cost_url.get('Url')
 
+
+    def _root_template_path(self):
+        """
+        Construct the root template resource path
+        It never includes a timestamp because we need to find it by convention in the deploy step
+        """
+        return utility.get_template_s3_resource_path(
+            prefix=self.template_args.get('s3_prefix'),
+            template_name=self.globals.get('environment_name'),
+            include_timestamp=False)
+
     def _root_template_url(self):
-        environment_name = self.globals['environment_name']
-        prefix = self.template_args["s3_prefix"]
-
-        # Root template never gets a timestamp, because we need to find it by convention in the deploy step
-        template_resource_path = utility.get_template_s3_resource_path(prefix, environment_name, include_timestamp=False)
-
-        bucket = self.template_args['s3_bucket']
-        template_url = utility.get_template_s3_url(bucket, template_resource_path)
-
-        return template_url
+        """
+        Construct the root template S3 URL
+        """
+        return utility.get_template_s3_url(
+            bucket_name=self.template_args.get('s3_bucket'),
+            resource_path=self._root_template_path())
 
     def create_action(self):
         """
@@ -233,7 +225,6 @@ class EnvironmentBase(object):
         Initializes a new template instance, and write it to file.
         """
         self.load_config()
-
         self.initialize_template()
 
         # Do custom troposphere resource creation in your overridden copy of this method
@@ -259,7 +250,7 @@ class EnvironmentBase(object):
                 NotificationARNs=notification_arns,
                 Capabilities=['CAPABILITY_IAM'])
             is_successful = True
-            print "Successfully issued update stack command for %s\n" % stack_name
+            print "\nSuccessfully issued update stack command for %s\n" % stack_name
 
         # Else stack doesn't currently exist, create a new stack
         except botocore.exceptions.ClientError as update_e:
@@ -274,7 +265,7 @@ class EnvironmentBase(object):
                         DisableRollback=True,
                         TimeoutInMinutes=TIMEOUT)
                     is_successful = True
-                    print "Successfully issued create stack command for %s\n" % stack_name
+                    print "\nSuccessfully issued create stack command for %s\n" % stack_name
                 except botocore.exceptions.ClientError as create_e:
                     print "Deploy failed: \n\n%s\n" % create_e.message
             else:
@@ -344,7 +335,7 @@ class EnvironmentBase(object):
         stack_name = self.config['global']['environment_name']
 
         cfn_conn.delete_stack(StackName=stack_name)
-        print "Successfully issued delete stack command for %s\n" % stack_name
+        print "\nSuccessfully issued delete stack command for %s\n" % stack_name
 
     def _validate_config_helper(self, schema, config, path):
         # Check each requirement
@@ -533,10 +524,6 @@ class EnvironmentBase(object):
             self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
             self.stack_monitor.add_handler(self)
 
-        # configure Template class with S3 settings
-        Template.template_bucket = self.template_args.get('s3_bucket')
-        Template.s3_path_prefix = self.template_args.get("s3_prefix")
-        Template.stack_timeout = self.template_args.get("timeout_in_minutes")
 
     def initialize_template(self):
         """
@@ -544,9 +531,17 @@ class EnvironmentBase(object):
         """
         print '\nGenerating templates for {} stack\n'.format(self.globals['environment_name'])
 
-        self.template = Template(self.globals.get('environment_name', 'default_template'))
+        # Configure Template class with S3 settings from config
+        Template.template_bucket = self.template_args.get('s3_bucket')
+        Template.s3_path_prefix = self.template_args.get("s3_prefix")
+        Template.stack_timeout = self.template_args.get("timeout_in_minutes")
+        Template.upload_acl = self.template_args.get('s3_upload_acl')
+        Template.include_timestamp = self.template_args.get('include_timestamp')
 
+        # Create the root template object
+        self.template = Template(self.globals.get('environment_name', 'default_template'))
         self.template.description = self.template_args.get('description', 'No Description Specified')
+        self.template.resource_path = self._root_template_path()
 
         ec2_key = self.config.get('template').get('ec2_key_default', 'default-key')
         self.template._ec2_key = self.template.add_parameter(Parameter(

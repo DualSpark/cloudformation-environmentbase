@@ -220,10 +220,10 @@ class EnvironmentBase(object):
         prefix = self.template_args["s3_prefix"]
 
         # Root template never gets a timestamp, because we need to find it by convention in the deploy step
-        template_resource_path = utility.template_s3_resource_path(prefix, environment_name, include_timestamp=False)
+        template_resource_path = utility.get_template_s3_resource_path(prefix, environment_name, include_timestamp=False)
 
         bucket = self.template_args['s3_bucket']
-        template_url = utility.template_s3_url(bucket, template_resource_path)
+        template_url = utility.get_template_s3_url(bucket, template_resource_path)
 
         return template_url
 

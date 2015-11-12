@@ -11,6 +11,7 @@
         "s3_bucket": "dualspark",
         "s3_prefix": "templates",
         "s3_upload_acl": "public-read",
+        "include_timestamp": true,
         "timeout_in_minutes": "60",
         "ec2_key_default": "dualspark_rsa"
     },

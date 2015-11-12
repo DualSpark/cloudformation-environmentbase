@@ -46,7 +46,7 @@ def tropo_to_string(snippet, indent=4, sort_keys=True, separators=(',', ': ')):
     return json.dumps(snippet, cls=t.awsencode, indent=indent, sort_keys=sort_keys, separators=separators)
 
 
-def template_s3_resource_path(prefix, template_name, include_timestamp=True):
+def get_template_s3_resource_path(prefix, template_name, include_timestamp=True):
     """
     Constructs s3 resource path for provided template name
     :param prefix: S3 base path (marts after url port and hostname)
@@ -61,7 +61,7 @@ def template_s3_resource_path(prefix, template_name, include_timestamp=True):
     return "%s/%s.template" % (prefix, template_name)
 
 
-def template_s3_url(bucket_name, resource_path):
+def get_template_s3_url(bucket_name, resource_path):
     """
     Constructs S3 URL from bucket name and resource path.
     :param bucket_name: S3 bucket name

@@ -16,7 +16,6 @@ import logging
 import json
 
 TIMEOUT = 60
-TEMPLATES_PATH = 'templates'
 
 
 class ValidationError(Exception):
@@ -142,50 +141,62 @@ class EnvironmentBase(object):
         self.generate_ami_cache()
 
     def _ensure_template_dir_exists(self):
-        parent_dir = TEMPLATES_PATH
-        if not os.path.exists(parent_dir):
-            os.makedirs(parent_dir)
-        return TEMPLATES_PATH
+        template_dir = self.config.get('template').get('s3_prefix')
+        if not os.path.exists(template_dir):
+            os.makedirs(template_dir)
+        return template_dir
 
     @staticmethod
-    def serialize_templates_helper(template, s3_client, template_upload_acl, local_template_dir=None):
-        resource_path = template.resource_path
+    def serialize_templates_helper(template, s3_client, template_upload_acl, template_config, is_root_template=False):
+
+        # We can't include the timestamp for the root template because we use
+        # naming conventions to locate it during the deploy command
+        include_timestamp = template_config.get('include_timestamp') and not is_root_template
+
+        # Construct the template path using the bucket name, template_prefix, template_name, and optional timestamp
+        template.resource_path = utility.get_template_s3_resource_path(
+                prefix=template_config.get('s3_prefix'),
+                template_name=template.name,
+                include_timestamp=include_timestamp)
+
         raw_json = template.to_template_json()
 
+        # Recursive call for all the child templates
         for child, _, _ in template._child_templates:
-            EnvironmentBase.serialize_templates_helper(child, s3_client, template_upload_acl, local_template_dir)
+            EnvironmentBase.serialize_templates_helper(
+                template=child,
+                s3_client=s3_client,
+                template_upload_acl=template_upload_acl,
+                template_config=template_config,
+                is_root_template=False)
 
+        # Upload the template to the s3 bucket under the template_prefix
         s3_client.Bucket(Template.template_bucket).put_object(
-            Key=resource_path,
+            Key=template.resource_path,
             Body=raw_json,
             ACL=template_upload_acl
         )
 
-        stack_url = utility.template_s3_url(Template.template_bucket, resource_path)
-        print "Writing template to", stack_url
+        # Save the template locally with the same file hierarchy as on s3
+        with open(template.resource_path, 'w') as output_file:
+            reloaded_template = json.loads(raw_json)
+            output_file.write(json.dumps(reloaded_template, indent=4, separators=(',', ':')))
 
-        if local_template_dir:
-            local_file_name = template.name + '.template'
-            local_file_path = os.path.join(local_template_dir, local_file_name)
-            with open(local_file_path, 'w') as output_file:
-                reloaded_template = json.loads(raw_json)
-                output_file.write(json.dumps(reloaded_template, indent=4, separators=(',', ':')))
+        print "Generated {} template".format(template.name)
+        print "S3:\t{}".format(utility.get_template_s3_url(Template.template_bucket, template.resource_path))
+        print "Local:\t{}\n".format(template.resource_path)
 
-                print "Local:", local_file_path
-
-        print
 
     def serialize_templates(self):
         s3_client = utility.get_boto_resource(self.config, 's3')
-
-        local_file_path = None
-        if self.globals['print_debug']:
-            local_file_path = self._ensure_template_dir_exists()
+        local_file_path = self._ensure_template_dir_exists()
 
         EnvironmentBase.serialize_templates_helper(
-            self.template, s3_client,
-            self.template_args.get('s3_upload_acl'),
-            local_template_dir=local_file_path)
+            template=self.template,
+            s3_client=s3_client,
+            template_upload_acl=self.template_args.get('s3_upload_acl'),
+            template_config=self.config.get('template'),
+            is_root_template=True)
 
     def estimate_cost(self, template_name=None, template_url=None, stack_params=None):
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
@@ -204,9 +215,11 @@ class EnvironmentBase(object):
 
         return estimate_cost_url.get('Url')
 
-    def _template_url(self):
+    def _root_template_url(self):
         environment_name = self.globals['environment_name']
         prefix = self.template_args["s3_prefix"]
+
+        # Root template never gets a timestamp, because we need to find it by convention in the deploy step
         template_resource_path = utility.template_s3_resource_path(prefix, environment_name, include_timestamp=False)
 
         bucket = self.template_args['s3_bucket']
@@ -235,7 +248,7 @@ class EnvironmentBase(object):
         if sns_topic:
             notification_arns.append(sns_topic.arn)
 
-        template_url = self._template_url()
+        template_url = self._root_template_url()
 
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         try:
@@ -529,9 +542,9 @@ class EnvironmentBase(object):
         """
         Create new Template instance, set description and common parameters and load AMI cache.
         """
-        print 'Generating template for %s stack\n' % self.globals['environment_name']
+        print '\nGenerating templates for {} stack\n'.format(self.globals['environment_name'])
 
-        self.template = Template(self.globals.get('environment_name', 'default_template'), root_template=True)
+        self.template = Template(self.globals.get('environment_name', 'default_template'))
 
         self.template.description = self.template_args.get('description', 'No Description Specified')
 

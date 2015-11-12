@@ -36,7 +36,7 @@ class Template(t.Template):
     """
     stack_timeout = '60'
 
-    def __init__(self, template_name, root_template=False):
+    def __init__(self, template_name):
         """
         Init method for environmentbase.Template class
         @param template_name [string] - name of this template, used when identifying this template when uploading, etc.
@@ -52,12 +52,10 @@ class Template(t.Template):
         self._igw = None
         self._child_templates = []
         self.manual_parameter_bindings = {}
-        self._resource_path = ''
+        self.resource_path = ''
 
         self._azs = []
         self._subnets = {}
-
-        self._is_root_template = root_template
 
     def _ref_maybe(self, item):
         """
@@ -122,16 +120,6 @@ class Template(t.Template):
     @property
     def subnets(self):
         return self._ref_maybe(self._subnets)
-
-    @property
-    def resource_path(self):
-        if not self._resource_path:
-            include_timestamp = not self._is_root_template
-            self._resource_path = utility.template_s3_resource_path(
-                Template.s3_path_prefix,
-                self.name,
-                include_timestamp=include_timestamp)
-        return self._resource_path
 
     def __get_template_hash(self):
         """
@@ -1169,7 +1157,7 @@ class Template(t.Template):
         stack_params = self.match_stack_parameters(child_template)
 
         # assemble template path
-        full_s3_path = utility.template_s3_url(Template.template_bucket, child_template.resource_path)
+        full_s3_path = utility.get_template_s3_url(Template.template_bucket, child_template.resource_path)
 
         # create stack
         stack_obj = cf.Stack(

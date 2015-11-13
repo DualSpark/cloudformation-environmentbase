@@ -612,7 +612,7 @@ class EnvironmentBase(object):
         :param merge: Determines whether the resource is attached as a child template or all of its resources merged
         into the current template
         """
-        self.template.add_child_template(child_template, merge=merge, depends_on=depends_on)
+        return self.template.add_child_template(child_template, merge=merge, depends_on=depends_on)
 
 
     def write_stack_outputs_to_file(self, event_data):

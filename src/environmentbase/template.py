@@ -1093,6 +1093,7 @@ class Template(t.Template):
     def add_child_template(self, child_template, merge=False, depends_on=[]):
         child_template_entry = (child_template, merge, depends_on)
         self._child_templates.append(child_template_entry)
+        return child_template
 
     def process_child_templates(self):
         stack_outputs = {}

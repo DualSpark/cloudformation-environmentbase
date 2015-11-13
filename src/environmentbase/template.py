@@ -51,6 +51,7 @@ class Template(t.Template):
         self._utility_bucket = None
         self._igw = None
         self._child_templates = []
+        self._child_template_references = []
         self.manual_parameter_bindings = {}
 
         self._azs = []
@@ -1095,16 +1096,81 @@ class Template(t.Template):
         self._child_templates.append(child_template_entry)
         return child_template
 
-    def process_child_templates(self):
-        stack_outputs = {}
-        for (child_template, merge, depends_on) in self._child_templates:
+    def add_child_template_reference(self, template_name, template_url, stack_params={}, reference_template=None, depends_on=[]):
+        """
+        Use to create a child stack from a template that is not defined in this environment
+        Useful for B/G deployments
+        Note: Use either one of stack_params or reference_template, not both
+                reference_template will copy the parameters from the reference template into this one
+                stack_params lets you provide your own dictionary of Stack Parameters
+        """
+        template_reference_entry = (template_name, template_url, stack_params, reference_template, depends_on)
+        self._child_template_references.append(template_reference_entry)
 
+    def process_child_templates(self):
+        """
+        Iterate through and process the generated child template and child template reference lists
+        References must be processed after child templates because they may reference the native child 
+        templates to copy their parameters over, and the parameters do not exist until processed
+        """
+        for (child_template, merge, depends_on) in self._child_templates:
             self.process_child_template(child_template, merge, depends_on)
 
-            # # TODO: output autowiring feature, disambiguation of output sources
-            # for output in child_template.outputs:
-            #     stack_outputs[output.name] = child_template
+        for (template_name, template_url, stack_params, reference_template, depends_on) in self._child_template_references:
+            self.process_child_template_reference(template_name, template_url, stack_params, reference_template, depends_on)
 
+        # # TODO: output autowiring feature, disambiguation of output sources
+        # stack_outputs = {}
+        # for output in child_template.outputs:
+        #     stack_outputs[output.name] = child_template
+
+    def process_child_template(self, child_template, merge, depends_on):
+
+        # This merges all attributes from the two stacks together, so all this parameter binding is unnecessary
+        if merge:
+            self.merge(child_template)
+            return
+
+        # Add parameters from parent stack before executing build_hook
+        child_template.add_common_parameters_from_parent(self)
+        child_template.build_hook()
+
+        # Match the stack parameters with parent stack parameter values and manual parameter bindings
+        stack_params = self.match_stack_parameters(child_template)
+
+        # Construct the resource path based on the prefix + name + timestamp
+        child_template.resource_path = utility.get_template_s3_resource_path(
+            prefix=Template.s3_path_prefix,
+            template_name=child_template.name,
+            include_timestamp=Template.include_timestamp)
+
+        # Construct the template url using the bucket name and resource path
+        template_s3_url = utility.get_template_s3_url(Template.template_bucket, child_template.resource_path)
+
+        # create stack
+        stack_obj = cf.Stack(
+            child_template.name + 'Stack',
+            TemplateURL=template_s3_url,
+            Parameters=stack_params,
+            TimeoutInMinutes=Template.stack_timeout,
+            DependsOn=depends_on)
+
+        return self.add_resource(stack_obj)
+
+    def process_child_template_reference(self, template_name, template_url, stack_params, reference_template, depends_on):
+        # A reference template from within this environment may be used to define the parameter values
+        # Useful when referencing a corresponding template from an old deployment with the same parameters
+        if reference_template:
+            stack_params = self.match_stack_parameters(reference_template)
+
+        stack_obj = cf.Stack(
+            template_name + 'Stack',
+            TemplateURL=template_url,
+            Parameters=stack_params,
+            TimeoutInMinutes=Template.stack_timeout,
+            DependsOn=depends_on)
+
+        return self.add_resource(stack_obj)
 
     def match_stack_parameters(self, child_template):
         stack_params = {}
@@ -1144,39 +1210,6 @@ class Template(t.Template):
                 stack_params[parameter] = Ref(new_param)
 
         return stack_params
-
-    def process_child_template(self, child_template, merge, depends_on):
-
-        # This merges all attributes from the two stacks together, so all this parameter binding is unnecessary
-        if merge:
-            self.merge(child_template)
-            return
-
-        # Add parameters from parent stack before executing build_hook
-        child_template.add_common_parameters_from_parent(self)
-        child_template.build_hook()
-
-        # Match the stack parameters with parent stack parameter values and manual parameter bindings
-        stack_params = self.match_stack_parameters(child_template)
-
-        # Construct the resource path based on the prefix + name + timestamp
-        child_template.resource_path = utility.get_template_s3_resource_path(
-            prefix=Template.s3_path_prefix,
-            template_name=child_template.name,
-            include_timestamp=Template.include_timestamp)
-
-        # Construct the template url using the bucket name and resource path
-        template_s3_url = utility.get_template_s3_url(Template.template_bucket, child_template.resource_path)
-
-        # create stack
-        stack_obj = cf.Stack(
-            child_template.name + 'Stack',
-            TemplateURL=template_s3_url,
-            Parameters=stack_params,
-            TimeoutInMinutes=Template.stack_timeout,
-            DependsOn=depends_on)
-
-        return self.add_resource(stack_obj)
 
 
     def get_subnet_type(self, subnet_layer):

@@ -37,7 +37,8 @@ class HaCluster(Template):
                  cname='',
                  custom_tags={},
                  scaling_policies=None,
-                 creation_policy_timeout=None):
+                 creation_policy_timeout=None,
+                 allow_default_ingress=True):
         
         # This will be the name used in resource names and descriptions
         self.name = name
@@ -97,6 +98,10 @@ class HaCluster(Template):
         # A list of dictionaries describing scaling policies to be passed to add_asg
         self.scaling_policies = scaling_policies
 
+        # Indicates whether ingress rules should be added to the ELB for type-appropriate CIDR ranges 
+        # Internet facing ELBs would allow ingress from PUBLIC_ACCESS_CIDR and private ELBs will allow ingress from the VPC CIDR
+        self.allow_default_ingress = allow_default_ingress
+
         super(HaCluster, self).__init__(template_name=self.name)
 
 
@@ -149,13 +154,16 @@ class HaCluster(Template):
         Creates security groups for both ASG and ELB and opens the ports between them
         Sets self.security_groups as a dictionary with two security_groups: ha_cluster and elb
         """
-        # Determine ingress rules for ELB security -- open to internet for internet-facing ELB, open to VPC for internal ELB
-        access_cidr = PUBLIC_ACCESS_CIDR if self.elb_scheme == SCHEME_INTERNET_FACING else self.vpc_cidr
 
-        # Create the ingress rules to the ELB security group
         elb_sg_ingress_rules = []
-        for elb_port in [listener.get('elb_port') for listener in self.elb_listeners]:
-            elb_sg_ingress_rules.append(ec2.SecurityGroupRule(FromPort=elb_port, ToPort=elb_port, IpProtocol='tcp', CidrIp=access_cidr))
+        
+        if self.allow_default_ingress:
+            # Determine ingress rules for ELB security -- open to internet for internet-facing ELB, open to VPC for internal ELB
+            access_cidr = PUBLIC_ACCESS_CIDR if self.elb_scheme == SCHEME_INTERNET_FACING else self.vpc_cidr
+
+            # Add the ingress rules to the ELB security group        
+            for elb_port in [listener.get('elb_port') for listener in self.elb_listeners]:
+                elb_sg_ingress_rules.append(ec2.SecurityGroupRule(FromPort=elb_port, ToPort=elb_port, IpProtocol='tcp', CidrIp=access_cidr))
 
         # Create the ELB security group and attach the ingress rules
         elb_sg_name = '%sElbSecurityGroup' % self.name

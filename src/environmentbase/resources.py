@@ -1,5 +1,5 @@
 from pkg_resources import resource_string, resource_exists
-import yaml
+import yaml, json
 import os
 
 
@@ -82,6 +82,21 @@ def load_yaml_file(file_path):
         try:
             content = f.read()
             parsed_content = yaml.load(content)
+        except ValueError:
+            print '%s could not be parsed' % file_path
+            raise
+
+    return parsed_content
+
+def load_json_file(file_path):
+
+    if not os.path.isfile(file_path):
+        raise Exception('{} does not exist'.format(file_path))
+
+    with open(file_path, 'r') as f:
+        try:
+            content = f.read()
+            parsed_content = json.loads(content)
         except ValueError:
             print '%s could not be parsed' % file_path
             raise

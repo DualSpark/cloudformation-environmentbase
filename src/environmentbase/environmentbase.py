@@ -644,7 +644,7 @@ class EnvironmentBase(object):
             stack_outputs[output.key] = output.value
 
         # Ensure the stack_outputs directory exists
-        stack_outputs_dir = 'stack_outputs'
+        stack_outputs_dir = self.config.get('global').get('stack_outputs_directory', 'stack_outputs')
         if not os.path.isdir(stack_outputs_dir):
             os.mkdir(stack_outputs_dir)
 

@@ -5,7 +5,9 @@
         # Prints extra information useful for debugging
         "print_debug": "bool",
         # Enable monitoring of stack event stream
-        "monitor_stack": "bool"
+        "monitor_stack": "bool",
+        # Directory for writing stack outputs
+        "stack_outputs_directory": "basestring"        
     },
     "template": {
         # Name of json file containing mapping labels to AMI ids

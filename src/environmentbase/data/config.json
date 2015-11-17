@@ -3,7 +3,8 @@
         "print_debug": false,
         "environment_name": "environmentbase",
         "monitor_stack": false,
-        "write_stack_outputs": false
+        "write_stack_outputs": false,
+        "stack_outputs_directory": "stack_outputs"            
     },
     "template": {
         "ami_map_file": "ami_cache.json",
@@ -14,7 +15,7 @@
         "include_timestamp": true,
         "timeout_in_minutes": "60",
         "ec2_key_default": "dualspark_rsa",
-        "s3_upload": true
+        "s3_upload": true    
     },
     "logging": {
         "s3_bucket": "dualspark",

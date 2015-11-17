@@ -140,8 +140,14 @@ class EnvironmentBase(object):
         self.generate_config()
         self.generate_ami_cache()
 
+    def s3_prefix(self):
+        """
+        Allows subclasses to modify the default s3 prefix
+        """
+        return self.config.get('template').get('s3_prefix')
+
     def _ensure_template_dir_exists(self):
-        template_dir = self.config.get('template').get('s3_prefix')
+        template_dir = self.s3_prefix()
         if not os.path.exists(template_dir):
             os.makedirs(template_dir)
         return template_dir
@@ -215,7 +221,7 @@ class EnvironmentBase(object):
         It never includes a timestamp because we need to find it by convention in the deploy step
         """
         return utility.get_template_s3_resource_path(
-            prefix=self.template_args.get('s3_prefix'),
+            prefix=self.s3_prefix(),
             template_name=self.globals.get('environment_name'),
             include_timestamp=False)
 
@@ -541,7 +547,7 @@ class EnvironmentBase(object):
 
         # Configure Template class with S3 settings from config
         Template.template_bucket = self.template_args.get('s3_bucket')
-        Template.s3_path_prefix = self.template_args.get("s3_prefix")
+        Template.s3_path_prefix = self.s3_prefix()
         Template.stack_timeout = self.template_args.get("timeout_in_minutes")
         Template.upload_acl = self.template_args.get('s3_upload_acl')
         Template.include_timestamp = self.template_args.get('include_timestamp')
@@ -643,12 +649,13 @@ class EnvironmentBase(object):
         for output in self.get_cfn_stack_obj(stack_id).outputs:
             stack_outputs[output.key] = output.value
 
-        # Ensure the stack_outputs directory exists
         stack_outputs_dir = self.config.get('global').get('stack_outputs_directory', 'stack_outputs')
+
+        # Ensure <stack_outputs_dir> directory exists
         if not os.path.isdir(stack_outputs_dir):
             os.mkdir(stack_outputs_dir)
 
-        # Write the JSON-formatted stack outputs to ./stack_outputs/<stack_name>.json
+        # Write the JSON-formatted stack outputs to ./<stack_outputs_dir>/<stack_name>.json
         stack_output_filename = os.path.join(stack_outputs_dir, stack_name + '.json')
         with open(stack_output_filename, 'w') as output_file:
             output_file.write(json.dumps(stack_outputs, indent=4, separators=(',', ':')))

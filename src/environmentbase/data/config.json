@@ -13,7 +13,8 @@
         "s3_upload_acl": "public-read",
         "include_timestamp": true,
         "timeout_in_minutes": "60",
-        "ec2_key_default": "dualspark_rsa"
+        "ec2_key_default": "dualspark_rsa",
+        "s3_upload": true
     },
     "logging": {
         "s3_bucket": "dualspark",

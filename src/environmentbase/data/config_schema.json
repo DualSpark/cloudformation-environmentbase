@@ -22,7 +22,9 @@
         # Cloudformation create/update timeout
         "timeout_in_minutes": "basestring",
         # Name of EC2 Key on AWS
-        "ec2_key_default": "basestring"
+        "ec2_key_default": "basestring",
+        # Upload templates to s3
+        "s3_upload": "bool"
     },
     "logging": {
         # Name of the bucket to use for storing log files

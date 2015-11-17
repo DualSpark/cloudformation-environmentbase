@@ -147,7 +147,7 @@ class EnvironmentBase(object):
         return template_dir
 
     @staticmethod
-    def serialize_templates_helper(template, s3_client):
+    def serialize_templates_helper(template, s3_client, s3_upload=True):
 
         # Create stack resources for template and all child templates
         raw_json = template.to_template_json()
@@ -156,14 +156,16 @@ class EnvironmentBase(object):
         for child, _, _ in template._child_templates:
             EnvironmentBase.serialize_templates_helper(
                 template=child,
-                s3_client=s3_client)
+                s3_client=s3_client,
+                s3_upload=s3_upload)
 
-        # Upload the template to the s3 bucket under the template_prefix
-        s3_client.Bucket(Template.template_bucket).put_object(
-            Key=template.resource_path,
-            Body=raw_json,
-            ACL=Template.upload_acl
-        )
+        if s3_upload:
+            # Upload the template to the s3 bucket under the template_prefix            
+            s3_client.Bucket(Template.template_bucket).put_object(
+                Key=template.resource_path,
+                Body=raw_json,
+                ACL=Template.upload_acl
+            )
 
         # Save the template locally with the same file hierarchy as on s3
         with open(template.resource_path, 'w') as output_file:
@@ -171,7 +173,10 @@ class EnvironmentBase(object):
             output_file.write(json.dumps(reloaded_template, indent=4, separators=(',', ':')))
 
         print "Generated {} template".format(template.name)
-        print "S3:\t{}".format(utility.get_template_s3_url(Template.template_bucket, template.resource_path))
+
+        if s3_upload:
+            print "S3:\t{}".format(utility.get_template_s3_url(Template.template_bucket, template.resource_path))
+
         print "Local:\t{}\n".format(template.resource_path)
 
 
@@ -179,9 +184,12 @@ class EnvironmentBase(object):
         s3_client = utility.get_boto_resource(self.config, 's3')
         local_file_path = self._ensure_template_dir_exists()
 
+        s3_upload = self.config.get('template').get('s3_upload', True)
+
         EnvironmentBase.serialize_templates_helper(
             template=self.template,
-            s3_client=s3_client)
+            s3_client=s3_client,
+            s3_upload=s3_upload)
 
     def estimate_cost(self, template_name=None, template_url=None, stack_params=None):
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')

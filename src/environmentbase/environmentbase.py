@@ -147,6 +147,12 @@ class EnvironmentBase(object):
         """
         return self.config.get('template').get('s3_prefix')
 
+    def stack_outputs_directory(self):
+        """
+        Allows subclasses to modify the default satck outputs directory
+        """
+        return self.config.get('global').get('stack_outputs_directory', 'stack_outputs')
+
     def _ensure_template_dir_exists(self):
         template_dir = self.s3_prefix()
         if not os.path.exists(template_dir):
@@ -643,14 +649,14 @@ class EnvironmentBase(object):
     def write_stack_output_to_file(self, stack_id, stack_name):
         """
         Given a CFN stack's physical resource ID, query the stack for its outputs
-        Save outputs to file as JSON at ./stack_outputs/<stack_name>.json
+        Save outputs to file as JSON at ./<stack_outputs_dir>/<stack_name>.json
         """
         # Grab all the outputs from the cfn stack object as k:v pairs
         stack_outputs = {}
         for output in self.get_cfn_stack_obj(stack_id).outputs:
             stack_outputs[output.key] = output.value
 
-        stack_outputs_dir = self.config.get('global').get('stack_outputs_directory', 'stack_outputs')
+        stack_outputs_dir = self.stack_outputs_directory()
 
         # Ensure <stack_outputs_dir> directory exists
         if not os.path.isdir(stack_outputs_dir):

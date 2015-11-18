@@ -115,42 +115,14 @@ class EnvironmentBaseTestCase(TestCase):
     def test_config_yaml(self):
         """ Make sure load_config can load yaml files."""
         with open("config.yaml", 'w') as f:
-            f.write("""
-global:
-  setting: value # We test this setting
-  print_debug: false
-  output: dummy
-  environment_name: test
-  monitor_stack: false
-network:
-  network_cidr_base: dummy
-  subnet_config: 
-    - dummy 
-  subnet_types:
-    - dummy
-  az_count: 1
-  network_cidr_size: dummy
-template:
-  ami_map_file: dummy
-  s3_upload_acl: dummy
-  description: dummy
-  s3_bucket: dummy
-  s3_prefix: dummy
-  ec2_key_default: dummy
-  timeout_in_minutes: "60"
-logging:
-  s3_bucket: dummy
-nat:
-  instance_type: dummy
-  enable_ntp: false
-""")
+            f.write(yaml.dump(res.FACTORY_DEFAULT_CONFIG, default_flow_style=False))
             f.flush()
 
         fake_cli = self.fake_cli(['create', '--config-file', 'config.yaml'])
         base = eb.EnvironmentBase(fake_cli)
         base.load_config()
-
-        self.assertEqual(base.config['global']['setting'], 'value')
+    
+        self.assertEqual(base.config['global']['environment_name'], 'environmentbase')
 
 
 

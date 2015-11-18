@@ -1096,28 +1096,26 @@ class Template(t.Template):
         self._child_templates.append(child_template_entry)
         return child_template
 
-    def add_child_template_reference(self, template_name, template_url, stack_params={}, reference_template=None, depends_on=[]):
+    def add_child_template_reference(self, template_name, template_url, stack_params={}, depends_on=[]):
         """
-        Use to create a child stack from a template that is not defined in this environment
+        Create a child stack from a template that is not defined in this environment
         Useful for B/G deployments
-        Note: Use either one of stack_params or reference_template, not both
-                reference_template will copy the parameters from the reference template into this one
-                stack_params lets you provide your own dictionary of Stack Parameters
+        NOTE: If the original stack was deployed with any parameters, you must provide stack_params with 
+              this deployment. You can use environmentbase.get_stack_params_from_parent_template() to 
+              retrieve the parameters that it was originally deployed with
         """
-        template_reference_entry = (template_name, template_url, stack_params, reference_template, depends_on)
-        self._child_template_references.append(template_reference_entry)
+        return self.add_stack(
+            template_name=template_name,
+            template_url=template_url,
+            stack_params=stack_params,
+            depends_on=depends_on)
 
     def process_child_templates(self):
         """
-        Iterate through and process the generated child template and child template reference lists
-        References must be processed after child templates because they may reference the native child 
-        templates to copy their parameters over, and the parameters do not exist until processed
+        Iterate through and process the generated child template list
         """
         for (child_template, merge, depends_on) in self._child_templates:
             self.process_child_template(child_template, merge, depends_on)
-
-        for (template_name, template_url, stack_params, reference_template, depends_on) in self._child_template_references:
-            self.process_child_template_reference(template_name, template_url, stack_params, reference_template, depends_on)
 
         # # TODO: output autowiring feature, disambiguation of output sources
         # stack_outputs = {}
@@ -1147,22 +1145,17 @@ class Template(t.Template):
         # Construct the template url using the bucket name and resource path
         template_s3_url = utility.get_template_s3_url(Template.template_bucket, child_template.resource_path)
 
-        # create stack
-        stack_obj = cf.Stack(
-            child_template.name + 'Stack',
-            TemplateURL=template_s3_url,
-            Parameters=stack_params,
-            TimeoutInMinutes=Template.stack_timeout,
-            DependsOn=depends_on)
+        # Create the stack resource in this template and return the reference
+        return self.add_stack(
+            template_name=child_template.name,
+            template_url=template_s3_url,
+            stack_params=stack_params,
+            depends_on=depends_on)
 
-        return self.add_resource(stack_obj)
-
-    def process_child_template_reference(self, template_name, template_url, stack_params, reference_template, depends_on):
-        # A reference template from within this environment may be used to define the parameter values
-        # Useful when referencing a corresponding template from an old deployment with the same parameters
-        if reference_template:
-            stack_params = self.match_stack_parameters(reference_template)
-
+    def add_stack(self, template_name, template_url, stack_params={}, depends_on=[]):
+        """
+        Creates a cloudformation stack resource in this template with the attributes provided
+        """
         stack_obj = cf.Stack(
             template_name + 'Stack',
             TemplateURL=template_url,

@@ -14,6 +14,7 @@ import monitor
 import yaml
 import logging
 import json
+import tempfile
 
 TIMEOUT = 60
 
@@ -578,6 +579,31 @@ class EnvironmentBase(object):
 
         ami_cache = res.load_yaml_file(self.config.get('template').get('ami_map_file'))
         self.template.add_ami_mapping(ami_cache)
+
+    def get_stack_params_from_parent_template(self, parent_template_resource_path, stack_name):
+        """
+        This function gets all the deployment parameters used for a given stack from another deployment and returns them
+        @param parent_template_resource_path - The S3 resource path of the parent template that the stack is defined in
+        @param stack_name - The name of the stack to search for in the parent template
+        Returns a dictionary of stack parameters to be used with a new deployment
+        """
+        # Download the parent template from s3 to a temp directory
+        s3_client = utility.get_boto_client(self.config, "s3")
+        file_path = os.path.join(tempfile.mkdtemp(), 'parent.template')
+        s3_client.download_file(self.template_args.get('s3_bucket'), parent_template_resource_path, file_path)
+
+        # Parse the template as json into a dictionary
+        parent_template = res.load_json_file(file_path)
+
+        # Retrieve the child stack from the template
+        stack_reference = parent_template.get('Resources').get(stack_name)
+
+        # If the stack is not found in the parent template, return None
+        if not stack_reference:
+            return None
+
+        # Otherwise return the parameters dictionary that the stack was deployed with
+        return stack_reference.get('Properties').get('Parameters')
 
     def generate_ami_cache(self):
         """

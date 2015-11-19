@@ -21,25 +21,19 @@ class Template(t.Template):
     consistency since it was generated.
     """
 
-    """
-    Class variable for S3 destination, set once by controller for use across all template w/in an environment
-    """
+    # Class variable for S3 destination, set once by controller for use across all templates w/in an environment
     s3_path_prefix = ''
 
-    """
-    S3 bucket name
-    """
+    # S3 bucket name used to store the templates
     template_bucket = ''
 
-    """
-    Child stack timeout
-    """
+    # Timeout period after which to fail if a child stack has not reached a COMPLETE state
     stack_timeout = '60'
 
     def __init__(self, template_name):
         """
         Init method for environmentbase.Template class
-        @param template_name [string] - name of this template, used when identifying this template when uploading, etc.
+        @param template_name [string] - name of this template, used to identify this template when uploading, deploying, etc.
         """
         t.Template.__init__(self)
         self.name = template_name
@@ -135,6 +129,9 @@ class Template(t.Template):
         1. This passes all the initialized attributes to the other template
         2. Calls the other template's build_hook()
         3. Copies the generated troposphere attributes back into this template
+
+        NOTE: This function is currently used successfully in networkbase for merging the HaNat pattern
+              into the root template. It has not been thoroughly tested in more complex scenarios
         """
         other_template.copy_attributes_from(self)
 
@@ -181,6 +178,9 @@ class Template(t.Template):
     def get_config_schema():
         """
         This method is provided for subclasses to update config requirements with additional required keys and their types.
+        If you define both this and the get_factory_defaults() functions in your template and register the template with
+        the controller's config handlers, these values will be included when you run the `init` command
+
         The format is a dictionary with key values being one of bool/int/float/str/list.
         Example (yes comments are allowed):
         {
@@ -198,6 +198,9 @@ class Template(t.Template):
     def get_factory_defaults():
         """
         This method is provided for subclasses to update factory default config file with additional sections.
+        If you define both this and the get_config_schema() functions in your template and register the template with
+        the controller's config handlers, these values will be included when you run the `init` command
+
         The format is basic json (with comment support).
         {
             "template": {
@@ -212,7 +215,8 @@ class Template(t.Template):
 
     def to_template_json(self):
         """
-        Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
+        Process all child templates recursively and render this template as json with a timestamp identifying 
+        when it was generated along with a SHA256 hash representing the template for validation purposes
         """
         self.process_child_templates()
 
@@ -268,6 +272,11 @@ class Template(t.Template):
             return None
 
     def add_instance_profile(self, layer_name, iam_policies, path_prefix):
+        """
+        Helper function to add role and instance profile resources to this template 
+        using the provided iam_policies. The instance_profile will be created at:
+        '/<path_prefix>/<layer_name>/'
+        """
         iam_role_obj = iam.Role(layer_name + 'IAMRole',
                 AssumeRolePolicyDocument={
                     'Statement': [{
@@ -295,7 +304,8 @@ class Template(t.Template):
 
     def add_common_parameters(self, ec2_key, region_map, parent_subnets, az_count=2):
         """
-        Adds parameters to template for use as a child stack:
+        Adds the common set of parameters that are available to every child template
+        The values are automatically matched from the root template
             vpcCidr,
             vpcId,
             commonSecurityGroup,
@@ -381,10 +391,12 @@ class Template(t.Template):
         @param user_data [string] Contents of the user data script as a string
         Returns user_data_payload [string[]] Userdata payload ready to be dropped into a launch configuration
         """
+        # At least one of env_vars or user_data must exist
         if not (env_vars or user_data):
             return []
 
-        # If the variable value is not a string, use the Join function (this handles Refs, Parameters, etc. which are evaluated at runtime)
+        # If the variable value is not a string, use the Join function 
+        # This handles Refs, Parameters, etc. which are evaluated at runtime
         variable_declarations = []
         for k,v in env_vars.iteritems():
             if isinstance(v, basestring):
@@ -488,13 +500,16 @@ class Template(t.Template):
         adjustment_type="ChangeInCapacity",
         cooldown=1,
         scaling_adjustment=1):
+        """
+        Helper method to encapsulate process of adding a scaling policy to an autoscaling group in this template
+        """
         policy = autoscaling.ScalingPolicy(
             metric_name + 'ScalingPolicy',
             AdjustmentType=adjustment_type,
             AutoScalingGroupName=Ref(asg_name),
             Cooldown=cooldown,
-            ScalingAdjustment=str(scaling_adjustment)
-            )
+            ScalingAdjustment=str(scaling_adjustment))
+
         return self.add_resource(policy)
 
     def add_cloudwatch_alarm(self, 
@@ -508,7 +523,9 @@ class Template(t.Template):
         period=60,
         namespace='AWS/EC2',
         comparison_operator='GreaterThanThreshold'):
-
+        """
+        Helper method to encapsulate process of adding a cloudwatch alarm resource to a scaling policy
+        """
         alarm = cloudwatch.Alarm(
             layer_name + 'Alarm',
             EvaluationPeriods=str(evaluation_periods),
@@ -520,6 +537,7 @@ class Template(t.Template):
             Dimensions=[cloudwatch.MetricDimension(Name="AutoScalingGroupName",Value=Ref(asg_name))],
             ComparisonOperator=comparison_operator,
             MetricName=metric_name)
+
         return self.add_resource(alarm)
 
     def add_asg(self,
@@ -844,7 +862,7 @@ class Template(t.Template):
                              to_port=None,
                              ip_protocol='tcp'):
         """
-        Helper method creates reciprocal ingress and egress rules given two existing security groups and a set of ports
+        Helper method creates reciprocal ingress and egress rules given two existing security groups and a range of ports
         @param source_group [Troposphere.ec2.SecurityGroup] Object reference to the source security group
         @param source_group_name [string] friendly name of the source security group used for labels
         @param destination_group [Troposphere.ec2.SecurityGroup] Object reference to the destination security group
@@ -1092,6 +1110,10 @@ class Template(t.Template):
         self.manual_parameter_bindings['utilityBucket'] = self.utility_bucket
 
     def add_child_template(self, child_template, merge=False, depends_on=[]):
+        """
+        Appends the template to a list of child templates nested under this one
+        These will be processed all together at the end of the create process in process_child_templates()
+        """
         child_template_entry = (child_template, merge, depends_on)
         self._child_templates.append(child_template_entry)
         return child_template
@@ -1101,7 +1123,7 @@ class Template(t.Template):
         Create a child stack from a template that is not defined in this environment
         Useful for B/G deployments
         NOTE: If the original stack was deployed with any parameters, you must provide stack_params with 
-              this deployment. You can use environmentbase.get_stack_params_from_parent_template() to 
+              this deployment. You can use utility.get_stack_params_from_parent_template() to 
               retrieve the parameters that it was originally deployed with
         """
         return self.add_stack(
@@ -1123,6 +1145,12 @@ class Template(t.Template):
         #     stack_outputs[output.name] = child_template
 
     def process_child_template(self, child_template, merge, depends_on):
+        """
+        Add the common parameters from this template to the child template
+        Execute the child template's build hook function
+        Get the matching stack parameter values from this template and add the 
+        stack reference to this template with those stack parameters
+        """
 
         # This merges all attributes from the two stacks together, so all this parameter binding is unnecessary
         if merge:
@@ -1166,6 +1194,11 @@ class Template(t.Template):
         return self.add_resource(stack_obj)
 
     def match_stack_parameters(self, child_template):
+        """
+        For all matching parameters between this template and the child template, attempt to 
+        get the value from this template's parameters, resources, and manual parameter bindings.
+        Return the dictionary of stack parameters to deploy the child template with
+        """
         stack_params = {}
 
         for parameter in child_template.parameters.keys():

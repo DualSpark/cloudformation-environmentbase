@@ -149,7 +149,7 @@ class EnvironmentBase(object):
 
     def stack_outputs_directory(self):
         """
-        Allows subclasses to modify the default satck outputs directory
+        Allows subclasses to modify the default stack outputs directory
         """
         return self.config.get('global').get('stack_outputs_directory', 'stack_outputs')
 
@@ -243,7 +243,8 @@ class EnvironmentBase(object):
     def create_action(self):
         """
         Default create_action invoked by the CLI
-        Initializes a new template instance, and write it to file.
+        Loads and validates config, initializes a new template instance, and writes it to file.
+        Override the create_hook in your environment to inject all of your cloudformation resources
         """
         self.load_config()
         self.initialize_template()
@@ -254,6 +255,11 @@ class EnvironmentBase(object):
         self.serialize_templates()
 
     def _ensure_stack_is_deployed(self, stack_name='UnnamedStack', sns_topic=None, stack_params=[]):
+        """
+        Deploys the root template to cloudformation using boto
+        First attempts to issue an update stack command
+        If this fails because the stack does not yet exist, then issues a create stack command
+        """
         is_successful = False
         notification_arns = []
 
@@ -296,6 +302,8 @@ class EnvironmentBase(object):
 
     def add_parameter_binding(self, key, value):
         """
+        Deployment parameters are used to provide values for parameterized templates
+
         The deploy_parameter_bindings is populated with hashes of the form:
          {
              'ParameterKey': <key>,
@@ -312,8 +320,10 @@ class EnvironmentBase(object):
 
     def deploy_action(self):
         """
-        Default deploy_action invoked by the CLI. Attempt to update the stack. If the stack does not yet exist, it will
-        issue a create-stack command.
+        Default deploy_action invoked by the CLI. 
+        Loads and validates config, then deploys the root template to cloudformation using boto
+        Override the deploy_hook in your environment to intercept the deployment process
+        This can be useful for creating resources using boto outside of cloudformation
         """
         self.load_config()
         self.deploy_hook()
@@ -348,6 +358,9 @@ class EnvironmentBase(object):
     def delete_action(self):
         """
         Default delete_action invoked by CLI
+        Loads and validates config, then issues the delete stack command to the root stack
+        Override the delete_hook in your environment to intercept the delete process with your own code
+        This can be useful for deleting any resources that were created outside of cloudformation
         """
         self.load_config()
         self.delete_hook()
@@ -428,7 +441,7 @@ class EnvironmentBase(object):
     def _config_env_override(config, path, print_debug=False):
         """
         Update config value with values from the environment variables. If the environment variable exists
-        the config value is replaced with it's value.
+        the config value is replaced with its value.
 
         For config parameters like template.ec2_key_default this function will expect an environment
         variable matching the <section label>_<config_key> in all caps (e.g. TEMPLATE_EC2_KEY_DEFAULT).
@@ -604,7 +617,9 @@ class EnvironmentBase(object):
 
     def to_json(self):
         """
-        Centralized method for managing outputting this template with a timestamp identifying when it was generated and for creating a SHA256 hash representing the template for validation purposes
+        Centralized method for outputting the root template with a timestamp identifying when it 
+        was generated and for creating a SHA256 hash representing the template for validation purposes
+        Also recursively processess all child templates
         """
         return self.template.to_template_json()
 
@@ -628,7 +643,7 @@ class EnvironmentBase(object):
     def add_child_template(self, child_template, merge=False, depends_on=[]):
         """
         Saves reference to provided template. References are processed in write_template_to_file().
-        :param template: The Environmentbase Template you want to associate with the current instances
+        :param child_template: The Environmentbase Template you want to associate with the current instances
         :param depends_on: List of upstream resources that must be processes before the provided template
         :param merge: Determines whether the resource is attached as a child template or all of its resources merged
         into the current template

@@ -16,8 +16,8 @@ from toolz import groupby, assoc
 
 class NetworkBase(EnvironmentBase):
     """
-    Class creates all of the base networking infrastructure for a common deployment within AWS
-    This is intended to be the 'base' template for deploying child templates
+    EnvironmentBase controller containing a root template with all of the base networking infrastructure
+    for a common deployment within AWS. This is intended to be the 'base' stack for deploying child stacks
     """
 
     def construct_network(self):
@@ -70,7 +70,7 @@ class NetworkBase(EnvironmentBase):
 
     def create_action(self):
         """
-        Override EnvironmentBase.create_action() to construct VPC
+        Override EnvironmentBase.create_action() to construct the network components before the create_hook()
         """
         self.load_config()
         self.initialize_template()
@@ -111,7 +111,8 @@ class NetworkBase(EnvironmentBase):
 
     def create_network_components(self, network_config=None):
         """
-        Method creates a network with the specified number of public and private subnets within the VPC cidr specified by the networkAddresses CloudFormation mapping
+        Method creates a network with the specified number of public and private subnets within the 
+        VPC cidr specified by the networkAddresses CloudFormation mapping.
         @param network_config [dict] collection of network parameters for creating the VPC network
         """
         ## make VPC
@@ -199,7 +200,7 @@ class NetworkBase(EnvironmentBase):
 
     def create_subnet_egress(self, index, route_table, igw_title, subnet_type, subnet_layer):
         """
-        Create an egress route for the a subnet with the given index and type
+        Create an egress route for the subnet with the given index and type
         Override to create egress routes for other subnet types
         Creates the NAT instances in the public subnets
         """
@@ -298,7 +299,9 @@ class NetworkBase(EnvironmentBase):
     def add_network_cidr_mapping(self,
                                  network_config):
         """
-        Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.  Calculated based on CIDR block sizes and additionally checks to ensure all network segments fit inside of the specified overall VPC CIDR
+        Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks. 
+        Calculated based on CIDR block sizes and additionally checks to ensure all network segments 
+        fit inside of the specified overall VPC CIDR.
         @param network_config [dict] dictionary of values containing data for creating
         """
         az_count = int(network_config.get('az_count', '2'))

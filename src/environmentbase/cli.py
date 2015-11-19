@@ -74,11 +74,12 @@ class CLI(object):
         """
         print
 
+        # Allow the full stack trace to print out when the debug flag is enabled
         if self.args.get('--debug'):
             self._process_request_helper(controller)
-
+        # Otherwise catch it and print the error message
         else:
             try:
                 self._process_request_helper(controller)
             except Exception as e:
-                print e.message
+                print "ERROR:\n\t{}\n\nTry running with the --debug flag\n".format(e.message)

@@ -1,0 +1,17 @@
+*.pyc
+*.pyo
+*.class
+*.template
+*~
+*#
+/doc/generated/*
+/runpy
+/build
+/dist
+/stack_outputs
+src/cfn_environment_base.egg-info/
+ami_cache.*
+config.*
+.DS_Store
+.idea/
+.eggs

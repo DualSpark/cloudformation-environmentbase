@@ -1,0 +1,11 @@
+graft docs
+graft src
+
+include AUTHORS.rst
+include CONTRIBUTING.rst
+include LICENSE
+include README.md
+
+include tox.ini appveyor.yml
+
+global-exclude *.py[co]

@@ -186,11 +186,11 @@ class HaCluster(Template):
 
         # Create the reciprocal rules between the ELB and the ASG for all instance ports
         # NOTE: The condition in the list comprehension exists because elb_port is used as a default when instance_port is not specified
-        cluster_sg_ingress_ports = [listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in self.elb_listeners]
+        cluster_sg_ingress_ports = {listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in self.elb_listeners}
 
-        # Also add the health check port if it's not included in the instance ports
-        if self.elb_health_check_port and self.elb_health_check_port not in cluster_sg_ingress_ports:
-            cluster_sg_ingress_ports.append(self.elb_health_check_port)
+        # Also add the health check port to the security group rules
+        if self.elb_health_check_port:
+            cluster_sg_ingress_ports.add(self.elb_health_check_port)
 
         for cluster_sg_ingress_port in cluster_sg_ingress_ports:
             self.create_reciprocal_sg(

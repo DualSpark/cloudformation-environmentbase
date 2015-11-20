@@ -78,9 +78,6 @@ setup(
         "toolz==0.7.4",
         'pbr==1.8.0'
     ],
-    dependency_links=[
-        "git+http://git.tibco.com/git/product/atmosphere/dualspark-tropos.git#egg=troposphere-1.1.2"
-    ],
 
     # Optional dependencies
     extras_require={},

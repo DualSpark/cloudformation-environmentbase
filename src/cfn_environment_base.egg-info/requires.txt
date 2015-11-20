@@ -1,0 +1,14 @@
+troposphere==1.1.2
+jmespath==0.7.1
+boto==2.38.0
+botocore==1.1.1
+boto3==1.1.0
+ipcalc==1.1.2
+docopt==0.6.2
+setuptools==17.1
+awacs==0.5.3
+commentjson==0.6
+PyYAML==3.11
+netaddr==0.7.18
+toolz==0.7.4
+pbr==1.8.0

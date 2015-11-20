@@ -1,0 +1,3 @@
+[console_scripts]
+environmentbase = environmentbase.__main__:main
+

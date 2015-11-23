@@ -694,7 +694,7 @@ class Template(t.Template):
             LaunchConfigurationName=Ref(launch_config),
             MaxSize=max_size,
             MinSize=min_size,
-            DesiredCapacity=min(min_size, max_size),
+            DesiredCapacity=min_size,
             VPCZoneIdentifier=self.subnets[subnet_type][subnet_layer.lower()],
             TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
             DependsOn=depends_on,

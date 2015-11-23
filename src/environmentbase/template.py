@@ -558,6 +558,8 @@ class Template(t.Template):
                 scaling_policies=None,  # [{'metric_name':'MyCustomMetric', 'comparison_operator':'GreaterThanThreshold', threshold':10, scaling_adjustment: 1}]
                 custom_tags=None,
                 load_balancer=None,
+                health_check_type='EC2',
+                health_check_grace_period=0,
                 instance_monitoring=False,
                 subnet_layer=None,
                 associate_public_ip=None,
@@ -695,7 +697,9 @@ class Template(t.Template):
             DesiredCapacity=min(min_size, max_size),
             VPCZoneIdentifier=self.subnets[subnet_type][subnet_layer.lower()],
             TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
-            DependsOn=depends_on)
+            DependsOn=depends_on,
+            HealthCheckGracePeriod=health_check_grace_period,
+            HealthCheckType=health_check_type)
 
         lb_tmp = []
 

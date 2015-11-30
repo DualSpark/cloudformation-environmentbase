@@ -75,6 +75,11 @@ This will look at the patterns passed into the EnvConfig object and generate a c
 
 Next run `python my_env.py create` to generate the cloudformation template using the updated config. Since we overrode environmentbase's `create_hook` function, this will hook into environmentbase's create action and add the bastion stack and any other resources you specified.
 
+NOTE: You can also override config values using environment variables. You can create env variables using the format:  
+`<section label>_<config_key>` in all caps (e.g. `TEMPLATE_EC2_KEY_DEFAULT`)  
+
+These are read in after the config file is loaded, so will override any values in your config.json  
+
 Then run `python my_env.py deploy` to create the stack on [cloudformation](https://console.aws.amazon.com/cloudformation/)
 
 Note that this example extends NetworkBase instead of EnvironmentBase. NetworkBase attaches several additional resources to the template that constitute a full VPC with subnets, routing tables, and a default security group.

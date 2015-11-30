@@ -99,10 +99,10 @@ Extension point for modifying behavior of delete action. Called after config is 
 Extension point for reacting to the cloudformation stack event stream.  If global.monitor_stack is enabled in config this function is used to react to stack events. Once a stack is created a notification topic will begin emitting events to a queue.  Each event is passed to this call for further processing.  The return value is used to indicate whether processing is complete (true indicates processing is complete, false indicates you are not yet done).
 Details about the event data can be read [here](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-listing-event-history.html)
 
-The event_data hash provided the following mappings from the raw cloudformation event:
-status = ResourceStatus
-type = ResourceType
-name = LogicalResourceId
-reason = ResourceStatusReason
-props = ResourceProperties
+The event_data hash provided the following mappings from the raw cloudformation event:  
+status = ResourceStatus  
+type = ResourceType  
+name = LogicalResourceId  
+reason = ResourceStatusReason  
+props = ResourceProperties  
 

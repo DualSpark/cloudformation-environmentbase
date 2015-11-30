@@ -81,6 +81,38 @@ Note that this example extends NetworkBase instead of EnvironmentBase. NetworkBa
 
 This should bring up a stack containing all of the configured network resources as well as a bastion host. Try SSHing into the bastion host using the SSH key specified in the config.json to validate that it worked.
 
+
+Network Configuration
+---------------------
+By default, networkbase will create one public and one private subnet for each availability zone in your VPC. You can modify this configuration by changing the default values in the network block of config:
+
+```json
+"network": {
+        "network_cidr_base": "10.0.0.0",
+        "network_cidr_size": "16",
+        "az_count": 3,
+        "subnet_types": [
+            "public",
+            "private"
+        ],
+        "subnet_config": [
+            {
+                "type": "public", 
+                "size": "18",
+                "name": "public"
+            },
+            {
+                "type": "private", 
+                "size": "22",
+                "name": "private"
+            },
+        ],
+    },
+```
+
+From here, you can change the VPC's address range, the types of subnets in your environment, and the subnet mask size of each subnet. You can define as many subnet tiers as you like in the subnet_config section, each new tier you add will be created in each of the AZs. For example, this default configuration would create a VPC with an address range of 10.0.0.0/16 over three AZs; one public subnet with a CIDR mask of 18 in each AZ; and one private subnet with a CIDR mask of 22 in each AZ, for a total of 6 subnets (2 tiers x 3 AZs). Public subnets get an egress route to the VPC's internet gateway, whereas private subnets communicate to the internet via a highly available NAT instance created in a public subnet within the same AZ.
+
+
 Creating your own controller:
 -----------------------------
 

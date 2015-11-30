@@ -73,7 +73,7 @@ if __name__ == '__main__':
     MyEnvClass()
 ```
 
-Overriding these two functions allows you to hook into the template generation and stack creation processes of environmentbase to inject the resources and deployment steps for your environment. See the [Development](DEVELOPMENT.md) documentation for more detailed examples. This create_hook() will add a bastion host as a child stack of the environment. 
+Overriding these two functions allows you to hook into the template generation and stack creation processes of environmentbase to inject the resources and deployment steps for your environment. This create_hook() will add a bastion host as a child stack of the environment. See the [Development](DEVELOPMENT.md) documentation for more detailed examples.  
 
 See [here](src/examples/) for more examples of using patterns.
 

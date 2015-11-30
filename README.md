@@ -18,7 +18,6 @@ include:
 
 * A public (/24) and a private subnet (/22) in three different Availability Zones
 * A highly available NAT instance per AZ
-* A bastion host
 * An S3 bucket configured to allow Amazon ELB (within the same region) and AWS
   CloudTrail to aggregate logs
 
@@ -46,20 +45,22 @@ that could serve as the common networking design for multi-AZ, multi-subnet
 demo environments. As such, the environmentbase.py script contains a number of
 methods that are meant to be used by sub-classes and provide abstractions for
 common workflows and use cases. To use this class, simply add it as a dependency 
-in your requirements.txt or setup.py. The import and class definition for your 
-project will look similar to the following:
+in your requirements.txt or setup.py. The following is an example showing how to
+import core envbase components and patterns, including the bastion host pattern:
 
 ```python
 from environmentbase.networkbase import NetworkBase
+from environmentbase.patterns.bastion import Bastion
 
 class MyEnvClass(NetworkBase):
     '''
-    Class creates a VPC and common network components for the environment
+    Class creates a VPC, common network components for the environment and a bastion host
     '''
 
     def create_hook(self):
 
         # Do custom troposphere resource creation here
+        self.add_child_template(Bastion())
 
 
     def deploy_hook(self):
@@ -72,7 +73,9 @@ if __name__ == '__main__':
     MyEnvClass()
 ```
 
-Overriding these two functions allows you to hook into the template generation and stack creation processes of environmentbase to inject the resources and deployment steps for your environment. See the [Development](DEVELOPMENT.md) documentation for more detailed examples, including how to integrate a pre-packaged pattern.
+Overriding these two functions allows you to hook into the template generation and stack creation processes of environmentbase to inject the resources and deployment steps for your environment. See the [Development](DEVELOPMENT.md) documentation for more detailed examples. This create_hook() will add a bastion host as a child stack of the environment. 
+
+See [here](src/examples/) for more examples of using patterns.
 
 Documentation within the class takes a modified usage of the
 [doxygen](http://www.stack.nl/~dimitri/doxygen/manual/docblocks.html#pythonblocks)
@@ -82,7 +85,7 @@ type and description of that parameter.
 
 ## Getting Started
 
-To use this script, you must install some requirements (listed [here](https://github.com/DualSpark/cloudformation-environmentbase/blob/master/setup.py#L64))  
+To use this script, you must install some requirements (listed [here](https://github.com/DualSpark/cloudformation-environmentbase/blob/master/setup.py#L65))  
 
 We recommend you create a [virtual environment](https://virtualenv.pypa.io/en/latest/) to isolate the dependencies from the rest of your system, but it is not required.  
 Run the following commands from the root of the environmentbase directory to install the dependencies:
@@ -120,8 +123,11 @@ This initialization command will generate two files: `config.json` and `ami_cach
 
 You should now look at the generated `config.json` file and fill out at least the following fields:
 
-`template : ec2_key_default` - SSH key used to log into your EC2 instances  
-`template : s3_bucket` - S3 bucket used to upload the generated cloudformation templates
+`template : ec2_key_default` - This must be the name of a valid SSH key in your AWS account  
+`template : s3_bucket` - S3 bucket used to upload the generated cloudformation templates  
+`logging : s3_bucket` - S3 bucket used for cloudtrail and ELB logging  
+
+You must ensure that the above two buckets exist and that you have access to write to them (they can be the same bucket). Also, the logging s3_bucket must have the correct access policy -- it needs to allow the AWS ELB and Cloudtrail accounts access to upload their logging data. See a sample access policy [here](src/environmentbase/data/logging_bucket_policy.json), just replace all instances of `%%S3_BUCKET%%` with your logging bucket name and attach the policy to your S3 bucket.
 
 You may also edit the other fields to customize the environment to your liking. After you have configured your environment, run:
 
@@ -129,13 +135,15 @@ You may also edit the other fields to customize the environment to your liking. 
 environmentbase create
 ```
 
-This will generate the cloudformation templates using your updated config. Then run:
+This will generate the cloudformation templates using your updated config. It will save them both to S3 in your template bucket as well as locally. You can use the config `template.include_timestamp` setting to toggle whether or not a timestamp will be included the template filenames (This can be useful for keeping versioned templates, it is enabled by default). Then run:
 
 ```bash
 environmentbase deploy
 ```
 
 This will create a cloudformation stack from your generated template on [AWS](https://console.aws.amazon.com/cloudformation/)
+
+You can use the config setting `global.monitor_stack` to enable real time tracking of the event stream from the stack deployment. You can then enable `global.write_stack_outputs` to automatically save all the stack outputs to a local file as they are brought up in AWS. You can also hook into the stack event stream with your own scripting using the `stack_event_hook()` function in environmentbase. Simply override this function in your controller and inject any real time deployment scripting. 
 
 You may run the following command to delete your stack when you are done with it:
 

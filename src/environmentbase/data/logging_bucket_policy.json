@@ -1,0 +1,66 @@
+{
+	"Statement": [
+		{
+			"Action": "s3:GetBucketAcl",
+			"Effect": "Allow",
+			"Principal": {
+				"AWS": [
+					"arn:aws:iam::027434742980:root",
+					"arn:aws:iam::035351147821:root",
+					"arn:aws:iam::903692715234:root",
+					"arn:aws:iam::127311923021:root",
+					"arn:aws:iam::216624486486:root",
+					"arn:aws:iam::086441151436:root",
+					"arn:aws:iam::783225319266:root",
+					"arn:aws:iam::156460612806:root",
+					"arn:aws:iam::797873946194:root",
+					"arn:aws:iam::859597730677:root",
+					"arn:aws:iam::814480443879:root",
+					"arn:aws:iam::114774131450:root",
+					"arn:aws:iam::582318560864:root",
+					"arn:aws:iam::507241528517:root",
+					"arn:aws:iam::388731089494:root",
+					"arn:aws:iam::054676820928:root",
+					"arn:aws:iam::113285607260:root",
+					"arn:aws:iam::284668455005:root"
+				]
+			},
+			"Resource": "arn:aws:s3:::%%S3_BUCKET%%",
+			"Sid": "AWSCloudTrailAclCheck20131101"
+		},
+		{
+			"Action": "s3:PutObject",
+			"Condition": {
+				"StringEquals": {
+					"s3:x-amz-acl": "bucket-owner-full-control"
+				}
+			},
+			"Effect": "Allow",
+			"Principal": {
+				"AWS": [
+					"arn:aws:iam::027434742980:root",
+					"arn:aws:iam::035351147821:root",
+					"arn:aws:iam::903692715234:root",
+					"arn:aws:iam::127311923021:root",
+					"arn:aws:iam::216624486486:root",
+					"arn:aws:iam::086441151436:root",
+					"arn:aws:iam::783225319266:root",
+					"arn:aws:iam::156460612806:root",
+					"arn:aws:iam::797873946194:root",
+					"arn:aws:iam::859597730677:root",
+					"arn:aws:iam::814480443879:root",
+					"arn:aws:iam::114774131450:root",
+					"arn:aws:iam::582318560864:root",
+					"arn:aws:iam::507241528517:root",
+					"arn:aws:iam::388731089494:root",
+					"arn:aws:iam::054676820928:root",
+					"arn:aws:iam::113285607260:root",
+					"arn:aws:iam::284668455005:root"
+				]
+			},
+			"Resource": "arn:aws:s3:::%%S3_BUCKET%%/*",
+			"Sid": "AWSCloudTrailWrite20131101"
+		}
+	],
+	"Version": "2012-10-17"
+}

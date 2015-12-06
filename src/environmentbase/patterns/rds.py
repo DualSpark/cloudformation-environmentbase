@@ -223,6 +223,12 @@ class RDS(Template):
                     GetAtt(rds_instance, "Endpoint.Port")])
             ))
 
+            # Add the connection address output
+            self.add_output(Output(
+                db_label.lower() + self.tier_name.title() + 'RdsAddress',
+                Value=GetAtt(rds_instance, "Endpoint.Address"))
+            )
+
             self.data[db_label] = {
                 'rds': rds_instance,
                 'dbname': Ref(db_name),

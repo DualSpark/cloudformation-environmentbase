@@ -3,6 +3,7 @@ from environmentbase import resources
 from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53, autoscaling
 import troposphere.constants as tpc
 from troposphere.policies import CreationPolicy, ResourceSignal
+from troposphere.policies import UpdatePolicy, AutoScalingRollingUpdate
 
 SCHEME_INTERNET_FACING = 'internet-facing'
 SCHEME_INTERNAL = 'internal'
@@ -83,6 +84,16 @@ class HaCluster(Template):
             self.creation_policy = CreationPolicy(ResourceSignal=ResourceSignal(Timeout='PT' + str(creation_policy_timeout) + 'M'))
         else:
             self.creation_policy = None
+
+        # Add update policy
+        self.update_policy = UpdatePolicy(
+            AutoScalingRollingUpdate=AutoScalingRollingUpdate(
+                PauseTime='PT1M',
+                MinInstancesInService="1",
+                MaxBatchSize='1',
+                # WaitOnResourceSignals=True
+            )
+        )
 
         # The Idle Timeout for the ELB (how long your connection can stay idle before being terminated)
         self.elb_idle_timeout = elb_idle_timeout
@@ -285,8 +296,9 @@ class HaCluster(Template):
             instance_profile=self.instance_profile,
             custom_tags=self.custom_tags,
             creation_policy=self.creation_policy,
+            update_policy=self.update_policy,
             scaling_policies=self.scaling_policies
-        )        
+        )
 
     def add_outputs(self):
         """

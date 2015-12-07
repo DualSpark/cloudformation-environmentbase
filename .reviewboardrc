@@ -1,0 +1,3 @@
+REVIEWBOARD_URL="http://scr.tibco.com/atmosphere"
+REPOSITORY="git-atmosphere-environmentbase"
+TARGET_GROUPS="troposphere"

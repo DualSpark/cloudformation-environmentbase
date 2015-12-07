@@ -1,1 +1,6 @@
 .DS_Store
+*.pyc
+ami_cache.json
+config.json
+stack_policy.json
+templates/

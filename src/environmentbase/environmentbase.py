@@ -240,6 +240,16 @@ class EnvironmentBase(object):
             bucket_name=self.template_args.get('s3_bucket'),
             resource_path=self._root_template_path())
 
+    def _get_stack_policy(self):
+        stack_policy = None
+
+        filename = self.config.get("global").get("stack_policy")
+        if filename is not None:
+            with open(filename, 'r') as stack_policy_file:
+                stack_policy = stack_policy_file.read()
+
+        return stack_policy
+
     def create_action(self):
         """
         Default create_action invoked by the CLI
@@ -268,14 +278,28 @@ class EnvironmentBase(object):
 
         template_url = self._root_template_url()
 
+        stack_policy = self._get_stack_policy()
+
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         try:
-            cfn_conn.update_stack(
-                StackName=stack_name,
-                TemplateURL=template_url,
-                Parameters=stack_params,
-                NotificationARNs=notification_arns,
-                Capabilities=['CAPABILITY_IAM'])
+            # ensure that the stack policy is included in the update_stack command if it exists
+            # boto won't let us pass StackPolicyBody as None, so this if/else is required
+            if stack_policy is not None:
+                cfn_conn.update_stack(
+                    StackName=stack_name,
+                    StackPolicyBody=stack_policy,                    
+                    TemplateURL=template_url,
+                    Parameters=stack_params,
+                    NotificationARNs=notification_arns,
+                    Capabilities=['CAPABILITY_IAM'])
+            else:
+                cfn_conn.update_stack(
+                    StackName=stack_name,
+                    TemplateURL=template_url,
+                    Parameters=stack_params,
+                    NotificationARNs=notification_arns,
+                    Capabilities=['CAPABILITY_IAM'])
+
             is_successful = True
             print "\nSuccessfully issued update stack command for %s\n" % stack_name
 
@@ -283,14 +307,26 @@ class EnvironmentBase(object):
         except botocore.exceptions.ClientError as update_e:
             if "does not exist" in update_e.message:
                 try:
-                    cfn_conn.create_stack(
-                        StackName=stack_name,
-                        TemplateURL=template_url,
-                        Parameters=stack_params,
-                        NotificationARNs=notification_arns,
-                        Capabilities=['CAPABILITY_IAM'],
-                        DisableRollback=True,
-                        TimeoutInMinutes=TIMEOUT)
+                    if stack_policy is not None:
+                        cfn_conn.create_stack(
+                            StackName=stack_name,
+                            StackPolicyBody=stack_policy,
+                            TemplateURL=template_url,
+                            Parameters=stack_params,
+                            NotificationARNs=notification_arns,
+                            Capabilities=['CAPABILITY_IAM'],
+                            DisableRollback=True,
+                            TimeoutInMinutes=TIMEOUT)
+                    else:
+                        cfn_conn.create_stack(
+                            StackName=stack_name,
+                            TemplateURL=template_url,
+                            Parameters=stack_params,
+                            NotificationARNs=notification_arns,
+                            Capabilities=['CAPABILITY_IAM'],
+                            DisableRollback=True,
+                            TimeoutInMinutes=TIMEOUT)
+
                     is_successful = True
                     print "\nSuccessfully issued create stack command for %s\n" % stack_name
                 except botocore.exceptions.ClientError as create_e:

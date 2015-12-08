@@ -279,12 +279,13 @@ class EnvironmentBase(object):
         template_url = self._root_template_url()
 
         stack_policy = self._get_stack_policy()
+        use_stack_policy = self.config.get("global").get("use_stack_policy")
 
         cfn_conn = utility.get_boto_client(self.config, 'cloudformation')
         try:
             # ensure that the stack policy is included in the update_stack command if it exists
             # boto won't let us pass StackPolicyBody as None, so this if/else is required
-            if stack_policy is not None:
+            if use_stack_policy and stack_policy is not None:
                 cfn_conn.update_stack(
                     StackName=stack_name,
                     StackPolicyBody=stack_policy,                    
@@ -307,7 +308,7 @@ class EnvironmentBase(object):
         except botocore.exceptions.ClientError as update_e:
             if "does not exist" in update_e.message:
                 try:
-                    if stack_policy is not None:
+                    if use_stack_policy and stack_policy is not None:
                         cfn_conn.create_stack(
                             StackName=stack_name,
                             StackPolicyBody=stack_policy,

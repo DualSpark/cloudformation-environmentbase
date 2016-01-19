@@ -101,7 +101,6 @@ class NetworkBase(EnvironmentBase):
         @param boto_config [dict] collection of boto configuration values as set by the configuration file
         @param az_count [int] number of AWS availability zones to include in the VPC mapping
         """
-        az_dict = {}
         regions_names = self._get_aws_regions(boto_config)
 
         for region_name in regions_names:

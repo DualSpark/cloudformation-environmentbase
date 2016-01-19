@@ -110,16 +110,10 @@ class NetworkBase(EnvironmentBase):
                 # release a new version this hack solves the region error
                 continue
             az_list = self._get_aws_zones(region_name)
-            if len(az_list) > 1:
-                temp_dict = {}
-                x = 0
-                for availability_zone_name in az_list:
-                    temp_dict['az' + str(x) + 'Name'] = availability_zone_name
-                    x += 1
-                if len(temp_dict) >= az_count:
-                    az_dict[region_name] = {}
-                    for item in temp_dict:
-                        self.template.add_region_map_value(region_name, item, temp_dict[item])
+            for x, az_name in enumerate(az_list[:az_count]):
+                key = 'az' + str(x) + 'Name'
+                value = az_name
+                self.template.add_region_map_value(region_name, key, value)
 
     def _get_aws_regions(self, boto_config):
         if self.globals['print_debug']:

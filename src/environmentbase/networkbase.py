@@ -13,6 +13,19 @@ from patterns import ha_nat
 import netaddr
 from toolz import groupby, assoc
 
+AWS_MAPPING = dict(
+                    [(u'eu-west-1', ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']),
+                    (u'ap-southeast-1', ['ap-southeast-1a', 'ap-southeast-1b']),
+                    (u'ap-southeast-2', ['ap-southeast-2a', 'ap-southeast-2b']),
+                    (u'eu-central-1', ['eu-central-1a', 'eu-central-1b']),
+                    (u'ap-northeast-1', ['ap-northeast-1a', 'ap-northeast-1c']),
+                    (u'us-east-1', ['us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e']),
+                    (u'sa-east-1', ['sa-east-1a', 'sa-east-1b', 'sa-east-1c']),
+                    (u'us-west-1', ['us-west-1b', 'us-west-1c']),
+                    (u'us-west-2', ['us-west-2a', 'us-west-2b', 'us-west-2c']),
+                    ]
+                )
+AWS_REGIONS = AWS_MAPPING.keys()
 
 class NetworkBase(EnvironmentBase):
     """
@@ -89,29 +102,41 @@ class NetworkBase(EnvironmentBase):
         @param az_count [int] number of AWS availability zones to include in the VPC mapping
         """
         az_dict = {}
-        region_list = []
-        aws_auth_info = {}
-        if 'aws_access_key_id' in boto_config and 'aws_secret_access_key' in boto_config:
-            aws_auth_info['aws_access_key_id'] = boto_config.get('aws_access_key_id')
-            aws_auth_info['aws_secret_access_key'] = boto_config.get('aws_secret_access_key')
-        conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'), **aws_auth_info)
-        for region in conn.get_all_regions():
-            if region.name == 'ap-northeast-2':
+        regions_names = self._get_aws_regions(boto_config)
+
+        for region_name in regions_names:
+            if region_name == 'ap-northeast-2':
                 # AWS added a new region in Seul, and while waiting for boto to
                 # release a new version this hack solves the region error
                 continue
-            region_list.append(region.name)
-            az_list = boto.vpc.connect_to_region(region.name, **aws_auth_info).get_all_zones()
+            az_list = self._get_aws_zones(region_name)
             if len(az_list) > 1:
                 temp_dict = {}
                 x = 0
-                for availability_zone in az_list:
-                    temp_dict['az' + str(x) + 'Name'] = availability_zone.name
+                for availability_zone_name in az_list:
+                    temp_dict['az' + str(x) + 'Name'] = availability_zone_name
                     x += 1
                 if len(temp_dict) >= az_count:
-                    az_dict[region.name] = {}
+                    az_dict[region_name] = {}
                     for item in temp_dict:
-                        self.template.add_region_map_value(region.name, item, temp_dict[item])
+                        self.template.add_region_map_value(region_name, item, temp_dict[item])
+
+    def _get_aws_regions(self, boto_config):
+        if self.globals['print_debug']:
+            regions_names = AWS_REGIONS
+        else:
+            conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'))
+            regions_names = [region.name for region in conn.get_all_regions()]
+        return regions_names
+        
+    def _get_aws_zones(self, region_name):
+        if self.globals['print_debug']:
+            return AWS_MAPPING[region_name]
+        else:
+            return [az.name for az in boto.vpc.connect_to_region(region_name).get_all_zones()]
+
+        
+
 
     def create_network_components(self, network_config=None):
         """

@@ -33,16 +33,24 @@ class NetworkBase(EnvironmentBase):
     for a common deployment within AWS. This is intended to be the 'base' stack for deploying child stacks
     """
 
+    def create_action(self):
+        """
+        Override EnvironmentBase.create_action() to construct the network components before the create_hook()
+        """
+        self.load_config()
+        self.initialize_template()
+        self.construct_network()
+        self.create_hook()
+        self.serialize_templates()
+
     def construct_network(self):
         """
         Main function to construct VPC, subnets, security groups, NAT instances, etc
         """
         network_config = self.config.get('network', {})
-
-        self.template._azs = []
-
         az_count = int(network_config.get('az_count', '2'))
 
+        self.template._azs = []
         self.stack_outputs = {}
 
         # Simple mapping of AZs to NATs, to prevent creating duplicates
@@ -81,16 +89,6 @@ class NetworkBase(EnvironmentBase):
         for x in range(0, az_count):
             self.template._azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
-    def create_action(self):
-        """
-        Override EnvironmentBase.create_action() to construct the network components before the create_hook()
-        """
-        self.load_config()
-        self.initialize_template()
-        self.construct_network()
-        self.create_hook()
-        self.serialize_templates()
-
     def add_vpc_az_mapping(self,
                            boto_config,
                            az_count=2):
@@ -127,9 +125,6 @@ class NetworkBase(EnvironmentBase):
             return AWS_MAPPING[region_name]
         else:
             return [az.name for az in boto.vpc.connect_to_region(region_name).get_all_zones()]
-
-        
-
 
     def create_network_components(self, network_config=None):
         """

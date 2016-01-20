@@ -41,6 +41,9 @@ class BaseNetwork(Template):
 
     def build_hook(self):
         self.construct_network()
+        # Remove the common parameters that this stack creates
+        for param_name in ["commonSecurityGroup", "internetGateway", "igwVpcAttachment", "vpcId", "vpcCidr"]:
+            self.parameters.pop(param_name)
 
     def construct_network(self):
         """

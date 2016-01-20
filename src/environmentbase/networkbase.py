@@ -1,7 +1,7 @@
 import json
 from itertools import product, chain
 
-from troposphere import Ref, Parameter, FindInMap, Output
+from troposphere import Ref, Parameter, FindInMap, Output, GetAtt
 import troposphere.ec2 as ec2
 import boto.vpc
 import boto
@@ -12,6 +12,9 @@ from patterns import ha_nat
 
 import netaddr
 from toolz import groupby, assoc
+
+from template import Template
+
 
 AWS_MAPPING = dict(
                     [(u'eu-west-1', ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']),
@@ -27,42 +30,41 @@ AWS_MAPPING = dict(
                 )
 AWS_REGIONS = AWS_MAPPING.keys()
 
-class NetworkBase(EnvironmentBase):
-    """
-    EnvironmentBase controller containing a root template with all of the base networking infrastructure
-    for a common deployment within AWS. This is intended to be the 'base' stack for deploying child stacks
-    """
+class BaseNetwork(Template):
 
-    def create_action(self):
-        """
-        Override EnvironmentBase.create_action() to construct the network components before the create_hook()
-        """
-        self.load_config()
-        self.initialize_template()
+    def __init__(self, template_name, network_config, boto_config, nat_config, az_count):
+        self.network_config = network_config
+        self.boto_config = boto_config
+        self.nat_config = nat_config
+        self.az_count = az_count
+        super(BaseNetwork, self).__init__(template_name)
+
+    def build_hook(self):
         self.construct_network()
-        self.create_hook()
-        self.serialize_templates()
 
     def construct_network(self):
         """
         Main function to construct VPC, subnets, security groups, NAT instances, etc
         """
-        network_config = self.config.get('network', {})
-        az_count = int(network_config.get('az_count', '2'))
+        network_config = self.network_config
+        boto_config = self.boto_config
+        nat_config = self.nat_config
+        az_count = self.az_count
+        cached = network_config.get("use_cached_region_data", False)
 
-        self.template._azs = []
+        self._azs = []
         self.stack_outputs = {}
 
         # Simple mapping of AZs to NATs, to prevent creating duplicates
         self.az_nat_mapping = {}
 
-        self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
+        self.add_vpc_az_mapping(boto_config, az_count=az_count, cached=cached)
         self.add_network_cidr_mapping(network_config=network_config)
-        self.create_network_components(network_config=network_config)
+        self.create_network_components(network_config=network_config, nat_config=nat_config)
 
-        self.template._common_security_group = self.template.add_resource(ec2.SecurityGroup('commonSecurityGroup',
+        self._common_security_group = self.add_resource(ec2.SecurityGroup('commonSecurityGroup',
             GroupDescription='Security Group allows ingress and egress for common usage patterns throughout this deployed infrastructure.',
-            VpcId=self.template.vpc_id,
+            VpcId=self.vpc_id,
             SecurityGroupEgress=[ec2.SecurityGroupRule(
                         FromPort='80',
                         ToPort='80',
@@ -84,14 +86,14 @@ class NetworkBase(EnvironmentBase):
                         ToPort='22',
                         IpProtocol='tcp',
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
-        self.template.add_output(Output('commonSecurityGroupId', Value=self.template.common_security_group))
+        self.add_output(Output('commonSecurityGroupId', Value=self.common_security_group))
 
         for x in range(0, az_count):
-            self.template._azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
+            self._azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
 
     def add_vpc_az_mapping(self,
                            boto_config,
-                           az_count=2):
+                           az_count=2, cached=False):
         """
         Method gets the AZs within the given account where subnets can be created/deployed
         This is necessary due to some accounts having 4 subnets available within ec2 classic and only 3 within vpc
@@ -99,34 +101,34 @@ class NetworkBase(EnvironmentBase):
         @param boto_config [dict] collection of boto configuration values as set by the configuration file
         @param az_count [int] number of AWS availability zones to include in the VPC mapping
         """
-        regions_names = self._get_aws_regions(boto_config)
+        regions_names = self._get_aws_regions(boto_config, cached)
 
         for region_name in regions_names:
             if region_name == 'ap-northeast-2':
                 # AWS added a new region in Seul, and while waiting for boto to
                 # release a new version this hack solves the region error
                 continue
-            az_list = self._get_aws_zones(region_name)
+            az_list = self._get_aws_zones(region_name, cached)
             for x, az_name in enumerate(az_list[:az_count]):
                 key = 'az' + str(x) + 'Name'
                 value = az_name
-                self.template.add_region_map_value(region_name, key, value)
+                self.add_region_map_value(region_name, key, value)
 
-    def _get_aws_regions(self, boto_config):
-        if self.globals['print_debug']:
+    def _get_aws_regions(self, boto_config, cached=False):
+        if cached:
             regions_names = AWS_REGIONS
         else:
             conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'))
             regions_names = [region.name for region in conn.get_all_regions()]
         return regions_names
         
-    def _get_aws_zones(self, region_name):
-        if self.globals['print_debug']:
+    def _get_aws_zones(self, region_name, cached=False):
+        if cached:
             return AWS_MAPPING[region_name]
         else:
             return [az.name for az in boto.vpc.connect_to_region(region_name).get_all_zones()]
 
-    def create_network_components(self, network_config=None):
+    def create_network_components(self, network_config, nat_config):
         """
         Method creates a network with the specified number of public and private subnets within the
         VPC cidr specified by the networkAddresses CloudFormation mapping.
@@ -138,24 +140,24 @@ class NetworkBase(EnvironmentBase):
         else:
             network_name = self.__class__.__name__
 
-        self.template._vpc_id = self.template.add_resource(ec2.VPC('vpc',
+        self._vpc_id = self.add_resource(ec2.VPC('vpc',
                 CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'),
                 EnableDnsSupport=True,
                 EnableDnsHostnames=True,
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
 
-        self.template.add_output(Output('vpcId', Value=self.template.vpc_id))
+        self.add_output(Output('vpcId', Value=self.vpc_id))
 
-        self.template._vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
+        self._vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 
-        self.template._igw = self.template.add_resource(ec2.InternetGateway('vpcIgw'))
+        self._igw = self.add_resource(ec2.InternetGateway('vpcIgw'))
 
         ## add IGW
         igw_title = 'igwVpcAttachment'
-        self.template._vpc_gateway_attachment = self.template.add_resource(ec2.VPCGatewayAttachment(
+        self._vpc_gateway_attachment = self.add_resource(ec2.VPCGatewayAttachment(
             igw_title,
-            InternetGatewayId=self.template.igw,
-            VpcId=self.template.vpc_id))
+            InternetGatewayId=self.igw,
+            VpcId=self.vpc_id))
 
         self.gateway_hook()
 
@@ -172,50 +174,50 @@ class NetworkBase(EnvironmentBase):
                 subnet_layer = subnet_config.get('name')
 
                 AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
-                CidrBlock = self.template.mappings['networkAddresses'][az_key][subnet_layer]
+                CidrBlock = self.mappings['networkAddresses'][az_key][subnet_layer]
 
                 # Save the subnet references to the template object
-                if subnet_type not in self.template._subnets:
-                    self.template._subnets[subnet_type] = {}
+                if subnet_type not in self._subnets:
+                    self._subnets[subnet_type] = {}
 
-                if subnet_layer not in self.template._subnets[subnet_type]:
-                    self.template._subnets[subnet_type][subnet_layer] = []
+                if subnet_layer not in self._subnets[subnet_type]:
+                    self._subnets[subnet_type][subnet_layer] = []
 
                 # Create the subnet
                 subnet_name = subnet_layer + 'AZ' + str(index)
-                subnet = self.template.add_resource(ec2.Subnet(
+                subnet = self.add_resource(ec2.Subnet(
                     subnet_name,
                     AvailabilityZone=AvailabilityZone,
-                    VpcId=self.template.vpc_id,
+                    VpcId=self.vpc_id,
                     CidrBlock=CidrBlock,
                     Tags=[ec2.Tag(key='network', value=subnet_type),
                           ec2.Tag(key='Name', value=' '.join([subnet_layer, 'AZ:', str(index)])),
                         ]))
 
-                self.template._subnets[subnet_type][subnet_layer].append(subnet)
+                self._subnets[subnet_type][subnet_layer].append(subnet)
 
-                self.template.add_output(Output(subnet_name, Value=CidrBlock))
+                self.add_output(Output(subnet_name, Value=CidrBlock))
 
                 # Create the routing table
-                route_table = self.template.add_resource(ec2.RouteTable(
+                route_table = self.add_resource(ec2.RouteTable(
                     subnet_layer + 'AZ' + str(index) + 'RouteTable',
-                    VpcId=self.template.vpc_id))
+                    VpcId=self.vpc_id))
 
                 # Create the NATs and egress rules
-                self.create_subnet_egress(index, route_table, igw_title, subnet_type, subnet_layer)
+                self.create_subnet_egress(index, route_table, igw_title, subnet_type, subnet_layer, nat_config)
 
                 # Associate the routing table with the subnet
-                self.template.add_resource(ec2.SubnetRouteTableAssociation(
+                self.add_resource(ec2.SubnetRouteTableAssociation(
                     subnet_layer + 'AZ' + str(index) + 'EgressRouteTableAssociation',
                     RouteTableId=Ref(route_table),
                     SubnetId=Ref(subnet)))
 
-        self.template.manual_parameter_bindings['vpcId'] = self.template.vpc_id
-        self.template.manual_parameter_bindings['vpcCidr'] = self.template.vpc_cidr
-        self.template.manual_parameter_bindings['internetGateway'] = self.template.igw
-        self.template.manual_parameter_bindings['igwVpcAttachment'] = self.template.vpc_gateway_attachment
+        self.manual_parameter_bindings['vpcId'] = self.vpc_id
+        self.manual_parameter_bindings['vpcCidr'] = self.vpc_cidr
+        self.manual_parameter_bindings['internetGateway'] = self.igw
+        self.manual_parameter_bindings['igwVpcAttachment'] = self.vpc_gateway_attachment
 
-    def create_subnet_egress(self, index, route_table, igw_title, subnet_type, subnet_layer):
+    def create_subnet_egress(self, index, route_table, igw_title, subnet_type, subnet_layer, nat_config):
         """
         Create an egress route for the subnet with the given index and type
         Override to create egress routes for other subnet types
@@ -224,10 +226,10 @@ class NetworkBase(EnvironmentBase):
 
         # For public subnets, create the route to the IGW
         if subnet_type == 'public':
-            self.template.add_resource(ec2.Route(subnet_layer + 'AZ' + str(index) + 'EgressRoute',
+            self.add_resource(ec2.Route(subnet_layer + 'AZ' + str(index) + 'EgressRoute',
                 DependsOn=[igw_title],
                 DestinationCidrBlock='0.0.0.0/0',
-                GatewayId=self.template.igw,
+                GatewayId=self.igw,
                 RouteTableId=Ref(route_table)))
 
         # For private subnets, create a NAT instance in a public subnet in the same AZ
@@ -237,9 +239,9 @@ class NetworkBase(EnvironmentBase):
             if self.az_nat_mapping.get(index):
                 return
 
-            nat_instance_type = self.config['nat']['instance_type']
-            nat_enable_ntp = self.config['nat']['enable_ntp']
-            extra_user_data = self.config['nat'].get('extra_user_data')
+            nat_instance_type = nat_config['instance_type']
+            nat_enable_ntp = nat_config['enable_ntp']
+            extra_user_data = nat_config.get('extra_user_data')
             ha_nat = self.create_nat(
                 index,
                 nat_instance_type,
@@ -248,7 +250,7 @@ class NetworkBase(EnvironmentBase):
                 extra_user_data=extra_user_data)
 
             # We merge the NAT template into the root template
-            self.template.merge(ha_nat)
+            self.merge(ha_nat)
 
             # Save the reference to the HA NAT, so we don't recreate it if we hit another private subnet in this AZ
             self.az_nat_mapping[index] = ha_nat
@@ -351,7 +353,7 @@ class NetworkBase(EnvironmentBase):
                 ret_val[az_key][subnet_name] = dict()
             ret_val[az_key][subnet_name] = subnet_cidr
 
-        return self.template.add_mapping('networkAddresses', ret_val)
+        return self.add_mapping('networkAddresses', ret_val)
 
     def add_vpn_gateway(self,
                         vpn_conf):
@@ -364,11 +366,27 @@ class NetworkBase(EnvironmentBase):
         else:
             vpn_name = self.__class__.__name__ + 'Gateway'
 
-        gateway = self.template.add_resource(ec2.VPNGateway('vpnGateway',
+        gateway = self.add_resource(ec2.VPNGateway('vpnGateway',
             Type=vpn_conf.get('vpn_type', 'ipsec.1'),
             Tags=[ec2.Tag(key='Name', value=vpn_name)]))
 
-        gateway_connection = self.template.add_resource(ec2.VPCGatewayAttachment('vpnGatewayAttachment',
-            VpcId=self.template.vpc_id,
-            InternetGatewayId=self.template.igw,
+        gateway_connection = self.add_resource(ec2.VPCGatewayAttachment('vpnGatewayAttachment',
+            VpcId=self.vpc_id,
+            InternetGatewayId=self.igw,
             VpnGatewayId=gateway))
+
+
+class NetworkBase(EnvironmentBase):
+    """
+    EnvironmentBase controller containing a root template with all of the base networking infrastructure
+    for a common deployment within AWS. This is intended to be the 'base' stack for deploying child stacks
+    """
+
+    def create_hook(self):
+        network_config = self.config.get('network', {})
+        boto_config = self.config.get('boto', {})
+        nat_config = self.config.get('nat')
+        az_count = int(network_config.get('az_count', '2'))
+
+        base_network_template = BaseNetwork('BaseNetwork', network_config, boto_config, nat_config, az_count)
+        self.add_child_template(base_network_template)

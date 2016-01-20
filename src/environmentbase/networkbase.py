@@ -397,28 +397,28 @@ class NetworkBase(EnvironmentBase):
         #     self.template.add_output(Output('', Value=GetAtt(base_network_template.name, '')))
 
         self.template.add_output(Output('commonSecurityGroupId', 
-                Value=GetAtt(base_network_template.name, 'Output.commonSecurityGroupId')))
+                Value=GetAtt(base_network_template.name, 'Outputs.commonSecurityGroupId')))
 
         self.template.add_output(Output('vpcId', 
-                Value=GetAtt(base_network_template.name, 'vpcId')))
+                Value=GetAtt(base_network_template.name, 'Outputs.vpcId')))
 
         self.template.add_output(Output('privateAZ2', 
-                Value=GetAtt(base_network_template.name, 'privateAZ2')))
+                Value=GetAtt(base_network_template.name, 'Outputs.privateAZ2')))
 
         self.template.add_output(Output('publicAZ1', 
-                Value=GetAtt(base_network_template.name, 'publicAZ1')))
+                Value=GetAtt(base_network_template.name, 'Outputs.publicAZ1')))
 
         self.template.add_output(Output('privateAZ0', 
-                Value=GetAtt(base_network_template.name, 'privateAZ0')))
+                Value=GetAtt(base_network_template.name, 'Outputs.privateAZ0')))
 
         self.template.add_output(Output('publicAZ0', 
-                Value=GetAtt(base_network_template.name, 'publicAZ0')))
+                Value=GetAtt(base_network_template.name, 'Outputs.publicAZ0')))
 
         self.template.add_output(Output('privateAZ1', 
-                Value=GetAtt(base_network_template.name, 'privateAZ1')))
+                Value=GetAtt(base_network_template.name, 'Outputs.privateAZ1')))
 
         self.template.add_output(Output('publicAZ2', 
-                Value=GetAtt(base_network_template.name, 'publicAZ2')))
+                Value=GetAtt(base_network_template.name, 'Outputs.publicAZ2')))
 
 
 

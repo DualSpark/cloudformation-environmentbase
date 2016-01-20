@@ -1189,7 +1189,7 @@ class Template(t.Template):
         Creates a cloudformation stack resource in this template with the attributes provided
         """
         stack_obj = cf.Stack(
-            template_name + 'Stack',
+            template_name,
             TemplateURL=template_url,
             Parameters=stack_params,
             TimeoutInMinutes=Template.stack_timeout,

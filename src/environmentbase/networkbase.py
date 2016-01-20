@@ -390,3 +390,35 @@ class NetworkBase(EnvironmentBase):
 
         base_network_template = BaseNetwork('BaseNetwork', network_config, boto_config, nat_config, az_count)
         self.add_child_template(base_network_template)
+
+        # TODO: make outputs passing less fragile:
+        # base_network_template.build_hook()
+        # for output in base_network_template.outputs:
+        #     self.template.add_output(Output('', Value=GetAtt(base_network_template.name, '')))
+
+        self.template.add_output(Output('commonSecurityGroupId', 
+                Value=GetAtt(base_network_template.name, 'Output.commonSecurityGroupId')))
+
+        self.template.add_output(Output('vpcId', 
+                Value=GetAtt(base_network_template.name, 'vpcId')))
+
+        self.template.add_output(Output('privateAZ2', 
+                Value=GetAtt(base_network_template.name, 'privateAZ2')))
+
+        self.template.add_output(Output('publicAZ1', 
+                Value=GetAtt(base_network_template.name, 'publicAZ1')))
+
+        self.template.add_output(Output('privateAZ0', 
+                Value=GetAtt(base_network_template.name, 'privateAZ0')))
+
+        self.template.add_output(Output('publicAZ0', 
+                Value=GetAtt(base_network_template.name, 'publicAZ0')))
+
+        self.template.add_output(Output('privateAZ1', 
+                Value=GetAtt(base_network_template.name, 'privateAZ1')))
+
+        self.template.add_output(Output('publicAZ2', 
+                Value=GetAtt(base_network_template.name, 'publicAZ2')))
+
+
+

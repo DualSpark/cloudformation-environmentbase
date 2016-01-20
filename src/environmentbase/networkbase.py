@@ -215,11 +215,6 @@ class BaseNetwork(Template):
                     RouteTableId=Ref(route_table),
                     SubnetId=Ref(subnet)))
 
-        self.manual_parameter_bindings['vpcId'] = self.vpc_id
-        self.manual_parameter_bindings['vpcCidr'] = self.vpc_cidr
-        self.manual_parameter_bindings['internetGateway'] = self.igw
-        self.manual_parameter_bindings['igwVpcAttachment'] = self.vpc_gateway_attachment
-
     def create_subnet_egress(self, index, route_table, igw_title, subnet_type, subnet_layer, nat_config):
         """
         Create an egress route for the subnet with the given index and type

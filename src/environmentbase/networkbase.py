@@ -34,7 +34,7 @@ class NetworkBase(EnvironmentBase):
 
         # Simple mapping of AZs to NATs, to prevent creating duplicates
         self.az_nat_mapping = {}
-        
+
         self.add_vpc_az_mapping(boto_config=self.config.get('boto', {}), az_count=az_count)
         self.add_network_cidr_mapping(network_config=network_config)
         self.create_network_components(network_config=network_config)
@@ -96,6 +96,10 @@ class NetworkBase(EnvironmentBase):
             aws_auth_info['aws_secret_access_key'] = boto_config.get('aws_secret_access_key')
         conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'), **aws_auth_info)
         for region in conn.get_all_regions():
+            if region.name == 'ap-northeast-2':
+                # AWS added a new region in Seul, and while waiting for boto to
+                # release a new version this hack solves the region error
+                continue
             region_list.append(region.name)
             az_list = boto.vpc.connect_to_region(region.name, **aws_auth_info).get_all_zones()
             if len(az_list) > 1:
@@ -111,7 +115,7 @@ class NetworkBase(EnvironmentBase):
 
     def create_network_components(self, network_config=None):
         """
-        Method creates a network with the specified number of public and private subnets within the 
+        Method creates a network with the specified number of public and private subnets within the
         VPC cidr specified by the networkAddresses CloudFormation mapping.
         @param network_config [dict] collection of network parameters for creating the VPC network
         """
@@ -171,7 +175,7 @@ class NetworkBase(EnvironmentBase):
                     AvailabilityZone=AvailabilityZone,
                     VpcId=self.template.vpc_id,
                     CidrBlock=CidrBlock,
-                    Tags=[ec2.Tag(key='network', value=subnet_type), 
+                    Tags=[ec2.Tag(key='network', value=subnet_type),
                           ec2.Tag(key='Name', value=' '.join([subnet_layer, 'AZ:', str(index)])),
                         ]))
 
@@ -273,7 +277,7 @@ class NetworkBase(EnvironmentBase):
         ret_val = {}
         base_cidr = network_cidr_base + '/' + network_cidr_size
         net = netaddr.IPNetwork(base_cidr)
-        
+
         grouped_subnet = groupby('size', self._get_subnet_config_w_az(network_config))
         subnet_groups = sorted(grouped_subnet.items())
         available_cidrs = []
@@ -299,8 +303,8 @@ class NetworkBase(EnvironmentBase):
     def add_network_cidr_mapping(self,
                                  network_config):
         """
-        Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks. 
-        Calculated based on CIDR block sizes and additionally checks to ensure all network segments 
+        Method calculates and adds a CloudFormation mapping that is used to set VPC and Subnet CIDR blocks.
+        Calculated based on CIDR block sizes and additionally checks to ensure all network segments
         fit inside of the specified overall VPC CIDR.
         @param network_config [dict] dictionary of values containing data for creating
         """
@@ -325,7 +329,7 @@ class NetworkBase(EnvironmentBase):
             subnet_az = subnet_config.get('AZ', '-1')
             subnet_cidr = subnet_config.get('cidr', 'ERROR')
             az_key = 'AZ{}'.format(subnet_az)
-            
+
             # TODO: check for subnet collisions
 
             if az_key not in ret_val:

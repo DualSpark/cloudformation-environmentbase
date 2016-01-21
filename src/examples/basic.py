@@ -1,6 +1,4 @@
 from environmentbase.networkbase import NetworkBase
-from environmentbase.patterns.bastion import Bastion
-from environmentbase.patterns.ha_cluster import HaCluster
 
 
 class MyEnvClass(NetworkBase):
@@ -9,15 +7,8 @@ class MyEnvClass(NetworkBase):
     """
 
     def create_hook(self):
-        # Add a bastion host as a child stack in the environment
-        self.add_child_template(Bastion())
-
-        # Add a preconfigured ASG + ELB as a child stack in the environment
-        self.add_child_template(HaCluster(
-            name="MyCluster",
-            min_size=2, max_size=3,
-            instance_type='t2.micro'))
-
+        # Do custom troposphere resource creation here
+        super(MyEnvClass, self).create_hook()
 
 if __name__ == '__main__':
     MyEnvClass()

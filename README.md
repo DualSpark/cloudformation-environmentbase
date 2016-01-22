@@ -152,3 +152,64 @@ environmentbase delete
 ```
 
 See [File Descriptions](FILE_DESCRIPTIONS.md) for a detailed explanation on the various files generated and consumed by EnvironmentBase
+
+## Dealing with versions
+
+1. Basic commands
+
+  Reading tag information 
+
+  - List all tags (apply across all branches): `git tag -l`
+
+  - Show commit associated to a tag. This is the same as git show <commit hash>, plus the tag annotation: `git show <tag name>`
+
+  Creating tags
+
+  - We use annotated tags to include extra information: `git tag -a 0.8.4 -m "Version 0.8.4"`
+
+  - Once the tag is created locally it needs to be pushed upstream: `git push origin master --tags`
+
+  Removing a branch or tag
+
+  - Remote: `git push origin :refs/<tags|heads>/<name>` e.g. `git push origin :refs/tags/0.8.5` OR `git push origin :refs/heads/0.8.5`
+
+  - Local: `git <branch|tag> -d 0.8.5`
+
+  Switching to a specific tag: `git checkout 0.8.4`
+
+
+2. Referencing a specific version of EnvironmentBase with setup.py.
+
+  Note: This works the same for tags and branches (since we use the same names)
+
+  ```python
+  from setuptools import setup
+
+  eb_version = “0.8.0”
+  setup(
+      name=“<your project name here>”,
+      version="0.1",
+      install_requires=[
+          'cfn-environment-base==' + eb_version
+      ],
+      dependency_links=[
+          "https://github.com/DualSpark/cloudformation-environmentbase/zipball/%(eb_version)#egg=cfn-environment-base-%(eb_version)" % locals()
+      ],
+      package_dir={"": "src"},
+      include_package_data=True,
+      zip_safe=True
+  )
+  ```
+
+
+3. New release procedure
+  1. Create a new branch with name <major>.<minor>.<hotfix> e.g “0.8.5”
+  2. Make code changes, test .. etc (merge changes from master into this branch)
+  3. Merge into master
+  4. Delete the version branch 
+  5. Create tag on master with same name as branch you just deleted.
+  
+  Note that the branch is deleted **before** the tag is created because they share the same name.  Otherwise referring to things by the version name may be ambigious.
+
+
+

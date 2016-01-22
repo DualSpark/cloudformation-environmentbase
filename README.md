@@ -205,6 +205,7 @@ See [File Descriptions](FILE_DESCRIPTIONS.md) for a detailed explanation on the 
 3. New release procedure
   1. Create a new branch with name <major>.<minor>.<hotfix> e.g “0.8.5”
   2. Make code changes, test .. etc (merge changes from master into this branch)
+     Remember to update: src/environmentbase/version.py to the same value as the branch name.
   3. Merge into master
   4. Delete the version branch 
   5. Create tag on master with same name as branch you just deleted.

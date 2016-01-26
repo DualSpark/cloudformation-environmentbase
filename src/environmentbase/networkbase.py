@@ -44,9 +44,9 @@ class BaseNetwork(Template):
         self.az_nat_mapping = {}
 
         super(BaseNetwork, self).__init__(template_name)
+        self.construct_network()
 
     def build_hook(self):
-        self.construct_network()
         # Remove the common parameters that this stack creates
         for param_name in ["commonSecurityGroup", "internetGateway", "igwVpcAttachment", "vpcId", "vpcCidr"]:
             self.parameters.pop(param_name)
@@ -398,37 +398,14 @@ class NetworkBase(EnvironmentBase):
         base_network_template = BaseNetwork('BaseNetwork', network_config, boto_config, nat_config, az_count)
         self.add_child_template(base_network_template)
 
-        # TODO: make outputs passing less fragile:
-        # base_network_template.build_hook()
-        # for output in base_network_template.outputs:
-        #     self.template.add_output(Output('', Value=GetAtt(base_network_template.name, '')))
+        for output in base_network_template.outputs:
+            self.manual_parameter_bindings[output] = GetAtt(base_network_template.name, output)
+            self.template.add_output(Output(output, Value=GetAtt(base_network_template.name, output)))
+            # TODO: should a custom resource be addeded for each output? 
 
-        self.template._subnets = base_network_template._subnets
-
-        self.template.add_output(Output('commonSecurityGroupId', 
-                Value=GetAtt(base_network_template.name, 'Outputs.commonSecurityGroupId')))
-
-        self.template.add_output(Output('vpcId', 
-                Value=GetAtt(base_network_template.name, 'Outputs.vpcId')))
-        self.template._vpc_id = GetAtt(base_network_template.name, 'Outputs.vpcId')
-
-        self.template.add_output(Output('privateAZ2', 
-                Value=GetAtt(base_network_template.name, 'Outputs.privateAZ2')))
-
-        self.template.add_output(Output('publicAZ1', 
-                Value=GetAtt(base_network_template.name, 'Outputs.publicAZ1')))
-
-        self.template.add_output(Output('privateAZ0', 
-                Value=GetAtt(base_network_template.name, 'Outputs.privateAZ0')))
-
-        self.template.add_output(Output('publicAZ0', 
-                Value=GetAtt(base_network_template.name, 'Outputs.publicAZ0')))
-
-        self.template.add_output(Output('privateAZ1', 
-                Value=GetAtt(base_network_template.name, 'Outputs.privateAZ1')))
-
-        self.template.add_output(Output('publicAZ2', 
-                Value=GetAtt(base_network_template.name, 'Outputs.publicAZ2')))
-
-
+        self.template._subnets = base_network_template._subnets.copy()
+        # self._vpc_cidr = None
+        # self._common_security_group = None
+        # self._utility_bucket = None
+        # self._igw = None
 

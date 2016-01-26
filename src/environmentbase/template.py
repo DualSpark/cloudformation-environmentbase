@@ -14,6 +14,9 @@ from datetime import datetime
 import resources as res
 import utility
 
+from toolz.dicttoolz import merge
+
+
 class Template(t.Template):
     """
     Custom wrapper for Troposphere Template object which handles S3 uploads and a specific
@@ -297,10 +300,17 @@ class Template(t.Template):
 
     def add_common_parameters_from_parent(self, parent):
         ec2_key = parent._ec2_key.Default
-        parent_subnets = parent._subnets
+        parent_subnets = parent._subnets if not self._subnets else {}
         az_count = len(parent._azs)
-        region_map = parent.mappings['RegionMap']
+        if self.mappings['RegionMap']:
+            region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
+        else:
+            region_map = parent.mappings['RegionMap']
         self.add_common_parameters(ec2_key, region_map, parent_subnets, az_count)
+
+    def _merge_region_map(self, map1, map2):
+        for key in set(map1.keys() + map2.keys()):
+            yield (key, merge(map1[key], map2[key]))
 
     def add_common_parameters(self, ec2_key, region_map, parent_subnets, az_count=2):
         """

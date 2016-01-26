@@ -126,7 +126,7 @@ class BaseNetwork(Template):
             conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'))
             regions_names = [region.name for region in conn.get_all_regions()]
         return regions_names
-        
+
     def _get_aws_zones(self, region_name, cached=False):
         if cached:
             return AWS_MAPPING[region_name]

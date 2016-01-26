@@ -58,7 +58,6 @@ class EnvironmentBase(object):
         self.globals = {}
         self.template_args = {}
         self.template = None
-        self.manual_parameter_bindings = {}
         self.deploy_parameter_bindings = []
         self.ignore_outputs = ['templateValidationHash', 'dateGenerated']
         self.stack_outputs = {}
@@ -593,8 +592,6 @@ class EnvironmentBase(object):
 
         self.template.add_utility_bucket(name=bucket_name)
         self.template.add_output(Output('utilityBucket',Value=bucket_name))
-
-        self.manual_parameter_bindings['utilityBucket'] = self.template.utility_bucket
 
         ami_cache = res.load_yaml_file(self.config.get('template').get('ami_map_file'))
         self.template.add_ami_mapping(ami_cache)    

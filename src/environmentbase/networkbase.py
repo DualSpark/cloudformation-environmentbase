@@ -37,6 +37,12 @@ class BaseNetwork(Template):
         self.boto_config = boto_config
         self.nat_config = nat_config
         self.az_count = az_count
+
+        self._azs = []
+        self.stack_outputs = {}
+        # Simple mapping of AZs to NATs, to prevent creating duplicates
+        self.az_nat_mapping = {}
+
         super(BaseNetwork, self).__init__(template_name)
 
     def build_hook(self):
@@ -55,11 +61,6 @@ class BaseNetwork(Template):
         az_count = self.az_count
         cached = network_config.get("use_cached_region_data", False)
 
-        self._azs = []
-        self.stack_outputs = {}
-
-        # Simple mapping of AZs to NATs, to prevent creating duplicates
-        self.az_nat_mapping = {}
 
         self.add_vpc_az_mapping(boto_config, az_count=az_count, cached=cached)
         self.add_network_cidr_mapping(network_config=network_config)
@@ -402,11 +403,14 @@ class NetworkBase(EnvironmentBase):
         # for output in base_network_template.outputs:
         #     self.template.add_output(Output('', Value=GetAtt(base_network_template.name, '')))
 
+        self.template._subnets = base_network_template._subnets
+
         self.template.add_output(Output('commonSecurityGroupId', 
                 Value=GetAtt(base_network_template.name, 'Outputs.commonSecurityGroupId')))
 
         self.template.add_output(Output('vpcId', 
                 Value=GetAtt(base_network_template.name, 'Outputs.vpcId')))
+        self.template._vpc_id = GetAtt(base_network_template.name, 'Outputs.vpcId')
 
         self.template.add_output(Output('privateAZ2', 
                 Value=GetAtt(base_network_template.name, 'Outputs.privateAZ2')))

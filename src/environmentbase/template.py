@@ -367,9 +367,13 @@ class Template(t.Template):
                     self._subnets[subnet_type][subnet_layer] = []
 
                 for subnet in parent_subnets[subnet_type][subnet_layer]:
+                    if isinstance(subnet, Parameter):
+                        subnet_name = subnet.title
+                    else:
+                        subnet_name = subnet.data['Ref']
                     self._subnets[subnet_type][subnet_layer].append(self.add_parameter(Parameter(
-                        subnet.name,
-                        Description=subnet.name,
+                        subnet_name,
+                        Description=subnet_name,
                         Type='String')))
 
         self._azs = []

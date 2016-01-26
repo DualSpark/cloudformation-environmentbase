@@ -63,6 +63,7 @@ class BaseNetwork(Template):
 
         self.add_vpc_az_mapping(boto_config, az_count=az_count, cached=cached)
         self.add_network_cidr_mapping(network_config=network_config)
+        self._prepare_subnets(self._subnet_configs)
         self.create_network_components(network_config=network_config, nat_config=nat_config)
 
         self._common_security_group = self.add_resource(ec2.SecurityGroup('commonSecurityGroup',
@@ -131,6 +132,18 @@ class BaseNetwork(Template):
         else:
             return [az.name for az in boto.vpc.connect_to_region(region_name).get_all_zones()]
 
+    def _prepare_subnets(self, subnet_configs):
+        for index, subnet_config in enumerate(subnet_configs):
+            subnet_type = subnet_config.get('type', 'private')
+            subnet_layer = subnet_config.get('name', 'subnet')
+
+            # Save the subnet references to the template object
+            if subnet_type not in self._subnets:
+                self._subnets[subnet_type] = {}
+
+            if subnet_layer not in self._subnets[subnet_type]:
+                self._subnets[subnet_type][subnet_layer] = []
+
     def create_network_components(self, network_config, nat_config):
         """
         Method creates a network with the specified number of public and private subnets within the
@@ -143,15 +156,16 @@ class BaseNetwork(Template):
         else:
             network_name = self.__class__.__name__
 
+        self._vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
+        self.add_output(Output('networkAddresses', Value=str(self.mappings['networkAddresses'])))
+
         self._vpc_id = self.add_resource(ec2.VPC('vpc',
-                CidrBlock=FindInMap('networkAddresses', 'vpcBase', 'cidr'),
+                CidrBlock=self._vpc_cidr,
                 EnableDnsSupport=True,
                 EnableDnsHostnames=True,
                 Tags=[ec2.Tag(key='Name', value=network_name)]))
 
         self.add_output(Output('vpcId', Value=self.vpc_id))
-
-        self._vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
 
         self._igw = self.add_resource(ec2.InternetGateway('vpcIgw'))
 
@@ -165,55 +179,46 @@ class BaseNetwork(Template):
         self.gateway_hook()
 
         ## make Subnets
-        network_cidr_base = str(network_config.get('network_cidr_base', '172.16.0.0'))
+        network_cidr_base = self._vpc_cidr
 
-        # Iterate through each subnet type for each AZ and add subnets, routing tables, routes, and NATs as necessary
-        for index in range(int(network_config.get('az_count', 2))):
-            az = index
-            az_key = 'AZ{}'.format(az)
+        for index, subnet_config in enumerate(self._subnet_configs):
+            subnet_type = subnet_config.get('type', 'private')
+            subnet_size = subnet_config.get('size', '22')
+            subnet_layer = subnet_config.get('name', 'subnet')
+            subnet_az = subnet_config.get('AZ', '-1')
+            subnet_cidr = subnet_config.get('cidr', 'ERROR')
+            az_key = 'AZ{}'.format(subnet_az)
 
-            for ind, subnet_config in enumerate(network_config.get('subnet_config', {})):
-                subnet_type = subnet_config.get('type', 'private')
-                subnet_layer = subnet_config.get('name')
+            AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(subnet_az) + 'Name')
+            CidrBlock = subnet_cidr
+            # Create the subnet
+            subnet_name = subnet_layer + 'AZ' + str(subnet_az)
+            subnet = self.add_resource(ec2.Subnet(
+                subnet_name,
+                AvailabilityZone=AvailabilityZone,
+                VpcId=self.vpc_id,
+                CidrBlock=CidrBlock,
+                Tags=[ec2.Tag(key='network', value=subnet_type),
+                      ec2.Tag(key='Name', value=subnet_name),
+                    ]))
 
-                AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(index) + 'Name')
-                CidrBlock = self.mappings['networkAddresses'][az_key][subnet_layer]
+            self._subnets[subnet_type][subnet_layer].append(subnet)
 
-                # Save the subnet references to the template object
-                if subnet_type not in self._subnets:
-                    self._subnets[subnet_type] = {}
+            self.add_output(Output(subnet_name, Value=self._ref_maybe(subnet)))
 
-                if subnet_layer not in self._subnets[subnet_type]:
-                    self._subnets[subnet_type][subnet_layer] = []
+            # Create the routing table
+            route_table = self.add_resource(ec2.RouteTable(
+                subnet_name + 'RouteTable',
+                VpcId=self.vpc_id))
 
-                # Create the subnet
-                subnet_name = subnet_layer + 'AZ' + str(index)
-                subnet = self.add_resource(ec2.Subnet(
-                    subnet_name,
-                    AvailabilityZone=AvailabilityZone,
-                    VpcId=self.vpc_id,
-                    CidrBlock=CidrBlock,
-                    Tags=[ec2.Tag(key='network', value=subnet_type),
-                          ec2.Tag(key='Name', value=' '.join([subnet_layer, 'AZ:', str(index)])),
-                        ]))
+            # Create the NATs and egress rules
+            self.create_subnet_egress(index, route_table, igw_title, subnet_type, subnet_layer, nat_config)
 
-                self._subnets[subnet_type][subnet_layer].append(subnet)
-
-                self.add_output(Output(subnet_name, Value=CidrBlock))
-
-                # Create the routing table
-                route_table = self.add_resource(ec2.RouteTable(
-                    subnet_layer + 'AZ' + str(index) + 'RouteTable',
-                    VpcId=self.vpc_id))
-
-                # Create the NATs and egress rules
-                self.create_subnet_egress(index, route_table, igw_title, subnet_type, subnet_layer, nat_config)
-
-                # Associate the routing table with the subnet
-                self.add_resource(ec2.SubnetRouteTableAssociation(
-                    subnet_layer + 'AZ' + str(index) + 'EgressRouteTableAssociation',
-                    RouteTableId=Ref(route_table),
-                    SubnetId=Ref(subnet)))
+            # Associate the routing table with the subnet
+            self.add_resource(ec2.SubnetRouteTableAssociation(
+                subnet_name + 'EgressRouteTableAssociation',
+                RouteTableId=Ref(route_table),
+                SubnetId=Ref(subnet)))
 
     def create_subnet_egress(self, index, route_table, igw_title, subnet_type, subnet_layer, nat_config):
         """
@@ -333,7 +338,7 @@ class BaseNetwork(Template):
         current_base_address = first_network_address_block
 
         subnet_config = self._get_subnet_config_w_cidr(network_config)
-        subnet_config = list(subnet_config)
+        subnet_config = self._subnet_configs = list(subnet_config)
 
         for index, subnet_config in enumerate(subnet_config):
             subnet_type = subnet_config.get('type', 'private')

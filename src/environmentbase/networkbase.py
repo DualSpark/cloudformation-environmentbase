@@ -136,6 +136,9 @@ class BaseNetwork(Template):
         for index, subnet_config in enumerate(subnet_configs):
             subnet_type = subnet_config.get('type', 'private')
             subnet_layer = subnet_config.get('name', 'subnet')
+            subnet_az = subnet_config.get('AZ', '-1')
+
+            subnet_name = subnet_layer + 'AZ' + str(subnet_az)
 
             # Save the subnet references to the template object
             if subnet_type not in self._subnets:
@@ -143,6 +146,8 @@ class BaseNetwork(Template):
 
             if subnet_layer not in self._subnets[subnet_type]:
                 self._subnets[subnet_type][subnet_layer] = []
+
+            self._subnets[subnet_type][subnet_layer].append(Ref(subnet_name))
 
     def create_network_components(self, network_config, nat_config):
         """
@@ -202,8 +207,6 @@ class BaseNetwork(Template):
                       ec2.Tag(key='Name', value=subnet_name),
                     ]))
 
-            self._subnets[subnet_type][subnet_layer].append(subnet)
-
             self.add_output(Output(subnet_name, Value=self._ref_maybe(subnet)))
 
             # Create the routing table
@@ -212,7 +215,7 @@ class BaseNetwork(Template):
                 VpcId=self.vpc_id))
 
             # Create the NATs and egress rules
-            self.create_subnet_egress(index, route_table, igw_title, subnet_type, subnet_layer, nat_config)
+            self.create_subnet_egress(subnet_az, route_table, igw_title, subnet_type, subnet_layer, nat_config)
 
             # Associate the routing table with the subnet
             self.add_resource(ec2.SubnetRouteTableAssociation(
@@ -220,16 +223,16 @@ class BaseNetwork(Template):
                 RouteTableId=Ref(route_table),
                 SubnetId=Ref(subnet)))
 
-    def create_subnet_egress(self, index, route_table, igw_title, subnet_type, subnet_layer, nat_config):
+    def create_subnet_egress(self, subnet_az, route_table, igw_title, subnet_type, subnet_layer, nat_config):
         """
-        Create an egress route for the subnet with the given index and type
+        Create an egress route for the subnet with the given subnet_az and type
         Override to create egress routes for other subnet types
         Creates the NAT instances in the public subnets
         """
 
         # For public subnets, create the route to the IGW
         if subnet_type == 'public':
-            self.add_resource(ec2.Route(subnet_layer + 'AZ' + str(index) + 'EgressRoute',
+            self.add_resource(ec2.Route(subnet_layer + 'AZ' + str(subnet_az) + 'EgressRoute',
                 DependsOn=[igw_title],
                 DestinationCidrBlock='0.0.0.0/0',
                 GatewayId=self.igw,
@@ -239,24 +242,24 @@ class BaseNetwork(Template):
         elif subnet_type == 'private':
 
             # If we have already created a NAT in this AZ, skip it
-            if self.az_nat_mapping.get(index):
+            if self.az_nat_mapping.get(subnet_az):
                 return
 
             nat_instance_type = nat_config['instance_type']
             nat_enable_ntp = nat_config['enable_ntp']
             extra_user_data = nat_config.get('extra_user_data')
             ha_nat = self.create_nat(
-                index,
+                subnet_az,
                 nat_instance_type,
                 nat_enable_ntp,
-                name='HaNat' + str(index),
+                name='HaNat' + str(subnet_az),
                 extra_user_data=extra_user_data)
 
             # We merge the NAT template into the root template
             self.merge(ha_nat)
 
             # Save the reference to the HA NAT, so we don't recreate it if we hit another private subnet in this AZ
-            self.az_nat_mapping[index] = ha_nat
+            self.az_nat_mapping[subnet_az] = ha_nat
 
 
     def gateway_hook(self):

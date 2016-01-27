@@ -25,11 +25,11 @@ AWS_REGIONS = AWS_MAPPING.keys()
 
 class BaseNetwork(Template):
 
-    def __init__(self, template_name, network_config, boto_config, nat_config, az_count):
+    def __init__(self, template_name, network_config, boto_config, nat_config):
         self.network_config = network_config
         self.boto_config = boto_config
         self.nat_config = nat_config
-        self.az_count = az_count
+        self.az_count = int(network_config.get('az_count', '2'))
 
         self._azs = []
         self.stack_outputs = {}

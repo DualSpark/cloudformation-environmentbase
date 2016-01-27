@@ -16,9 +16,8 @@ class NetworkBase(EnvironmentBase):
         network_config = self.config.get('network', {})
         boto_config = self.config.get('boto', {})
         nat_config = self.config.get('nat')
-        az_count = int(network_config.get('az_count', '2'))
 
-        base_network_template = BaseNetwork('BaseNetwork', network_config, boto_config, nat_config, az_count)
+        base_network_template = BaseNetwork('BaseNetwork', network_config, boto_config, nat_config)
         self.add_child_template(base_network_template)
 
         self.template.add_child_outputs_to_parameter_binding(base_network_template, propagate_up=True)

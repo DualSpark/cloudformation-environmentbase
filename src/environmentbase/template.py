@@ -302,7 +302,7 @@ class Template(t.Template):
         ec2_key = parent._ec2_key.Default
         parent_subnets = parent._subnets if not self._subnets else {}
         az_count = len(parent._azs)
-        if self.mappings['RegionMap']:
+        if self.mappings.get('RegionMap'):
             region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
         else:
             region_map = parent.mappings['RegionMap']

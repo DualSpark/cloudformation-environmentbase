@@ -399,11 +399,12 @@ class NetworkBase(EnvironmentBase):
         self.add_child_template(base_network_template)
 
         for output in base_network_template.outputs:
-            self.manual_parameter_bindings[output] = GetAtt(base_network_template.name, output)
+            self.template.manual_parameter_bindings[output] = GetAtt(base_network_template.name, output)
             self.template.add_output(Output(output, Value=GetAtt(base_network_template.name, "Outputs." + output)))
             # TODO: should a custom resource be addeded for each output? 
 
         self.template._subnets = base_network_template._subnets.copy()
+        self.template._vpc_id = GetAtt(base_network_template.name, 'Outputs.vpcId')
         # self._vpc_cidr = None
         # self._common_security_group = None
         # self._utility_bucket = None

@@ -91,7 +91,7 @@ class BaseNetwork(Template):
                         ToPort='22',
                         IpProtocol='tcp',
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
-        self.add_output(Output('commonSecurityGroupId', Value=self.common_security_group))
+        self.add_output(Output('commonSecurityGroup', Value=self.common_security_group))
 
         for x in range(0, az_count):
             self._azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))

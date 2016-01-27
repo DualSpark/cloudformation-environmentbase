@@ -164,6 +164,7 @@ class BaseNetwork(Template):
 
         self._vpc_cidr = FindInMap('networkAddresses', 'vpcBase', 'cidr')
         self.add_output(Output('networkAddresses', Value=str(self.mappings['networkAddresses'])))
+        self.add_output(Output('vpcCidr', Value=self.vpc_cidr))
 
         self._vpc_id = self.add_resource(ec2.VPC('vpc',
                 CidrBlock=self._vpc_cidr,
@@ -174,6 +175,8 @@ class BaseNetwork(Template):
         self.add_output(Output('vpcId', Value=self.vpc_id))
 
         self._igw = self.add_resource(ec2.InternetGateway('vpcIgw'))
+        self.add_output(Output('internetGateway', Value=self.igw))
+
 
         ## add IGW
         igw_title = 'igwVpcAttachment'
@@ -181,6 +184,8 @@ class BaseNetwork(Template):
             igw_title,
             InternetGatewayId=self.igw,
             VpcId=self.vpc_id))
+
+        self.add_output(Output('igwVpcAttachment', Value=self.vpc_gateway_attachment))
 
         self.gateway_hook()
 
@@ -405,8 +410,4 @@ class NetworkBase(EnvironmentBase):
 
         self.template._subnets = base_network_template._subnets.copy()
         self.template._vpc_id = GetAtt(base_network_template.name, 'Outputs.vpcId')
-        # self._vpc_cidr = None
-        # self._common_security_group = None
-        # self._utility_bucket = None
-        # self._igw = None
 

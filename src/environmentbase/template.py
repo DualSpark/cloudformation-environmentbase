@@ -1211,6 +1211,16 @@ class Template(t.Template):
 
         return self.add_resource(stack_obj)
 
+    def add_child_outputs_to_parameter_binding(self, child_template, propagate_up=False):
+        """
+        This auto-wires the outputs of the child stack to the manual_param of the parent stack
+        """
+        for output in child_template.outputs:
+            self.manual_parameter_bindings[output] = GetAtt(child_template.name, output)
+            if propagate_up:
+                self.add_output(Output(output, Value=GetAtt(child_template.name, "Outputs." + output)))
+            # TODO: should a custom resource be addeded for each output? 
+
     def match_stack_parameters(self, child_template):
         """
         For all matching parameters between this template and the child template, attempt to 

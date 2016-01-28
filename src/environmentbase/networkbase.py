@@ -400,7 +400,7 @@ class NetworkBase(EnvironmentBase):
 
         for output in base_network_template.outputs:
             self.manual_parameter_bindings[output] = GetAtt(base_network_template.name, output)
-            self.template.add_output(Output(output, Value=GetAtt(base_network_template.name, output)))
+            self.template.add_output(Output(output, Value=GetAtt(base_network_template.name, "Outputs." + output)))
             # TODO: should a custom resource be addeded for each output? 
 
         self.template._subnets = base_network_template._subnets.copy()

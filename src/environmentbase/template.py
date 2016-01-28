@@ -1216,7 +1216,7 @@ class Template(t.Template):
         This auto-wires the outputs of the child stack to the manual_param of the parent stack
         """
         for output in child_template.outputs:
-            self.manual_parameter_bindings[output] = GetAtt(child_template.name, output)
+            self.manual_parameter_bindings[output] = GetAtt(child_template.name, "Outputs." + output)
             if propagate_up:
                 self.add_output(Output(output, Value=GetAtt(child_template.name, "Outputs." + output)))
             # TODO: should a custom resource be addeded for each output? 

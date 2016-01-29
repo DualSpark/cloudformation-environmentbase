@@ -8,35 +8,24 @@ import netaddr
 from toolz import groupby, assoc
 
 from environmentbase.template import Template
-
-AWS_MAPPING = dict([
-    (u'eu-west-1', ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']),
-    (u'ap-southeast-1', ['ap-southeast-1a', 'ap-southeast-1b']),
-    (u'ap-southeast-2', ['ap-southeast-2a', 'ap-southeast-2b']),
-    (u'eu-central-1', ['eu-central-1a', 'eu-central-1b']),
-    (u'ap-northeast-1', ['ap-northeast-1a', 'ap-northeast-1c']),
-    (u'us-east-1', ['us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e']),
-    (u'sa-east-1', ['sa-east-1a', 'sa-east-1b', 'sa-east-1c']),
-    (u'us-west-1', ['us-west-1b', 'us-west-1c']),
-    (u'us-west-2', ['us-west-2a', 'us-west-2b', 'us-west-2c']),
-])
-AWS_REGIONS = AWS_MAPPING.keys()
+from environmentbase.utility import tropo_to_string
 
 
 class BaseNetwork(Template):
 
-    def __init__(self, template_name, network_config, boto_config, nat_config):
+    def __init__(self, template_name, network_config, region_name, nat_config, az_names):
+        super(BaseNetwork, self).__init__(template_name)
+
         self.network_config = network_config
-        self.boto_config = boto_config
         self.nat_config = nat_config
         self.az_count = int(network_config.get('az_count', '2'))
-
-        self._azs = []
+        self.region_name = region_name
+        self._azs = list(az_names)
         self.stack_outputs = {}
+
         # Simple mapping of AZs to NATs, to prevent creating duplicates
         self.az_nat_mapping = {}
 
-        super(BaseNetwork, self).__init__(template_name)
         self.construct_network()
 
     def build_hook(self):
@@ -49,12 +38,9 @@ class BaseNetwork(Template):
         Main function to construct VPC, subnets, security groups, NAT instances, etc
         """
         network_config = self.network_config
-        boto_config = self.boto_config
         nat_config = self.nat_config
         az_count = self.az_count
-        cached = network_config.get("use_cached_region_data", False)
 
-        self.add_vpc_az_mapping(boto_config, az_count=az_count, cached=cached)
         self.add_network_cidr_mapping(network_config=network_config)
         self._prepare_subnets(self._subnet_configs)
         self.create_network_components(network_config=network_config, nat_config=nat_config)
@@ -77,53 +63,17 @@ class BaseNetwork(Template):
                         ToPort='123',
                         IpProtocol='udp',
                         CidrIp='0.0.0.0/0')],
-            SecurityGroupIngress= [
+            SecurityGroupIngress=[
                     ec2.SecurityGroupRule(
                         FromPort='22',
                         ToPort='22',
                         IpProtocol='tcp',
                         CidrIp=FindInMap('networkAddresses', 'vpcBase', 'cidr'))]))
+
         self.add_output(Output('commonSecurityGroup', Value=self.common_security_group))
 
-        for x in range(0, az_count):
-            self._azs.append(FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(x) + 'Name'))
-
-    def add_vpc_az_mapping(self,
-                           boto_config,
-                           az_count=2, cached=False):
-        """
-        Method gets the AZs within the given account where subnets can be created/deployed
-        This is necessary due to some accounts having 4 subnets available within ec2 classic and only 3 within vpc
-        which causes the Select by index method of picking azs unpredictable for all accounts
-        @param boto_config [dict] collection of boto configuration values as set by the configuration file
-        @param az_count [int] number of AWS availability zones to include in the VPC mapping
-        """
-        regions_names = self._get_aws_regions(boto_config, cached)
-
-        for region_name in regions_names:
-            if region_name == 'ap-northeast-2':
-                # AWS added a new region in Seul, and while waiting for boto to
-                # release a new version this hack solves the region error
-                continue
-            az_list = self._get_aws_zones(region_name, cached)
-            for x, az_name in enumerate(az_list[:az_count]):
-                key = 'az' + str(x) + 'Name'
-                value = az_name
-                self.add_region_map_value(region_name, key, value)
-
-    def _get_aws_regions(self, boto_config, cached=False):
-        if cached:
-            regions_names = AWS_REGIONS
-        else:
-            conn = boto.vpc.connect_to_region(region_name=boto_config.get('region_name', 'us-east-1'))
-            regions_names = [region.name for region in conn.get_all_regions()]
-        return regions_names
-
-    def _get_aws_zones(self, region_name, cached=False):
-        if cached:
-            return AWS_MAPPING[region_name]
-        else:
-            return [az.name for az in boto.vpc.connect_to_region(region_name).get_all_zones()]
+        for i in range(0, az_count):
+            self._azs.append(self._azs[i])
 
     def _prepare_subnets(self, subnet_configs):
         for index, subnet_config in enumerate(subnet_configs):
@@ -148,6 +98,7 @@ class BaseNetwork(Template):
         VPC cidr specified by the networkAddresses CloudFormation mapping.
         @param network_config [dict] collection of network parameters for creating the VPC network
         """
+
         ## make VPC
         if 'network_name' in network_config:
             network_name = network_config.get('network_name')
@@ -180,7 +131,7 @@ class BaseNetwork(Template):
 
         self.gateway_hook()
 
-        ## make Subnets
+        # make Subnets
         network_cidr_base = self._vpc_cidr
 
         for index, subnet_config in enumerate(self._subnet_configs):
@@ -191,7 +142,7 @@ class BaseNetwork(Template):
             subnet_cidr = subnet_config.get('cidr', 'ERROR')
             az_key = 'AZ{}'.format(subnet_az)
 
-            AvailabilityZone = FindInMap('RegionMap', Ref('AWS::Region'), 'az' + str(subnet_az) + 'Name')
+            AvailabilityZone = self._azs[subnet_az]
             CidrBlock = subnet_cidr
             # Create the subnet
             subnet_name = subnet_layer + 'AZ' + str(subnet_az)
@@ -201,8 +152,7 @@ class BaseNetwork(Template):
                 VpcId=self.vpc_id,
                 CidrBlock=CidrBlock,
                 Tags=[ec2.Tag(key='network', value=subnet_type),
-                      ec2.Tag(key='Name', value=subnet_name),
-                    ]))
+                      ec2.Tag(key='Name', value=subnet_name)]))
 
             self.add_output(Output(subnet_name, Value=self._ref_maybe(subnet)))
 
@@ -258,7 +208,6 @@ class BaseNetwork(Template):
             # Save the reference to the HA NAT, so we don't recreate it if we hit another private subnet in this AZ
             self.az_nat_mapping[subnet_az] = ha_nat
 
-
     def gateway_hook(self):
         """
         Override to allow subclasses to create VPGs and similar components during network creation
@@ -276,7 +225,6 @@ class BaseNetwork(Template):
             enable_ntp,
             name=name,
             extra_user_data=extra_user_data)
-
 
     def _get_subnet_config_w_az(self, network_config):
         az_count = int(network_config.get('az_count', 2))

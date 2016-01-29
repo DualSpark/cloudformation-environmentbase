@@ -2,6 +2,7 @@ import os
 import os.path
 import copy
 import re
+import sys
 import botocore.exceptions
 from boto import cloudformation, sts
 from troposphere import Parameter, Output
@@ -423,6 +424,12 @@ class EnvironmentBase(object):
 
         self._validate_config_helper(config_reqs_copy, config, '')
 
+        # Validate region
+        valid_regions = config['global']['valid_regions']
+        region_name = config['boto']['region_name']
+        if region_name not in valid_regions:
+            raise ValidationError('Unrecognized region name: ' + region_name)
+
     def _add_config_handler(self, handler):
         """
         Register classes that will augment the configuration defaults and/or validation logic here
@@ -548,6 +555,14 @@ class EnvironmentBase(object):
         self._validate_config(config)
         self.config = config
 
+        # Load AZs
+        region_name = self.config['boto']['region_name']
+        # API call can take a few seconds so tell user what's going on
+        print '\nRequesting AZ names for region (%s) ..' % region_name,
+        sys.stdout.flush()
+        self._load_azs(config['global'])
+        print 'Done\nAZ names: %s' % config['global']['az_names']
+
         # Save shortcut references to commonly referenced config sections
         self.globals = self.config.get('global', {})
         self.template_args = self.config.get('template', {})
@@ -557,6 +572,32 @@ class EnvironmentBase(object):
             self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
             self.stack_monitor.add_handler(self)
 
+    def _load_azs(self, config_obj):
+        """
+        Adds a new config parameter 'global.az_names' populated with AZ names available from the current user's account.
+        @param config_obj: Config section to attach the az_names list to.
+        """
+        ec2_conn = utility.get_boto_client(self.config, 'ec2')
+        az_resp = ec2_conn.describe_availability_zones()
+
+        # Example output:
+        # {
+        #     u'AvailabilityZones': [
+        #         {u'State': 'available', u'RegionName': 'us-west-2', u'Messages': [], u'ZoneName': 'us-west-2a'},
+        #         {u'State': 'available', u'RegionName': 'us-west-2', u'Messages': [], u'ZoneName': 'us-west-2b'},
+        #         {u'State': 'available', u'RegionName': 'us-west-2', u'Messages': [], u'ZoneName': 'us-west-2c'}
+        #     ],
+        #     'ResponseMetadata': {'HTTPStatusCode': 200, 'RequestId': '6470e6d6-8b3a-4a4e-b084-d933f605a396'}
+        # }
+
+        az_names = map(
+            # pull out just the ZoneName from the az entry
+            lambda az_entry: az_entry['ZoneName'],
+            # We are only dealing with the AvailabilityZones
+            az_resp['AvailabilityZones']
+        )
+
+        config_obj['az_names'] = az_names
 
     def initialize_template(self):
         """
@@ -593,8 +634,12 @@ class EnvironmentBase(object):
         self.template.add_utility_bucket(name=bucket_name)
         self.template.add_output(Output('utilityBucket',Value=bucket_name))
 
-        ami_cache = res.load_yaml_file(self.config.get('template').get('ami_map_file'))
-        self.template.add_ami_mapping(ami_cache)    
+        ami_filename = self.config['template']['ami_map_file']
+        ami_cache = res.load_yaml_file(ami_filename)
+
+        region_name = self.config['boto']['region_name']
+        restricted_ami_cache = {region_name: ami_cache[region_name]}
+        self.template.add_ami_mapping(restricted_ami_cache)
 
     def generate_ami_cache(self):
         """

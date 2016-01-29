@@ -173,7 +173,7 @@ class EnvironmentBase(object):
                 s3_upload=s3_upload)
 
         if s3_upload:
-            # Upload the template to the s3 bucket under the template_prefix            
+            # Upload the template to the s3 bucket under the template_prefix
             s3_client.Bucket(Template.template_bucket).put_object(
                 Key=template.resource_path,
                 Body=raw_json,
@@ -320,7 +320,7 @@ class EnvironmentBase(object):
 
     def deploy_action(self):
         """
-        Default deploy_action invoked by the CLI. 
+        Default deploy_action invoked by the CLI.
         Loads and validates config, then deploys the root template to cloudformation using boto
         Override the deploy_hook in your environment to intercept the deployment process
         This can be useful for creating resources using boto outside of cloudformation
@@ -659,7 +659,7 @@ class EnvironmentBase(object):
 
     def to_json(self):
         """
-        Centralized method for outputting the root template with a timestamp identifying when it 
+        Centralized method for outputting the root template with a timestamp identifying when it
         was generated and for creating a SHA256 hash representing the template for validation purposes
         Also recursively processess all child templates
         """

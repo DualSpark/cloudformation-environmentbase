@@ -27,7 +27,7 @@
         "include_timestamp": true,
         "timeout_in_minutes": "60",
         "ec2_key_default": "dualspark_rsa",
-        "s3_upload": true    
+        "s3_upload": true
     },
     "logging": {
         "s3_bucket": "dualspark",
@@ -49,12 +49,12 @@
         ],
         "subnet_config": [
             {
-                "type": "public", 
+                "type": "public",
                 "size": "18",
                 "name": "public"
             },
             {
-                "type": "private", 
+                "type": "private",
                 "size": "22",
                 "name": "private"
             },

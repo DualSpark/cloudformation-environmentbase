@@ -1,4 +1,4 @@
-from troposphere import Ref, FindInMap, Output
+from troposphere import Ref, FindInMap, Output, GetAZs, Select
 import troposphere.ec2 as ec2
 import boto.vpc
 import boto
@@ -142,13 +142,12 @@ class BaseNetwork(Template):
             subnet_cidr = subnet_config.get('cidr', 'ERROR')
             az_key = 'AZ{}'.format(subnet_az)
 
-            AvailabilityZone = self._azs[subnet_az]
             CidrBlock = subnet_cidr
             # Create the subnet
             subnet_name = subnet_layer + 'AZ' + str(subnet_az)
             subnet = self.add_resource(ec2.Subnet(
                 subnet_name,
-                AvailabilityZone=AvailabilityZone,
+                AvailabilityZone=Select(subnet_az, GetAZs("")),
                 VpcId=self.vpc_id,
                 CidrBlock=CidrBlock,
                 Tags=[ec2.Tag(key='network', value=subnet_type),

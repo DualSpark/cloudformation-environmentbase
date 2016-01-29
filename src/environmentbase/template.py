@@ -1,4 +1,4 @@
-from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select
+from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select, GetAZs
 from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs, cloudwatch
 from awacs import logs as awacs_logs, aws
 from awacs.helpers.trust import make_simple_assume_statement
@@ -705,7 +705,7 @@ class Template(t.Template):
 
         auto_scaling_obj = autoscaling.AutoScalingGroup(
             layer_name + 'AutoScalingGroup',
-            AvailabilityZones=self.azs,
+            AvailabilityZones=GetAZs(""),
             LaunchConfigurationName=Ref(launch_config),
             MaxSize=max_size,
             MinSize=min_size,

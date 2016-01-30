@@ -555,14 +555,6 @@ class EnvironmentBase(object):
         self._validate_config(config)
         self.config = config
 
-        # Load AZs
-        region_name = self.config['boto']['region_name']
-        # API call can take a few seconds so tell user what's going on
-        print '\nRequesting AZ names for region (%s) ..' % region_name,
-        sys.stdout.flush()
-        self._load_azs(config['global'])
-        print 'Done\nAZ names: %s' % config['global']['az_names']
-
         # Save shortcut references to commonly referenced config sections
         self.globals = self.config.get('global', {})
         self.template_args = self.config.get('template', {})
@@ -572,32 +564,6 @@ class EnvironmentBase(object):
             self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
             self.stack_monitor.add_handler(self)
 
-    def _load_azs(self, config_obj):
-        """
-        Adds a new config parameter 'global.az_names' populated with AZ names available from the current user's account.
-        @param config_obj: Config section to attach the az_names list to.
-        """
-        ec2_conn = utility.get_boto_client(self.config, 'ec2')
-        az_resp = ec2_conn.describe_availability_zones()
-
-        # Example output:
-        # {
-        #     u'AvailabilityZones': [
-        #         {u'State': 'available', u'RegionName': 'us-west-2', u'Messages': [], u'ZoneName': 'us-west-2a'},
-        #         {u'State': 'available', u'RegionName': 'us-west-2', u'Messages': [], u'ZoneName': 'us-west-2b'},
-        #         {u'State': 'available', u'RegionName': 'us-west-2', u'Messages': [], u'ZoneName': 'us-west-2c'}
-        #     ],
-        #     'ResponseMetadata': {'HTTPStatusCode': 200, 'RequestId': '6470e6d6-8b3a-4a4e-b084-d933f605a396'}
-        # }
-
-        az_names = map(
-            # pull out just the ZoneName from the az entry
-            lambda az_entry: az_entry['ZoneName'],
-            # We are only dealing with the AvailabilityZones
-            az_resp['AvailabilityZones']
-        )
-
-        config_obj['az_names'] = az_names
 
     def initialize_template(self):
         """

@@ -13,7 +13,7 @@ from environmentbase.utility import tropo_to_string
 
 class BaseNetwork(Template):
 
-    def __init__(self, template_name, network_config, region_name, nat_config, az_names):
+    def __init__(self, template_name, network_config, region_name, nat_config):
         super(BaseNetwork, self).__init__(template_name)
 
         self.network_config = network_config

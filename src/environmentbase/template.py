@@ -51,7 +51,6 @@ class Template(t.Template):
         self._child_template_references = []
         self.manual_parameter_bindings = {}
 
-        self._azs = []
         self._subnets = {}
 
     def _ref_maybe(self, item):
@@ -111,10 +110,6 @@ class Template(t.Template):
         return self._ref_maybe(self._vpc_gateway_attachment)
 
     @property
-    def azs(self):
-        return self._ref_maybe(self._azs)
-
-    @property
     def subnets(self):
         return self._ref_maybe(self._subnets)
 
@@ -160,7 +155,6 @@ class Template(t.Template):
         self._igw                    = other_template._igw
         self._vpc_gateway_attachment = other_template._vpc_gateway_attachment
 
-        self._azs        = list(other_template.azs)
         self._subnets    = other_template.subnets.copy()
 
         self.parameters = other_template.parameters.copy()
@@ -301,19 +295,18 @@ class Template(t.Template):
     def add_common_parameters_from_parent(self, parent):
         ec2_key = parent._ec2_key.Default
         parent_subnets = parent._subnets if not self._subnets else {}
-        az_count = len(parent._azs)
 
         if 'RegionMap' in self.mappings:
             region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
         else:
             region_map = parent.mappings['RegionMap']
-        self.add_common_parameters(ec2_key, region_map, parent_subnets, az_count)
+        self.add_common_parameters(ec2_key, region_map, parent_subnets)
 
     def _merge_region_map(self, map1, map2):
         for key in set(map1.keys() + map2.keys()):
             yield (key, merge(map1[key], map2[key]))
 
-    def add_common_parameters(self, ec2_key, region_map, parent_subnets, az_count=2):
+    def add_common_parameters(self, ec2_key, region_map, parent_subnets):
         """
         Adds the common set of parameters that are available to every child template
         The values are automatically matched from the root template
@@ -321,8 +314,7 @@ class Template(t.Template):
             vpcId,
             commonSecurityGroup,
             utilityBucket,
-            each subnet: [public|private]Subnet[0-9],
-            each AZ name: availabilityZone[0-9]
+            each subnet: [public|private]Subnet[0-9]
         """
         self._vpc_cidr = self.add_parameter(Parameter(
             'vpcCidr',
@@ -386,16 +378,6 @@ class Template(t.Template):
                         subnet_name,
                         Description=subnet_name,
                         Type='String')))
-
-        self._azs = []
-
-        for x in range(0, az_count):
-            az_param = Parameter(
-                'availabilityZone' + str(x),
-                Description='Availability Zone ' + str(x),
-                Type='String')
-            self.add_parameter(az_param)
-            self._azs.append(az_param)
 
 
     @staticmethod
@@ -1236,12 +1218,6 @@ class Template(t.Template):
             if parameter in self.manual_parameter_bindings:
                 manual_match = self.manual_parameter_bindings[parameter]
                 stack_params[parameter] = manual_match
-
-            # Naming scheme for identifying the AZ of a subnet
-            elif parameter.startswith('availabilityZone'):
-                index = int(parameter[-1:])
-                stack_params[parameter] = Select(index, t.GetAZs(Ref(t.AWS_REGION)))
-                # stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone', ''), 'AvailabilityZone')
 
             # Match any child stack parameters that have the same name as this stacks **parameters**
             elif parameter in self.parameters.keys():

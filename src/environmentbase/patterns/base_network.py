@@ -20,7 +20,6 @@ class BaseNetwork(Template):
         self.nat_config = nat_config
         self.az_count = int(network_config.get('az_count', '2'))
         self.region_name = region_name
-        self._azs = list(az_names)
         self.stack_outputs = {}
 
         # Simple mapping of AZs to NATs, to prevent creating duplicates

@@ -672,7 +672,6 @@ class EnvironmentBase(object):
     # - vpcId: resource id of VPC
     # - commonSecurityGroup: sg identifier for common allowed ports (22 in from VPC)
     # - utilityBucket: S3 bucket name used to send logs to
-    # - availabilityZone[1-3]: Indexed names of AZs VPC is deployed to
     # - [public|private]Subnet[0-9]: indexed and classified subnet identifiers
     #
     # and some instance attributes referencing the attached parameters:
@@ -681,7 +680,6 @@ class EnvironmentBase(object):
     # - self.common_security_group
     # - self.utility_bucket
     # - self.subnets: keyed by type, layer, and AZ index (e.g. self.subnets['public']['web'][1])
-    # - self.azs: List of parameter references
     def add_child_template(self, child_template, merge=False, depends_on=[]):
         """
         Saves reference to provided template. References are processed in write_template_to_file().

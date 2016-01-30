@@ -72,9 +72,6 @@ class BaseNetwork(Template):
 
         self.add_output(Output('commonSecurityGroup', Value=self.common_security_group))
 
-        for i in range(0, az_count):
-            self._azs.append(self._azs[i])
-
     def _prepare_subnets(self, subnet_configs):
         for index, subnet_config in enumerate(subnet_configs):
             subnet_type = subnet_config.get('type', 'private')

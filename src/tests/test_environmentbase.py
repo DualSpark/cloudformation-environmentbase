@@ -60,6 +60,8 @@ class EnvironmentBaseTestCase(TestCase):
                     config[section][key] = dummy_int
                 elif key_type == list.__name__:
                     config[section][key] = dummy_list
+
+        config['boto']['region_name'] = config['global']['valid_regions'][0]
         return config
 
     def _create_local_file(self, name, content):
@@ -121,7 +123,7 @@ class EnvironmentBaseTestCase(TestCase):
         fake_cli = self.fake_cli(['create', '--config-file', 'config.yaml'])
         base = eb.EnvironmentBase(fake_cli)
         base.load_config()
-    
+
         self.assertEqual(base.config['global']['environment_name'], 'environmentbase')
 
 
@@ -294,7 +296,7 @@ class EnvironmentBaseTestCase(TestCase):
         base.init_action()
         base.load_config()
         self.assertEqual(base.config['global']['environment_name'], dummy_value)
-        
+
     def test_config_file_flag(self):
         dummy_value = 'dummy'
         base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', dummy_value]))
@@ -373,7 +375,7 @@ class EnvironmentBaseTestCase(TestCase):
     #             return MyNat(index, nat_instance_type, enable_ntp, name, extra_user_data)
 
     #     # Initialize the the controller with faked 'create' CLI parameter
-        
+
     #     ctrlr = MyController((self.fake_cli(['init'])))
     #     ctrlr.init_action()
     #     ctrlr.load_config()

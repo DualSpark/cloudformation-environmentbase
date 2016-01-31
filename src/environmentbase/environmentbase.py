@@ -410,6 +410,13 @@ class EnvironmentBase(object):
 
                     self._validate_config_helper(req_value, matching_value, new_path)
 
+                elif isinstance(req_value, list):
+                    matching_value = config[matching_key]
+                    if not isinstance(matching_value, list):
+                        message = "Type mismatch in config, %s should be a list, not %s" % \
+                                  (new_path, type(matching_value).__name__)
+                        raise ValidationError(message)
+
     def _validate_config(self, config, factory_schema=res.CONFIG_REQUIREMENTS):
         """
         Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present

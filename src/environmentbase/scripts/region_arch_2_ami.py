@@ -84,19 +84,27 @@ def filter_amis(ami_list, remove_rcs=True, use_nat_instances=False, remove_minim
 
 
 def get_hvm_ami(filtered_amis, vol_type=VOL_TYPE_SSD):
-    filter_fun = lambda ami: ami['VirtualizationType'] == VIRT_TYPE_HVM and \
-                             ami['BlockDeviceMappings'][0]['Ebs']['VolumeType'] == vol_type
-    return filter(filter_fun, filtered_amis)[0]
+    def filter_fun(ami):
+        virt_match = ami['VirtualizationType'] == VIRT_TYPE_HVM
+        vol_match = ami['BlockDeviceMappings'][0]['Ebs']['VolumeType'] == vol_type
+        return virt_match and vol_match
+
+    amis = filter(filter_fun, filtered_amis)
+    return None if not amis else filtered_amis[0]
 
 
 def get_pv_ami(filtered_amis):
-    filter_fun = lambda ami: ami['VirtualizationType'] == VIRT_TYPE_PV and \
-                             ami['BlockDeviceMappings'][0]['Ebs']['VolumeType'] == VOL_TYPE_MAG
-    return filter(filter_fun, filtered_amis)[0]
+    def filter_fun(ami):
+        virt_match = ami['VirtualizationType'] == VIRT_TYPE_PV
+        vol_match = ami['BlockDeviceMappings'][0]['Ebs']['VolumeType'] == VOL_TYPE_MAG
+        return virt_match and vol_match
+
+    amis = filter(filter_fun, filtered_amis)
+    return None if not amis else filtered_amis[0]
 
 
 if __name__ == '__main__':
-    region_mapping = {}
+    ami_map = {'PV64': {}, 'HVM64': {}}
     regions = get_region_list()
 
     print 'Regions %s' % regions
@@ -111,14 +119,20 @@ if __name__ == '__main__':
             filtered_amis = filter_amis(images)
 
         hvm_ami = get_hvm_ami(filtered_amis)
-        print json.dumps(hvm_ami, indent=4, separators=(',', ': '))
+        if hvm_ami:
+            ami_map['HVM64'][region] = hvm_ami["ImageId"]
+            print json.dumps(hvm_ami, indent=4, separators=(',', ': '))
+        else:
+            print '* No HVM hits for region'
 
         pv_ami = get_pv_ami(filtered_amis)
-        print json.dumps(pv_ami, indent=4, separators=(',', ': '))
+        if pv_ami:
+            ami_map['PV64'][region] = pv_ami["ImageId"]
+            print json.dumps(pv_ami, indent=4, separators=(',', ': '))
+        else:
+            print '* No PV hits for region'
 
-        region_mapping[region] = {'PV64': pv_ami["ImageId"], 'HVM64': hvm_ami["ImageId"]}
-
-    json_str = json.dumps(region_mapping, indent=4, separators=(',', ': '), sort_keys=True)
+    json_str = json.dumps(ami_map, indent=4, separators=(',', ': '), sort_keys=True)
 
     # Someone please explain to me why I have to do this repeatedly for all matches to be replaced!!
     import re

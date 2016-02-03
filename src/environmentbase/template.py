@@ -308,17 +308,13 @@ class Template(t.Template):
         ec2_key = parent._ec2_key.Default
         parent_subnets = parent._subnets if not self._subnets else {}
 
-        if 'RegionMap' in self.mappings:
-            region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
-        else:
-            region_map = parent.mappings['RegionMap']
-        self.add_common_parameters(ec2_key, region_map, parent_subnets)
+        self.add_common_parameters(ec2_key, parent_subnets)
 
     def _merge_region_map(self, map1, map2):
         for key in set(map1.keys() + map2.keys()):
             yield (key, merge(map1[key], map2[key]))
 
-    def add_common_parameters(self, ec2_key, region_map, parent_subnets):
+    def add_common_parameters(self, ec2_key, parent_subnets):
         """
         Adds the common set of parameters that are available to every child template
         The values are automatically matched from the root template
@@ -370,8 +366,6 @@ class Template(t.Template):
             MaxLength=255,
             ConstraintDescription=res.get_str('ec2_key_message')
         ))
-
-        self.mappings['RegionMap'] = region_map
 
         for subnet_type in parent_subnets:
             if subnet_type not in self._subnets:
@@ -465,43 +459,6 @@ class Template(t.Template):
             if not line.startswith('#~'):
                 ret_val.append(line.replace("\n", ""))
         return ret_val
-
-    def add_ami_mapping(self, json_data):
-        """
-        Method gets the ami cache from the file locally and adds a mapping for ami ids per region into the template
-        This depends on populating ami_cache.json with the AMI ids that are output by the packer scripts per region
-        @param ami_map_file [string] path representing where to find the AMI map to ingest into this template
-        """
-        for region in json_data:
-            for key in json_data[region]:
-                self.add_region_map_value(region, key, json_data[region][key])
-
-    def add_region_map_value(self,
-                             region,
-                             key,
-                             value):
-        """
-        Method adds a key value pair to the RegionMap mapping within this CloudFormation template
-        @param region [string] AWS region name that the key value pair is associated with
-        @param key [string] name of the key to store in the RegionMap mapping for the specified Region
-        @param value [string] value portion of the key value pair related to the region specified
-        """
-        self.__init_region_map([region])
-        if region not in self.mappings['RegionMap']:
-            self.mappings['RegionMap'][region] = {}
-        self.mappings['RegionMap'][region][key] = value
-
-    def __init_region_map(self,
-                          region_list):
-        """
-        Internal helper method used to check to ensure mapping dictionaries are present
-        @param region_list [list(str)] array of strings representing the names of the regions to validate and/or create within the RegionMap CloudFormation mapping
-        """
-        if 'RegionMap' not in self.mappings:
-            self.mappings['RegionMap'] = {}
-        for region_name in region_list:
-            if region_name not in self.mappings['RegionMap']:
-                self.mappings['RegionMap'][region_name] = {}
 
     def add_scaling_policy(self,
         metric_name,

@@ -622,12 +622,7 @@ class EnvironmentBase(object):
         bucket_name = self.config.get('logging').get('s3_bucket')
 
         self.template.add_utility_bucket(name=bucket_name)
-        self.template.add_output(Output('utilityBucket',Value=bucket_name))
-
-        ami_filename = self.config['template']['ami_map_file']
-        ami_cache = res.load_yaml_file(ami_filename)
-
-        self.template.add_ami_mapping(ami_cache)
+        self.template.add_output(Output('utilityBucket', Value=bucket_name))
 
     def generate_ami_cache(self):
         """

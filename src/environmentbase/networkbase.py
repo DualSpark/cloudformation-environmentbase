@@ -395,6 +395,8 @@ class NetworkBase(EnvironmentBase):
     """
 
     def create_hook(self):
+        super(NetworkBase, self).create_hook()
+
         network_config = self.config.get('network', {})
         boto_config = self.config.get('boto', {})
         nat_config = self.config.get('nat')

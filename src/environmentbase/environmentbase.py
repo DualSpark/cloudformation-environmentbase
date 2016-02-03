@@ -610,9 +610,7 @@ class EnvironmentBase(object):
         ami_filename = self.config['template']['ami_map_file']
         ami_cache = res.load_yaml_file(ami_filename)
 
-        region_name = self.config['boto']['region_name']
-        restricted_ami_cache = {region_name: ami_cache[region_name]}
-        self.template.add_ami_mapping(restricted_ami_cache)
+        self.template.add_ami_mapping(ami_cache)
 
     def generate_ami_cache(self):
         """

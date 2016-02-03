@@ -38,5 +38,69 @@
         "region_name": "us-west-2",
         "aws_access_key_id": null,
         "aws_secret_access_key": null
+    },
+    "network": {
+        "network_cidr_base": "10.0.0.0",
+        "network_cidr_size": "16",
+        "az_count": 3,
+        "subnet_types": [
+            "public",
+            "private"
+        ],
+        "subnet_config": [
+            {
+                "type": "public",
+                "size": "18",
+                "name": "public"
+            },
+            {
+                "type": "private",
+                "size": "22",
+                "name": "private"
+            },
+        ],
+    },
+    "nat": {
+        "instance_type": "t2.micro",
+        "enable_ntp": false
+    },
+    "instancetype_to_arch": {
+        "c1.medium": "PV64",    "c1.xlarge": "PV64",    "c3.2xlarge": "HVM64",  "c3.4xlarge": "HVM64",
+        "c3.8xlarge": "HVM64",  "c3.large": "HVM64",    "c3.xlarge": "HVM64",   "c4.2xlarge": "HVM64",
+        "c4.4xlarge": "HVM64",  "c4.8xlarge": "HVM64",  "c4.large": "HVM64",    "c4.xlarge": "HVM64",
+        "cc2.8xlarge": "PV64",  "cg1.4xlarge": "PV64",  "cr1.8xlarge": "PV64",  "d2.2xlarge": "HVM64",
+        "d2.4xlarge": "HVM64",  "d2.8xlarge": "HVM64",  "d2.xlarge": "HVM64",   "g2.2xlarge": "HVMG2",
+        "g2.8xlarge": "HVM64",  "hi1.4xlarge": "PV64",  "hs1.8xlarge": "PV64",  "i2.2xlarge": "HVM64",
+        "i2.4xlarge": "HVM64",  "i2.8xlarge": "HVM64",  "i2.xlarge": "HVM64",   "m1.large": "PV64",
+        "m1.medium": "PV64",    "m1.small": "PV64",     "m1.xlarge": "PV64",    "m2.2xlarge": "PV64",
+        "m2.4xlarge": "PV64",   "m2.xlarge": "PV64",    "m3.2xlarge": "HVM64",  "m3.large": "HVM64",
+        "m3.medium": "HVM64",   "m3.xlarge": "HVM64",   "m4.10xlarge": "HVM64", "m4.2xlarge": "HVM64",
+        "m4.4xlarge": "HVM64",  "m4.large": "HVM64",    "m4.xlarge": "HVM64",   "r3.2xlarge": "HVM64",
+        "r3.4xlarge": "HVM64",  "r3.8xlarge": "HVM64",  "r3.large": "HVM64",    "r3.xlarge": "HVM64",
+        "t1.micro": "PV64",     "t2.large": "HVM64",    "t2.medium": "HVM64",   "t2.micro": "HVM64",
+        "t2.nano": "HVM64",     "t2.small": "HVM64"
+    },
+    "image_map": {
+        "amazonLinuxAmiId": {
+            "ap-northeast-1": { "HVM64": "ami-cbf90ecb", "PV64": "ami-27f90e27" },
+            "ap-southeast-1": { "HVM64": "ami-68d8e93a", "PV64": "ami-acd9e8fe" },
+            "ap-southeast-2": { "HVM64": "ami-fd9cecc7", "PV64": "ami-ff9cecc5" },
+            "eu-central-1": { "HVM64": "ami-a8221fb5", "PV64": "ami-ac221fb1" },
+            "eu-west-1": { "HVM64": "ami-a10897d6", "PV64": "ami-bf0897c8" },
+            "sa-east-1": { "HVM64": "ami-b52890a8", "PV64": "ami-bb2890a6" },
+            "us-east-1": { "HVM64": "ami-1ecae776", "PV64": "ami-1ccae774" },
+            "us-west-1": { "HVM64": "ami-d114f295", "PV64": "ami-d514f291" },
+            "us-west-2": { "HVM64": "ami-e7527ed7", "PV64": "ami-ff527ecf" }
+        },
+        "natAmiId": {
+            "ap-northeast-1": {"HVM64": "ami-5f840e5e"},
+            "ap-southeast-1": {"HVM64": "ami-780a432a"},
+            "ap-southeast-2": {"HVM64": "ami-0154c73b"},
+            "eu-west-1": {"HVM64": "ami-ed352799"},
+            "sa-east-1": {"HVM64": "ami-7660c56b"},
+            "us-east-1": {"HVM64": "ami-4f9fee26"},
+            "us-west-1": {"HVM64": "ami-7850793d"},
+            "us-west-2": {"HVM64": "ami-69ae8259"}
+        }
     }
 }

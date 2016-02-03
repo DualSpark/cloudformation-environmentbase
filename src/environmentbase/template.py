@@ -33,6 +33,18 @@ class Template(t.Template):
     # Timeout period after which to fail if a child stack has not reached a COMPLETE state
     stack_timeout = '60'
 
+    # Static mapping of EC2 instance types to supported virtualization architectures e.g. m3.medium --> HVM64
+    instancetype_to_arch = {}
+
+    # Static mapping of AMI names to AMI configs
+    ami_config = {}
+
+    # Region to deploy to
+    region = ''
+
+    ARCH_MAP = "InstanceTypeToArch"
+    IMAGE_MAP_PREFIX = "ImageMapFor"
+
     def __init__(self, template_name):
         """
         Init method for environmentbase.Template class
@@ -537,6 +549,76 @@ class Template(t.Template):
 
         return self.add_resource(alarm)
 
+    @staticmethod
+    def image_map_name(image_label):
+        """
+        Each image map is a concatenation of a custom label and a prefix. This function
+        provides a consistant way to get the correct image map name from the custom label.
+        @returns string
+        """
+        return Template.IMAGE_MAP_PREFIX + image_label.title()
+
+    def get_instancetype_param(self, instance_type, image_name, layer_name):
+        """
+        @param instance_type [string] Default instance_type value.
+        @param image_name [string] Key from config.image_map, used to create Parameter name
+        @param layer_name [string] Functional name for the template, also used in Parameter name
+        Returns a troposphere.Parameter configured to take instance types.  The parameter is only
+        created if it does not already exist.
+        """
+        if not isinstance(instance_type, basestring):
+            raise Exception('Template.get_instancetype_param::instance_type should be string')
+
+        param_name = layer_name.title() + 'InstanceTypeFor' + image_name.title()
+
+        # Return parameter if it already exists
+        if param_name in self.parameters:
+            return self.parameters.get(param_name)
+
+        sorted_instancetypes = sorted(Template.instancetype_to_arch.keys())
+        return self.add_parameter(Parameter(
+            param_name,
+            Description='AWS instance type',
+            Default=instance_type,
+            Type='String',
+            AllowedValues=sorted_instancetypes))
+
+    def get_ami(self, instance_type, image_name, layer_name):
+        """
+        @param instance_type [string] Default instance_type value.
+        @param image_name [string] Key from config.image_map, used to create Parameter name
+        @param layer_name [string] Functional name for the template, also used in Parameter name
+        Returns a CloudFormation expression which will evaluate to an AMI id.  This is done by
+        attaching a single instancetype_to_arch map and a region_to_ami_id map (per image type).
+        Note: Resulting templates can deploy with different instance_types into differnet regions
+        without any modification.
+        """
+        if not isinstance(instance_type, basestring):
+            raise Exception('Template.get_ami::instance_type should be string')
+
+        # Static validation of instance type
+        if instance_type not in Template.instancetype_to_arch.keys():
+            raise Exception('Unrecognized instance type: "%s"' % instance_type)
+
+        # Add input parameter (\w runtime validation) for instance_type
+        instancetype_param = self.get_instancetype_param(instance_type, image_name, layer_name)
+
+        # Lazy-add instancetype_to_arch map
+        if Template.ARCH_MAP not in self.mappings:
+            arch_map = {inst_type: {"Arch": arch} for inst_type, arch in Template.instancetype_to_arch.items()}
+            self.mappings[Template.ARCH_MAP] = arch_map
+
+        arch_type = FindInMap(Template.ARCH_MAP, Ref(instancetype_param), 'Arch')
+
+        # Lazy-add region_to_ami map for this ami_name
+        image_map_name = Template.image_map_name(image_name)
+        if image_map_name not in self.mappings:
+            self.mappings[image_map_name] = self.image_map[image_name]
+
+        imageId = FindInMap(image_map_name, Ref('AWS::Region'), arch_type)
+
+        return imageId
+
     def add_asg(self,
                 layer_name,
                 instance_profile=None,
@@ -568,7 +650,7 @@ class Template(t.Template):
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
         @param instance_profile [Troposphere.iam.InstanceProfile] IAM Instance Profile object to be applied to instances launched within this Auto Scaling group
-        @param instance_type [Troposphere.Parameter | string] Reference to the AWS EC2 Instance Type to deploy.
+        @param instance_type [string] Reference to the AWS EC2 Instance Type to deploy.
         @param ami_name [string] Name of the AMI to deploy as defined within the RegionMap lookup for the deployed region
         @param ec2_key [Troposphere.Parameter | Troposphere.Ref(Troposphere.Parameter)] Input parameter used to gather the name of the EC2 key to use to secure access to instances launched within this Auto Scaling group
         @param user_data [string[]] Array of strings (lines of bash script) to be set as the user data as a bootstrap script for instances launched within this Auto Scaling group
@@ -594,6 +676,7 @@ class Template(t.Template):
 
         if type(instance_type) != str:
             instance_type = Ref(instance_type)
+            raise Exception("Tempalte.add_asg::instance_type should be String")
 
         sg_list = []
         for sg in security_groups:
@@ -619,11 +702,14 @@ class Template(t.Template):
         if not associate_public_ip:
             associate_public_ip = True if subnet_type == 'public' else False
 
+        image_id_expr = self.get_ami(instance_type, ami_name, layer_name)
+        instancetype_param = self.get_instancetype_param(instance_type, ami_name, layer_name)
+
         launch_config_obj = autoscaling.LaunchConfiguration(
             layer_name + 'LaunchConfiguration',
             IamInstanceProfile=Ref(instance_profile),
-            ImageId=FindInMap('RegionMap', Ref('AWS::Region'), ami_name),
-            InstanceType=instance_type,
+            ImageId=image_id_expr,
+            InstanceType=Ref(instancetype_param),
             SecurityGroups=sg_list,
             KeyName=ec2_key,
             AssociatePublicIpAddress=associate_public_ip,

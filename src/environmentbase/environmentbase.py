@@ -599,6 +599,8 @@ class EnvironmentBase(object):
         Template.stack_timeout = self.template_args.get("timeout_in_minutes")
         Template.upload_acl = self.template_args.get('s3_upload_acl')
         Template.include_timestamp = self.template_args.get('include_timestamp')
+        Template.instancetype_to_arch = self.config['instancetype_to_arch']
+        Template.image_map = self.config['image_map']
 
         # Create the root template object
         self.template = Template(self.globals.get('environment_name', 'default_template'))

@@ -8,7 +8,6 @@
         "monitor_stack": "bool",
         # Directory for writing stack outputs
         "stack_outputs_directory": "basestring",
-        # Directory for writing stack outputs
         "valid_regions": "list"
     },
     "template": {
@@ -36,5 +35,8 @@
     },
     "boto": {
         "region_name": "basestring"
+    },
+    "instancetype_to_arch": {
+        "*": "basestring"
     }
 }

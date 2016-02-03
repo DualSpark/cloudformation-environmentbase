@@ -1,6 +1,6 @@
 from environmentbase.template import Template
 from environmentbase import resources
-from troposphere import Ref, Join, Base64, FindInMap, Output
+from troposphere import Ref, Join, Base64, Output
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tag
 from troposphere.iam import Policy, Role, InstanceProfile
@@ -148,16 +148,19 @@ class HaNat(Template):
             " --stack ", {"Ref": "AWS::StackName"},
             " --region ", {"Ref": "AWS::Region"}
         ])
- 
+
+        image_id_expr = self.get_ami(self.instance_type, 'natAmiId', 'HaNat')
+        instancetype_param = self.get_instancetype_param(self.instance_type, 'natAmiId', 'HaNat')
+
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),
             UserData=Base64(Join('', user_data)),
-            ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'natAmiId'),
+            ImageId=image_id_expr,
             KeyName=Ref('ec2Key'),
             SecurityGroups=[Ref(self.sg)],
             EbsOptimized=False,
             IamInstanceProfile=Ref(self.instance_profile),
-            InstanceType=self.instance_type,
+            InstanceType=Ref(instancetype_param),
             AssociatePublicIpAddress=True
         ))
 

@@ -48,6 +48,19 @@ def get_resource(resource_name, relative_to_module_name=__name__):
     file_content = resource_string(relative_to_module_name, file_path)
     return file_content
 
+
+# Implimentation of "!include" directive for yaml parser to load YAML content from external file
+def yaml_include(loader, node):
+    # Get the path out of the yaml file
+    file_name = os.path.join(os.path.dirname(loader.name), node.value)
+
+    with file(file_name) as inputfile:
+        return yaml.load(inputfile)
+
+
+# Modify yaml parser to support "!include" directive to embed content from an external files
+yaml.add_constructor("!include", yaml_include)
+
 EXTENSIONS = ['.json', '.yaml', '.yml']
 
 DEFAULT_CONFIG_FILENAME = 'config'
@@ -56,7 +69,6 @@ FACTORY_DEFAULT_CONFIG = get_yaml_resource(DEFAULT_CONFIG_FILENAME)
 
 DEFAULT_AMI_CACHE_FILENAME = 'ami_cache'
 FACTORY_DEFAULT_AMI_CACHE = get_yaml_resource(DEFAULT_AMI_CACHE_FILENAME)
-
 
 CONFIG_REQUIREMENTS_FILENAME = 'config_schema'
 CONFIG_REQUIREMENTS = get_yaml_resource(CONFIG_REQUIREMENTS_FILENAME)

@@ -80,27 +80,5 @@
         "t1.micro": "PV64",     "t2.large": "HVM64",    "t2.medium": "HVM64",   "t2.micro": "HVM64",
         "t2.nano": "HVM64",     "t2.small": "HVM64"
     },
-    "image_map": {
-        "amazonLinuxAmiId": {
-            "ap-northeast-1": { "HVM64": "ami-cbf90ecb", "PV64": "ami-27f90e27" },
-            "ap-southeast-1": { "HVM64": "ami-68d8e93a", "PV64": "ami-acd9e8fe" },
-            "ap-southeast-2": { "HVM64": "ami-fd9cecc7", "PV64": "ami-ff9cecc5" },
-            "eu-central-1": { "HVM64": "ami-a8221fb5", "PV64": "ami-ac221fb1" },
-            "eu-west-1": { "HVM64": "ami-a10897d6", "PV64": "ami-bf0897c8" },
-            "sa-east-1": { "HVM64": "ami-b52890a8", "PV64": "ami-bb2890a6" },
-            "us-east-1": { "HVM64": "ami-1ecae776", "PV64": "ami-1ccae774" },
-            "us-west-1": { "HVM64": "ami-d114f295", "PV64": "ami-d514f291" },
-            "us-west-2": { "HVM64": "ami-e7527ed7", "PV64": "ami-ff527ecf" }
-        },
-        "natAmiId": {
-            "ap-northeast-1": {"HVM64": "ami-5f840e5e"},
-            "ap-southeast-1": {"HVM64": "ami-780a432a"},
-            "ap-southeast-2": {"HVM64": "ami-0154c73b"},
-            "eu-west-1": {"HVM64": "ami-ed352799"},
-            "sa-east-1": {"HVM64": "ami-7660c56b"},
-            "us-east-1": {"HVM64": "ami-4f9fee26"},
-            "us-west-1": {"HVM64": "ami-7850793d"},
-            "us-west-2": {"HVM64": "ami-69ae8259"}
-        }
-    }
+    "image_map": !include ami_cache.json
 }

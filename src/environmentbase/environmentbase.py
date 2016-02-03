@@ -555,7 +555,7 @@ class EnvironmentBase(object):
             config.update(handler.get_factory_defaults())
 
         with open(self.config_filename, 'w') as f:
-            f.write(json.dumps(config, indent=4, sort_keys=True, separators=(',', ': ')))
+            f.write(res.FACTORY_DEFAULT_CONFIG_STRING)
             print 'Generated config file at %s\n' % self.config_filename
 
     def load_config(self, view=None, config=None):

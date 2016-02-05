@@ -71,7 +71,7 @@ class ResourcesTestCase(TestCase):
         }
 
         # verify extraction of complex structure
-        self.r.extract_config_section(config, 'b', 'b.json')
+        self.r._extract_config_section(config, 'b', 'b.json')
         self.assertEquals(config['b'], '!include b.json')
         with file('b.json') as f:
             content = f.read()
@@ -141,7 +141,7 @@ class ResourcesTestCase(TestCase):
         # Verify modified config section is modified
         self.assertEquals(parsed_content['AWSTemplateFormatVersion'], "2016-02-05")
 
-# def test_gather_includes(self):
+    # def test_gather_includes(self):
     #     files = r.gather_includes('config_tree_root', module=__name__, internal_path='resources/includes')
     #     self.assertEquals(len(files), 4)
 

@@ -34,11 +34,11 @@ class Res(object):
     def __init__(self):
         # Set PyYAML's '!include' constructor to use the file loader
         # Any function that changes this should set it back before exiting
-        yaml.add_constructor("!include", Res.yaml_file_include)
+        yaml.add_constructor("!include", Res._yaml_file_include)
 
     # Implimentation of "!include" directive for yaml parser to load YAML content from egg archive resource
     @staticmethod
-    def yaml_resource_include(loader, node):
+    def _yaml_resource_include(loader, node):
         content = R.load_resource(
             node.value,
             module=Res._INCLUDE_RESOURCE_MODULE,
@@ -47,7 +47,7 @@ class Res(object):
 
     # Implimentation of "!include" directive for yaml parser to load YAML content from filesystem resource
     @staticmethod
-    def yaml_file_include(loader, node):
+    def _yaml_file_include(loader, node):
         # Get the path out of the yaml file
         file_name = os.path.join(os.path.dirname(loader.name), node.value)
         if os.path.isfile(file_name):
@@ -164,18 +164,18 @@ class Res(object):
 
         # Configure PyYAML to process '!include' directive with correct handler function
         if not from_file:
-            yaml.add_constructor("!include", Res.yaml_resource_include)
+            yaml.add_constructor("!include", Res._yaml_resource_include)
 
         # parse and return
         parsed_content = yaml.load(content)
 
         # Set PyYAML's !include back to loading from files
         if not from_file:
-            yaml.add_constructor("!include", Res.yaml_file_include)
+            yaml.add_constructor("!include", Res._yaml_file_include)
 
         return parsed_content
 
-    def extract_config_section(self, config, config_key, filename):
+    def _extract_config_section(self, config, config_key, filename):
         """
         Write requested config section to file and replace config value with a sentinel value to
         be processed later into a valid '!include' directive. The sentinel is a string containing
@@ -190,13 +190,25 @@ class Res(object):
         with open(filename, 'w') as f:
             content = json.dumps(section, indent=4, separators=(',', ': '))
             f.write(content)
-            print "Generated %s file at %s\n" % (config_key, filename)
 
         config[config_key] = "!include %s" % filename
 
     def generate_config(self, config_file=CONFIG_FILENAME, config_handlers=list(), extract_map=_EXTRACTED_CONFIG_SECTIONS):
         """
-
+        Copies specified yaml/json file from the EGG resource to current directory, default is 'conifg.json'.  Optionally
+        split out specific sections into separate files using extract_map.  Additionally us config_handlers to add in
+        additional conifg content before serializing content to file.
+        @param config_file [string] Name of file within resource path to load.
+        @param extract_map [map<string, string>] Specifies top-level sections of config to externalize to separate file.
+        Where key=config section name, value=filename.
+        @param config_handlers [list(objects)] Config handlers should resemble the following:
+            class CustomHandler(object):
+                @staticmethod
+                def get_factory_defaults():
+                    return custom_config_addition
+                @staticmethod
+                def get_config_schema():
+                    return custom_config_validation
         """
         # Load config from egg
         config = self.parse_file(config_file, from_file=False)
@@ -213,7 +225,8 @@ class Res(object):
 
         # Write config sections to file and replace content with "!include" string.
         for section_key, filename in extract_map.iteritems():
-            self.extract_config_section(config_copy, section_key, filename)
+            self._extract_config_section(config_copy, section_key, filename)
+            print "Generated %s file at %s\n" % (section_key, filename)
 
         # Serialize config to string
         templatized_config_string = json.dumps(config_copy, indent=4, separators=(',', ': '))

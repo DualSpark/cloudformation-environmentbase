@@ -12,6 +12,7 @@
 src/cfn_environment_base.egg-info/
 ami_cache.*
 config.*
+instancetype_to_arch.*
 .DS_Store
 .idea/
 .eggs

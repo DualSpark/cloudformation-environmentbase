@@ -198,7 +198,7 @@ class Res(object):
 
         # Output file
         with open(filename, 'w') as f:
-            content = json.dumps(section, indent=4, separators=(',', ': '))
+            content = json.dumps(section, indent=4, separators=(',', ': '), sort_keys=True)
             f.write(content)
 
         config[config_key] = "!include %s" % filename
@@ -240,7 +240,7 @@ class Res(object):
             print "Generated %s file at %s\n" % (section_key, filename)
 
         # Serialize config to string
-        templatized_config_string = json.dumps(config_copy, indent=4, separators=(',', ': '))
+        templatized_config_string = json.dumps(config_copy, indent=4, separators=(',', ': '), sort_keys=True)
 
         # Replace encoded 'include' with the real one using regex.
         # This amounts to capturing the quoted string and stripping off the quotes

@@ -81,7 +81,7 @@ def get_template_from_s3(config, template_resource_path):
     get_boto_client(config, "s3").download_file(s3_bucket, template_resource_path, file_path)
 
     # Parse the template as json and return the dictionary
-    return res.load_json_file(file_path)
+    return res.R.parse_file(file_path)
 
 
 def get_stack_params_from_parent_template(parent_template_contents, stack_name):

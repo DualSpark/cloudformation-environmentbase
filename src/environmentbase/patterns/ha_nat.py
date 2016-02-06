@@ -132,10 +132,10 @@ class HaNat(Template):
 
     def add_nat_asg(self):
 
-        user_data = [resources.get_resource('nat_takeover.sh')]
+        user_data = [resources.R.load_resource('nat_takeover.sh')]
 
         if self.enable_ntp:
-            user_data.append(resources.get_resource('ntp_takeover.sh'))
+            user_data.append(resources.R.load_resource('ntp_takeover.sh'))
         if self.extra_user_data:
             user_data.append(open(self.extra_user_data).read())
 

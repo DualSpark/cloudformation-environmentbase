@@ -12,7 +12,7 @@ R = None
 
 class Res(object):
 
-    CONFIG_REQUIREMENTS_FILENAME = 'config_schema,json'
+    CONFIG_REQUIREMENTS_FILENAME = 'config_schema.json'
     CONFIG_FILENAME = "config.json"
     IMAGE_MAP_FILENAME = "ami_cache.json"
     INSTANCETYPE_MAP_FILENAME = "instancetype_to_arch.json"
@@ -176,6 +176,10 @@ class Res(object):
 
         return parsed_content
 
+    def load_config(self):
+        config = self.parse_file(Res.CONFIG_FILENAME)
+        return config
+
     def _extract_config_section(self, config, config_key, filename, prompt=False):
         """
         Write requested config section to file and replace config value with a sentinel value to
@@ -328,8 +332,8 @@ R = Res()
 # CONFIG_REQUIREMENTS = get_yaml_resource(CONFIG_REQUIREMENTS_FILENAME)
 
 
-# COMMON_STRINGS_FILENAME = 'common_strings'
-# COMMON_STRINGS = get_yaml_resource(COMMON_STRINGS_FILENAME)
+COMMON_STRINGS_FILENAME = 'common_strings.json'
+COMMON_STRINGS = R.parse_file(COMMON_STRINGS_FILENAME, from_file=False)
 
 
 # def load_file(parent, basename):
@@ -370,23 +374,7 @@ R = Res()
 #     return parsed_content
 
 
-# def get_str(key, default=None):
-#     return COMMON_STRINGS.get(key, default)
+def get_str(key, default=None):
+    return COMMON_STRINGS.get(key, default)
 
 
-# def get_type(typename):
-#     """
-#     Convert typename to type object
-#     :param typename: String name of type
-#     :return: __builtin__ type instance
-#     """
-#     types = {
-#         'bool': bool,
-#         'int': int,
-#         'float': float,
-#         # avoid all the python unicode weirdness by making all the strings basestrings
-#         'str': basestring,
-#         'basestring': basestring,
-#         'list': list
-#     }
-#     return types.get(typename, None)

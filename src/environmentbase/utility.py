@@ -17,6 +17,24 @@ def first_letter_capitalize(the_string):
     return the_string[:1].capitalize() + the_string[1:]
 
 
+def get_type(typename):
+    """
+    Convert typename to type object
+    :param typename: String name of type
+    :return: __builtin__ type instance
+    """
+    types = {
+        'bool': bool,
+        'int': int,
+        'float': float,
+        # avoid all the python unicode weirdness by making all the strings basestrings
+        'str': basestring,
+        'basestring': basestring,
+        'list': list
+    }
+    return types.get(typename, None)
+
+
 def _get_boto_session(boto_config):
     if not boto_config.get('session'):
         boto_config['session'] = boto3.session.Session(region_name=boto_config['region_name'])

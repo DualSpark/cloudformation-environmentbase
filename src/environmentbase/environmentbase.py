@@ -399,7 +399,7 @@ class EnvironmentBase(object):
 
                 # ------------ value check -----------
                 if isinstance(req_value, basestring):
-                    req_type = res.get_type(req_value)
+                    req_type = utility.get_type(req_value)
 
                     if not isinstance(config[matching_key], req_type):
                         message = "Type mismatch in config, %s should be of type %s, not %s" % \
@@ -454,7 +454,7 @@ class EnvironmentBase(object):
         """
 
         if not factory_schema:
-            res.R.load_resource()
+            factory_schema = res.R.parse_file(res.Res.CONFIG_REQUIREMENTS_FILENAME, from_file=False)
 
         config_reqs_copy = copy.deepcopy(factory_schema)
 
@@ -554,7 +554,7 @@ class EnvironmentBase(object):
 
         # Else read from file
         else:
-            config = res.load_file('', self.config_filename)
+            config = res.R.load_config()
 
         # Load in cli config overrides
         view.update_config(config)

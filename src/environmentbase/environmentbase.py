@@ -40,7 +40,7 @@ class EnvironmentBase(object):
     def __init__(self,
                  view=None,
                  env_config=EnvConfig(),
-                 config_filename=(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0]),
+                 config_filename=res.R.CONFIG_FILENAME,
                  config_file_override=None):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
@@ -94,8 +94,8 @@ class EnvironmentBase(object):
 
     def add_config_hook(self):
         """
-        Override in your subclass for adding custom config handlers.  
-        Called after the other config handlers have been added.  
+        Override in your subclass for adding custom config handlers.
+        Called after the other config handlers have been added.
         After the hook completes the view is loaded and started.
         """
         pass
@@ -147,8 +147,7 @@ class EnvironmentBase(object):
         Generates config and ami_cache files
         Override in your subclass for custom initialization steps
         """
-        self.generate_config()
-        self.generate_ami_cache()
+        res.R.generate_config(prompt=True)
 
     def s3_prefix(self):
         """
@@ -447,12 +446,16 @@ class EnvironmentBase(object):
             error_msg = "Too many availability zones requested: network.az_count=%s but '%s' has only %s." % (az_count, region_name, actual_az_count)
             raise ValidationError(error_msg)
 
-    def _validate_config(self, config, factory_schema=res.CONFIG_REQUIREMENTS):
+    def _validate_config(self, config, factory_schema=None):
         """
         Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present
         and that the required types match. Throws ValidationError if not valid.
         :param config: dict to be validated
         """
+
+        if not factory_schema:
+            res.R.load_resource()
+
         config_reqs_copy = copy.deepcopy(factory_schema)
 
         # Merge in any requirements provided by config handlers
@@ -535,29 +538,6 @@ class EnvironmentBase(object):
             else:
                 EnvironmentBase._config_env_override(config[key], new_path, print_debug=print_debug)
 
-    def generate_config(self):
-        """
-        Generate config dictionary from defaults
-        Add defaults from all registered config handlers (added patterns, etc.)
-        Write file to self.config_filename
-        """
-
-        if os.path.isfile(self.config_filename):
-            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % self.config_filename).lower()
-            print
-            if not overwrite == 'y':
-                return
-
-        config = copy.deepcopy(res.FACTORY_DEFAULT_CONFIG)
-
-        # Merge in any defaults provided by registered config handlers
-        for handler in self._config_handlers:
-            config.update(handler.get_factory_defaults())
-
-        with open(self.config_filename, 'w') as f:
-            f.write(res.FACTORY_DEFAULT_CONFIG_STRING)
-            print 'Generated config file at %s\n' % self.config_filename
-
     def load_config(self, view=None, config=None):
         """
         Load config from self.config_filename, break if it doesn't exist
@@ -598,7 +578,6 @@ class EnvironmentBase(object):
             self.stack_monitor = monitor.StackMonitor(self.globals['environment_name'])
             self.stack_monitor.add_handler(self)
 
-
     def initialize_template(self):
         """
         Create new Template instance, set description and common parameters and load AMI cache.
@@ -636,22 +615,6 @@ class EnvironmentBase(object):
         self.template.add_utility_bucket(name=bucket_name)
         self.template.add_output(Output('utilityBucket', Value=bucket_name))
 
-    def generate_ami_cache(self):
-        """
-        Generate ami_cache.json file from defaults
-        """
-        ami_cache_filename = res.DEFAULT_AMI_CACHE_FILENAME + res.EXTENSIONS[0]
-
-        if os.path.isfile(ami_cache_filename):
-            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % ami_cache_filename).lower()
-            print
-            if not overwrite == 'y':
-                return
-
-        with open(ami_cache_filename, 'w') as f:
-            f.write(json.dumps(res.FACTORY_DEFAULT_AMI_CACHE, indent=4, separators=(',', ': ')))
-            print "Generated AMI cache file at %s\n" % ami_cache_filename
-
     def to_json(self):
         """
         Centralized method for outputting the root template with a timestamp identifying when it
@@ -685,7 +648,6 @@ class EnvironmentBase(object):
         """
         return self.template.add_child_template(child_template, merge=merge, depends_on=depends_on)
 
-
     def write_stack_outputs_to_file(self, event_data):
         """
         Given the stack event data, determine if the stack has finished executing (CREATE_COMPLETE or UPDATE_COMPLETE)
@@ -694,7 +656,6 @@ class EnvironmentBase(object):
         if event_data['type'] == 'AWS::CloudFormation::Stack' and \
         (event_data['status'] == 'CREATE_COMPLETE' or event_data['status'] == 'UPDATE_COMPLETE'):
             self.write_stack_output_to_file(stack_id=event_data['id'], stack_name=event_data['name'])
-
 
     def write_stack_output_to_file(self, stack_id, stack_name):
         """
@@ -720,7 +681,6 @@ class EnvironmentBase(object):
         if self.globals['print_debug']:
             print "Outputs for {0} written to {1}\n".format(stack_name, stack_output_filename)
 
-
     def get_stack_output(self, stack_id, output_name):
         """
         Given the PhysicalResourceId of a Stack and a specific output key, return the output value
@@ -738,13 +698,11 @@ class EnvironmentBase(object):
         # If the output wasn't found in the stack, raise an exception
         raise Exception("%s did not output %s" % (stack_obj.stack_name, output_name))
 
-
     def get_cfn_stack_obj(self, stack_id):
         """
         Given the unique physical stack ID, return exactly one cloudformation stack object
         """
         return self.get_cfn_connection().describe_stacks(stack_id)[0]
-
 
     def get_cfn_connection(self):
         """
@@ -753,7 +711,6 @@ class EnvironmentBase(object):
         if not self.cfn_connection:
             self.cfn_connection = cloudformation.connect_to_region(self.config.get('boto').get('region_name'))
         return self.cfn_connection
-
 
     def get_sts_credentials(self, role_session_name, role_arn):
         """
@@ -767,4 +724,3 @@ class EnvironmentBase(object):
             )
             self.sts_credentials = assumed_role.credentials
         return self.sts_credentials
-

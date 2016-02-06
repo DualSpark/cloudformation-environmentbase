@@ -12,6 +12,7 @@ R = None
 
 class Res(object):
 
+    CONFIG_REQUIREMENTS_FILENAME = 'config_schema,json'
     CONFIG_FILENAME = "config.json"
     IMAGE_MAP_FILENAME = "ami_cache.json"
     INSTANCETYPE_MAP_FILENAME = "instancetype_to_arch.json"
@@ -175,7 +176,7 @@ class Res(object):
 
         return parsed_content
 
-    def _extract_config_section(self, config, config_key, filename):
+    def _extract_config_section(self, config, config_key, filename, prompt=False):
         """
         Write requested config section to file and replace config value with a sentinel value to
         be processed later into a valid '!include' directive. The sentinel is a string containing
@@ -183,7 +184,16 @@ class Res(object):
         @parse config [list|dict] The config datastructure to be modified with a template token.
         @param config_key [string] The config key to be externalized.
         @param filename [string] The name of the file created to hold config[config_key]
+        @param prompt [boolean] block for user input to abort file output if file already exists
         """
+
+        # If file exists ask user if we should proceed
+        if prompt and os.path.isfile(filename):
+            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % filename).lower()
+            print
+            if not overwrite == 'y':
+                return
+
         section = config.get(config_key)
 
         # Output file
@@ -193,12 +203,13 @@ class Res(object):
 
         config[config_key] = "!include %s" % filename
 
-    def generate_config(self, config_file=CONFIG_FILENAME, config_handlers=list(), extract_map=_EXTRACTED_CONFIG_SECTIONS):
+    def generate_config(self, config_file=CONFIG_FILENAME, config_handlers=list(), extract_map=_EXTRACTED_CONFIG_SECTIONS, prompt=False):
         """
         Copies specified yaml/json file from the EGG resource to current directory, default is 'conifg.json'.  Optionally
         split out specific sections into separate files using extract_map.  Additionally us config_handlers to add in
         additional conifg content before serializing content to file.
         @param config_file [string] Name of file within resource path to load.
+        @param prompt [boolean] block for user input to abort file output if file already exists
         @param extract_map [map<string, string>] Specifies top-level sections of config to externalize to separate file.
         Where key=config section name, value=filename.
         @param config_handlers [list(objects)] Config handlers should resemble the following:
@@ -225,7 +236,7 @@ class Res(object):
 
         # Write config sections to file and replace content with "!include" string.
         for section_key, filename in extract_map.iteritems():
-            self._extract_config_section(config_copy, section_key, filename)
+            self._extract_config_section(config_copy, section_key, filename, prompt)
             print "Generated %s file at %s\n" % (section_key, filename)
 
         # Serialize config to string
@@ -236,6 +247,13 @@ class Res(object):
         final_config_string = re.sub(r"\"!include ([a-zA-Z0-9_.\\-]*)\"",
                                      lambda m: m.group(0)[1:-1],
                                      templatized_config_string)
+
+        # If file exists ask user if we should proceed
+        if prompt and os.path.isfile(config_file):
+            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % config_file).lower()
+            print
+            if not overwrite == 'y':
+                return
 
         # Finally write config.json to file
         with open(config_file, 'w') as f:

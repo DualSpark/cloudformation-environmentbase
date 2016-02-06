@@ -92,59 +92,6 @@ class Res(object):
 
         return file_content
 
-    # def gather_includes(self, filename, module=None, internal_path=None):
-    #     """
-    #     Scan file from resource path for '!include' resources.  Return list of all referenced files.
-    #     This method will fail if a file is referenced more than once.
-    #     """
-
-    #     # Can't set with param vaules for some reason
-    #     if not module:
-    #         module = Res._INCLUDE_RESOURCE_MODULE
-    #     if not internal_path:
-    #         internal_path = Res._INCLUDE_RESOURCE_INTERNAL_PATH
-
-    #     processed_includes = []
-    #     pending_includes = [filename]
-
-    #     while pending_includes:
-    #         current = pending_includes.pop()
-    #         content = self.load_resource(current, module, internal_path)
-
-    #         for m in re.finditer(r"!include ([a-zA-Z0-9_.\\-]*)", content):
-    #             file_ref = m.group(1)
-
-    #             if file_ref in processed_includes:
-    #                 raise Exception("Repeat reference for '%s' in file %s" % (file_ref, filename))
-
-    #             pending_includes.append(file_ref)
-
-    #         processed_includes.append(current)
-
-    #     return processed_includes
-
-    # def copy_from_egg(self, filename, destination='.', module=None, internal_path=None):
-    #     """
-    #     Copy file from egg, including all dependent files referenced with '!include'
-    #     """
-
-    #     # Can't set with param vaules for some reason
-    #     if not module:
-    #         module = Res._INCLUDE_RESOURCE_MODULE
-    #     if not internal_path:
-    #         internal_path = Res._INCLUDE_RESOURCE_INTERNAL_PATH
-
-    #     filenames = self.gather_includes(filename, module, internal_path)
-
-    #     for current_filename in filenames:
-    #         # Load the cached resource
-    #         content = self.load_resource(current_filename, module, internal_path)
-
-    #         # Write file content to local file
-    #         filepath = os.path.join(destination, current_filename)
-    #         with open(filepath, 'w') as f:
-    #             f.write(content)
-
     def parse_file(self, filename, from_file=True):
         """
         Read file into python data structure from either EGG archive or local filesystem.
@@ -272,6 +219,7 @@ R = Res()
 
 COMMON_STRINGS_FILENAME = 'common_strings.json'
 COMMON_STRINGS = R.parse_file(COMMON_STRINGS_FILENAME, from_file=False)
+
 
 def get_str(key, default=None):
     return COMMON_STRINGS.get(key, default)

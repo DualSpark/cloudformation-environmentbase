@@ -140,29 +140,3 @@ class ResourcesTestCase(TestCase):
 
         # Verify modified config section is modified
         self.assertEquals(parsed_content['AWSTemplateFormatVersion'], "2016-02-05")
-
-    # def test_gather_includes(self):
-    #     files = r.gather_includes('config_tree_root', module=__name__, internal_path='resources/includes')
-    #     self.assertEquals(len(files), 4)
-
-    #     with self.assertRaises(Exception):
-    #         r.gather_includes('config_self_ref', module=__name__, internal_path='resources/includes')
-
-    #     with self.assertRaises(Exception):
-    #         r.gather_includes('circular_ref_a', module=__name__, internal_path='resources/includes')
-
-    # def test_copy_from_egg(self):
-    #     resources = ['config_tree_root', 'config_tree_left', 'config_tree_left_left', 'config_tree_right']
-
-    #     # current directory test
-    #     r.copy_from_egg('config_tree_root', module=__name__, internal_path='resources/includes')
-
-    #     for resource_name in resources:
-    #         self.assertTrue(os.path.isfile(resource_name))
-
-    #     # destination test
-    #     new_dir = mkdtemp()
-    #     r.copy_from_egg('config_tree_root', destination=new_dir, module=__name__, internal_path='resources/includes')
-    #     for resource_name in resources:
-    #         new_path = os.path.join(new_dir, resource_name)
-    #         self.assertTrue(os.path.isfile(new_path))

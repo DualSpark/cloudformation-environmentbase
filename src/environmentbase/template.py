@@ -14,6 +14,9 @@ from datetime import datetime
 import resources as res
 import utility
 
+from toolz.dicttoolz import merge
+
+
 class Template(t.Template):
     """
     Custom wrapper for Troposphere Template object which handles S3 uploads and a specific
@@ -297,10 +300,17 @@ class Template(t.Template):
 
     def add_common_parameters_from_parent(self, parent):
         ec2_key = parent._ec2_key.Default
-        parent_subnets = parent._subnets
+        parent_subnets = parent._subnets if not self._subnets else {}
         az_count = len(parent._azs)
-        region_map = parent.mappings['RegionMap']
+        if self.mappings.get('RegionMap'):
+            region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
+        else:
+            region_map = parent.mappings['RegionMap']
         self.add_common_parameters(ec2_key, region_map, parent_subnets, az_count)
+
+    def _merge_region_map(self, map1, map2):
+        for key in set(map1.keys() + map2.keys()):
+            yield (key, merge(map1[key], map2[key]))
 
     def add_common_parameters(self, ec2_key, region_map, parent_subnets, az_count=2):
         """
@@ -367,9 +377,13 @@ class Template(t.Template):
                     self._subnets[subnet_type][subnet_layer] = []
 
                 for subnet in parent_subnets[subnet_type][subnet_layer]:
+                    if isinstance(subnet, Parameter):
+                        subnet_name = subnet.title
+                    else:
+                        subnet_name = subnet.data['Ref']
                     self._subnets[subnet_type][subnet_layer].append(self.add_parameter(Parameter(
-                        subnet.name,
-                        Description=subnet.name,
+                        subnet_name,
+                        Description=subnet_name,
                         Type='String')))
 
         self._azs = []
@@ -1189,13 +1203,23 @@ class Template(t.Template):
         Creates a cloudformation stack resource in this template with the attributes provided
         """
         stack_obj = cf.Stack(
-            template_name + 'Stack',
+            template_name,
             TemplateURL=template_url,
             Parameters=stack_params,
             TimeoutInMinutes=Template.stack_timeout,
             DependsOn=depends_on)
 
         return self.add_resource(stack_obj)
+
+    def add_child_outputs_to_parameter_binding(self, child_template, propagate_up=False):
+        """
+        This auto-wires the outputs of the child stack to the manual_param of the parent stack
+        """
+        for output in child_template.outputs:
+            self.manual_parameter_bindings[output] = GetAtt(child_template.name, "Outputs." + output)
+            if propagate_up:
+                self.add_output(Output(output, Value=GetAtt(child_template.name, "Outputs." + output)))
+            # TODO: should a custom resource be addeded for each output? 
 
     def match_stack_parameters(self, child_template):
         """

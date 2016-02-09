@@ -208,8 +208,9 @@ class EnvironmentBaseTestCase(TestCase):
             cntrl._validate_config(valid_config)
 
         # Check wildcard sections
+        config_reqs = res.R.parse_file(res.Res.CONFIG_REQUIREMENTS_FILENAME, from_file=False)
         extra_reqs = {'*-db': {'host': 'str', 'port': 'int'}}
-        extra_reqs.update(res.CONFIG_REQUIREMENTS)
+        extra_reqs.update(config_reqs)
 
         valid_config.update({
             'my-db': {'host': 'localhost', 'port': 3306},
@@ -223,7 +224,7 @@ class EnvironmentBaseTestCase(TestCase):
                     'deeper': {
                         'key': 'str'
                     }}}}
-        extra_reqs.update(res.CONFIG_REQUIREMENTS)
+        extra_reqs.update(config_reqs)
 
         valid_config.update({
             'lets': {

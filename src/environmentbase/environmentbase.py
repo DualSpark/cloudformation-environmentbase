@@ -417,6 +417,15 @@ class EnvironmentBase(object):
                                   (new_path, type(matching_value).__name__)
                         raise ValidationError(message)
 
+    def _validate_region(self, config):
+        """
+        Checks boto.region_name against the list of valid regions raising an exception if not.
+        """
+        valid_regions = config['global']['valid_regions']
+        region_name = config['boto']['region_name']
+        if region_name not in valid_regions:
+            raise ValidationError('Unrecognized region name: ' + region_name)
+
     def _validate_config(self, config, factory_schema=res.CONFIG_REQUIREMENTS):
         """
         Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present
@@ -432,10 +441,7 @@ class EnvironmentBase(object):
         self._validate_config_helper(config_reqs_copy, config, '')
 
         # Validate region
-        valid_regions = config['global']['valid_regions']
-        region_name = config['boto']['region_name']
-        if region_name not in valid_regions:
-            raise ValidationError('Unrecognized region name: ' + region_name)
+        self._validate_region(config)
 
     def _add_config_handler(self, handler):
         """

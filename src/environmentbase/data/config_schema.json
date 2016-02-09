@@ -7,7 +7,9 @@
         # Enable monitoring of stack event stream
         "monitor_stack": "bool",
         # Directory for writing stack outputs
-        "stack_outputs_directory": "basestring"        
+        "stack_outputs_directory": "basestring",
+        # Directory for writing stack outputs
+        "valid_regions": "list"
     },
     "template": {
         # Name of json file containing mapping labels to AMI ids
@@ -42,5 +44,8 @@
     "nat": {
         "instance_type": "basestring",
         "enable_ntp": "bool"
+    },
+    "boto": {
+        "region_name": "basestring"
     }
 }

@@ -2,6 +2,7 @@ import os
 import os.path
 import copy
 import re
+import sys
 import botocore.exceptions
 from boto import cloudformation, sts
 from troposphere import Parameter, Output
@@ -172,7 +173,7 @@ class EnvironmentBase(object):
                 s3_upload=s3_upload)
 
         if s3_upload:
-            # Upload the template to the s3 bucket under the template_prefix            
+            # Upload the template to the s3 bucket under the template_prefix
             s3_client.Bucket(Template.template_bucket).put_object(
                 Key=template.resource_path,
                 Body=raw_json,
@@ -319,7 +320,7 @@ class EnvironmentBase(object):
 
     def deploy_action(self):
         """
-        Default deploy_action invoked by the CLI. 
+        Default deploy_action invoked by the CLI.
         Loads and validates config, then deploys the root template to cloudformation using boto
         Override the deploy_hook in your environment to intercept the deployment process
         This can be useful for creating resources using boto outside of cloudformation
@@ -409,6 +410,22 @@ class EnvironmentBase(object):
 
                     self._validate_config_helper(req_value, matching_value, new_path)
 
+                elif isinstance(req_value, list):
+                    matching_value = config[matching_key]
+                    if not isinstance(matching_value, list):
+                        message = "Type mismatch in config, %s should be a list, not %s" % \
+                                  (new_path, type(matching_value).__name__)
+                        raise ValidationError(message)
+
+    def _validate_region(self, config):
+        """
+        Checks boto.region_name against the list of valid regions raising an exception if not.
+        """
+        valid_regions = config['global']['valid_regions']
+        region_name = config['boto']['region_name']
+        if region_name not in valid_regions:
+            raise ValidationError('Unrecognized region name: ' + region_name)
+
     def _validate_config(self, config, factory_schema=res.CONFIG_REQUIREMENTS):
         """
         Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present
@@ -422,6 +439,9 @@ class EnvironmentBase(object):
             config_reqs_copy.update(handler.get_config_schema())
 
         self._validate_config_helper(config_reqs_copy, config, '')
+
+        # Validate region
+        self._validate_region(config)
 
     def _add_config_handler(self, handler):
         """
@@ -593,8 +613,10 @@ class EnvironmentBase(object):
         self.template.add_utility_bucket(name=bucket_name)
         self.template.add_output(Output('utilityBucket',Value=bucket_name))
 
-        ami_cache = res.load_yaml_file(self.config.get('template').get('ami_map_file'))
-        self.template.add_ami_mapping(ami_cache)    
+        ami_filename = self.config['template']['ami_map_file']
+        ami_cache = res.load_yaml_file(ami_filename)
+
+        self.template.add_ami_mapping(ami_cache)
 
     def generate_ami_cache(self):
         """
@@ -614,7 +636,7 @@ class EnvironmentBase(object):
 
     def to_json(self):
         """
-        Centralized method for outputting the root template with a timestamp identifying when it 
+        Centralized method for outputting the root template with a timestamp identifying when it
         was generated and for creating a SHA256 hash representing the template for validation purposes
         Also recursively processess all child templates
         """
@@ -627,7 +649,6 @@ class EnvironmentBase(object):
     # - vpcId: resource id of VPC
     # - commonSecurityGroup: sg identifier for common allowed ports (22 in from VPC)
     # - utilityBucket: S3 bucket name used to send logs to
-    # - availabilityZone[1-3]: Indexed names of AZs VPC is deployed to
     # - [public|private]Subnet[0-9]: indexed and classified subnet identifiers
     #
     # and some instance attributes referencing the attached parameters:
@@ -636,7 +657,6 @@ class EnvironmentBase(object):
     # - self.common_security_group
     # - self.utility_bucket
     # - self.subnets: keyed by type, layer, and AZ index (e.g. self.subnets['public']['web'][1])
-    # - self.azs: List of parameter references
     def add_child_template(self, child_template, merge=False, depends_on=[]):
         """
         Saves reference to provided template. References are processed in write_template_to_file().

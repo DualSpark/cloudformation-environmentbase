@@ -243,13 +243,13 @@ class EnvironmentBaseTestCase(TestCase):
 
             @staticmethod
             def get_config_schema():
-                return {'new_section': {'new_key': 'str'}}
+                return {'new_section': {'new_key': 'basestring'}}
 
         class MyEnvBase(eb.EnvironmentBase):
             pass
 
         view = self.fake_cli(['init'])
-        env_config=eb.EnvConfig(config_handlers=[MyConfigHandler])
+        env_config = eb.EnvConfig(config_handlers=[MyConfigHandler])
         controller = MyEnvBase(
             view=view,
             env_config=env_config
@@ -260,15 +260,15 @@ class EnvironmentBaseTestCase(TestCase):
         # Make sure the runtime config and the file saved to disk have the new parameter
         self.assertEquals(controller.config['new_section']['new_key'], 'value')
 
-        with open(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0], 'r') as f:
+        with open(res.Res.CONFIG_FILENAME, 'r') as f:
             external_config = yaml.load(f)
             self.assertEquals(external_config['new_section']['new_key'], 'value')
 
         # Check extended validation
         # recreate config file without 'new_section' and make sure it fails validation
-        os.remove(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0])
+        os.remove(res.Res.CONFIG_FILENAME)
         dummy_config = self._create_dummy_config()
-        self._create_local_file(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0], json.dumps(dummy_config, indent=4))
+        self._create_local_file(res.Res.CONFIG_FILENAME, json.dumps(dummy_config, indent=4))
 
         with self.assertRaises(eb.ValidationError):
             base = MyEnvBase(view=view, env_config=env_config)

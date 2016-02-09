@@ -147,7 +147,8 @@ class EnvironmentBase(object):
         Generates config and ami_cache files
         Override in your subclass for custom initialization steps
         """
-        res.R.generate_config(prompt=True)
+        config_handlers = self.env_config.config_handlers
+        res.R.generate_config(prompt=True, config_handlers=config_handlers)
 
     def s3_prefix(self):
         """

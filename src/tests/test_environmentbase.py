@@ -42,7 +42,7 @@ class EnvironmentBaseTestCase(TestCase):
         dummy_int = 3
         dummy_list = ['A', 'B', 'C']
 
-        config_requirements = copy.deepcopy(res.CONFIG_REQUIREMENTS)
+        config_requirements = res.R.parse_file(res.Res.CONFIG_REQUIREMENTS_FILENAME, from_file=False)
 
         if env_base:
             for handler in env_base.config_handlers:
@@ -129,14 +129,8 @@ class EnvironmentBaseTestCase(TestCase):
 
         self.assertEqual(base.config['global']['environment_name'], 'environmentbase')
 
-
-
     def test_config_override(self):
         """ Make sure local config files overrides default values."""
-
-        # We don't care about the AMI cache for this test,
-        # but the file has to exist and to contain valid json
-        self._create_local_file(res.DEFAULT_AMI_CACHE_FILENAME + res.EXTENSIONS[0], '{}')
 
         # Create a local config file and verify that it overrides the factory default
         config = self._create_dummy_config()
@@ -145,7 +139,7 @@ class EnvironmentBaseTestCase(TestCase):
         original_value = config['global']['environment_name']
         config['global']['environment_name'] = original_value + 'dummy'
 
-        with open(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0], 'w') as f:
+        with open(res.Res.CONFIG_FILENAME, 'w') as f:
             f.write(yaml.dump(config))
             f.flush()
 
@@ -164,8 +158,8 @@ class EnvironmentBaseTestCase(TestCase):
             base.load_config()
 
         # remove config.json and create the alternate config file
-        os.remove(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0])
-        self.assertFalse(os.path.isfile(res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0]))
+        os.remove(res.Res.CONFIG_FILENAME)
+        self.assertFalse(os.path.isfile(res.Res.CONFIG_FILENAME))
 
         with open(config_filename, 'w') as f:
             f.write(yaml.dump(config))

@@ -123,8 +123,8 @@ class Res(object):
 
         return parsed_content
 
-    def load_config(self):
-        config = self.parse_file(Res.CONFIG_FILENAME)
+    def load_config(self, config_filename=CONFIG_FILENAME):
+        config = self.parse_file(config_filename)
         return config
 
     def _extract_config_section(self, config, config_key, filename, prompt=False):

@@ -115,13 +115,16 @@ class EnvironmentBaseTestCase(TestCase):
         self.assertEqual(actions_called['delete'], 1)
 
     def test_config_yaml(self):
-        """ Make sure load_config can load yaml files."""
-        with open("config.yaml", 'w') as f:
-            f.write(yaml.dump(res.FACTORY_DEFAULT_CONFIG, default_flow_style=False))
+        """ Verify load_config can load non-default files """
+        alt_config_filename = 'config.yaml'
+        config = res.R.parse_file(res.Res.CONFIG_FILENAME, from_file=False)
+
+        with open(alt_config_filename, 'w') as f:
+            f.write(yaml.dump(config, default_flow_style=False))
             f.flush()
 
         fake_cli = self.fake_cli(['create', '--config-file', 'config.yaml'])
-        base = eb.EnvironmentBase(fake_cli)
+        base = eb.EnvironmentBase(fake_cli, config_filename=alt_config_filename)
         base.load_config()
 
         self.assertEqual(base.config['global']['environment_name'], 'environmentbase')

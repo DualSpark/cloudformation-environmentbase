@@ -554,7 +554,7 @@ class EnvironmentBase(object):
 
         # Else read from file
         else:
-            config = res.R.load_config()
+            config = res.R.load_config(self.config_filename)
 
         # Load in cli config overrides
         view.update_config(config)

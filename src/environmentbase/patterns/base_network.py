@@ -143,7 +143,7 @@ class BaseNetwork(Template):
             subnet_name = subnet_layer + 'AZ' + str(subnet_az)
             subnet = self.add_resource(ec2.Subnet(
                 subnet_name,
-                AvailabilityZone=Select(subnet_az, GetAZs("")),
+                AvailabilityZone=Select(subnet_az, GetAZs()),
                 VpcId=self.vpc_id,
                 CidrBlock=CidrBlock,
                 Tags=[ec2.Tag(key='network', value=subnet_type),

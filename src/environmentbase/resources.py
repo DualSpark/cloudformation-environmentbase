@@ -154,12 +154,18 @@ class Res(object):
 
         config[config_key] = "!include %s" % filename
 
-    def generate_config(self, config_file=CONFIG_FILENAME, config_handlers=list(), extract_map=_EXTRACTED_CONFIG_SECTIONS, prompt=False):
+    def generate_config(self,
+                        config_file=CONFIG_FILENAME,
+                        output_filename=None,
+                        config_handlers=list(),
+                        extract_map=_EXTRACTED_CONFIG_SECTIONS,
+                        prompt=False):
         """
         Copies specified yaml/json file from the EGG resource to current directory, default is 'conifg.json'.  Optionally
         split out specific sections into separate files using extract_map.  Additionally us config_handlers to add in
         additional conifg content before serializing content to file.
         @param config_file [string] Name of file within resource path to load.
+        @param output_file [string] Name of generated config file (default is same as 'config_file')
         @param prompt [boolean] block for user input to abort file output if file already exists
         @param extract_map [map<string, string>] Specifies top-level sections of config to externalize to separate file.
         Where key=config section name, value=filename.
@@ -172,6 +178,10 @@ class Res(object):
                 def get_config_schema():
                     return custom_config_validation
         """
+        # Output same file name as the input unless specified otherwise
+        if not output_filename:
+            output_filename = config_file
+
         # Load config from egg
         config = self.parse_file(config_file, from_file=False)
 
@@ -200,14 +210,14 @@ class Res(object):
                                      templatized_config_string)
 
         # If file exists ask user if we should proceed
-        if prompt and os.path.isfile(config_file):
-            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % config_file).lower()
+        if prompt and os.path.isfile(output_filename):
+            overwrite = raw_input("%s already exists. Overwrite? (y/n) " % output_filename).lower()
             print
             if not overwrite == 'y':
                 return
 
         # Finally write config.json to file
-        with open(config_file, 'w') as f:
+        with open(output_filename, 'w') as f:
             f.write(final_config_string)
             print "Generated config file at %s\n" % 'config.json'
 

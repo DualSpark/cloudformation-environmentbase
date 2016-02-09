@@ -274,7 +274,6 @@ class EnvironmentBaseTestCase(TestCase):
             base = MyEnvBase(view=view, env_config=env_config)
             base.load_config()
 
-
     def test_generate_config(self):
         """ Verify cli flags update config object """
 
@@ -282,10 +281,12 @@ class EnvironmentBaseTestCase(TestCase):
         base = eb.EnvironmentBase(self.fake_cli(['init']))
         base.init_action()
         base.load_config()
+
+        factory_config = res.R.parse_file(res.Res.CONFIG_FILENAME, from_file=False)
         self.assertEqual(base.config['global']['print_debug'],
-                         res.FACTORY_DEFAULT_CONFIG['global']['print_debug'])
+                         factory_config['global']['print_debug'])
         self.assertEqual(base.config['global']['environment_name'],
-                         res.FACTORY_DEFAULT_CONFIG['global']['environment_name'])
+                         factory_config['global']['environment_name'])
 
     def test_template_file_flag(self):
         # verify that the --template-file flag changes the config value

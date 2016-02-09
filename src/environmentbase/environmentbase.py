@@ -148,7 +148,7 @@ class EnvironmentBase(object):
         Override in your subclass for custom initialization steps
         """
         config_handlers = self.env_config.config_handlers
-        res.R.generate_config(prompt=True, config_handlers=config_handlers)
+        res.R.generate_config(prompt=True, output_filename=self.config_filename, config_handlers=config_handlers)
 
     def s3_prefix(self):
         """

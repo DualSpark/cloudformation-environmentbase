@@ -104,8 +104,8 @@ def get_pv_ami(filtered_amis):
 
 
 if __name__ == '__main__':
-    ami_map = {'PV64': {}, 'HVM64': {}}
     regions = get_region_list()
+    ami_map = {region_name: {} for region_name in regions}
 
     print 'Regions %s' % regions
     for region in regions:
@@ -120,14 +120,14 @@ if __name__ == '__main__':
 
         hvm_ami = get_hvm_ami(filtered_amis)
         if hvm_ami:
-            ami_map['HVM64'][region] = hvm_ami["ImageId"]
+            ami_map[region]['HVM64'] = hvm_ami["ImageId"]
             print json.dumps(hvm_ami, indent=4, separators=(',', ': '))
         else:
             print '* No HVM hits for region', region
 
         pv_ami = get_pv_ami(filtered_amis)
         if pv_ami:
-            ami_map['PV64'][region] = pv_ami["ImageId"]
+            ami_map[region]['PV64'] = pv_ami["ImageId"]
             print json.dumps(pv_ami, indent=4, separators=(',', ': '))
         else:
             print '* No PV hits for region', region

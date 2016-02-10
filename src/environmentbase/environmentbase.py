@@ -150,7 +150,7 @@ class EnvironmentBase(object):
         """
         Allows subclasses to modify the default stack outputs directory
         """
-        return self.config.get('global').get('stack_outputs_directory', 'stack_outputs')
+        return self.config.get('global').get('stack_outputs_directory') or 'stack_outputs'
 
     def _ensure_template_dir_exists(self):
         template_dir = self.s3_prefix()

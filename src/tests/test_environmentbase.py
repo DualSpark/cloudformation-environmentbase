@@ -307,11 +307,9 @@ class EnvironmentBaseTestCase(TestCase):
             base = eb.EnvironmentBase(self.fake_cli(['init']))
             base.load_config()
 
-
-
         # Create refs to files that should be created and make sure they don't already exists
-        config_file = os.path.join(self.temp_dir, res.DEFAULT_CONFIG_FILENAME + res.EXTENSIONS[0])
-        ami_cache_file = os.path.join(self.temp_dir, res.DEFAULT_AMI_CACHE_FILENAME + res.EXTENSIONS[0])
+        config_file = os.path.join(self.temp_dir, res.Res.CONFIG_FILENAME)
+        ami_cache_file = os.path.join(self.temp_dir, res.Res.CONFIG_FILENAME)
         self.assertFalse(os.path.isfile(config_file))
         self.assertFalse(os.path.isfile(ami_cache_file))
 
@@ -324,7 +322,6 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Verify that the previously created files are loaded up correctly
         eb.EnvironmentBase(self.fake_cli(['create']))
-
 
     # The following two tests use a create_action, which currently doesn't test correctly
 
@@ -339,7 +336,6 @@ class EnvironmentBaseTestCase(TestCase):
     #         def create_hook(self):
     #             res = ec2.Instance("ec2instance", InstanceType="m3.medium", ImageId="ami-951945d0")
     #             self.template.add_resource(res)
-
 
     #     # Initialize the the controller with faked 'create' CLI parameter
     #     with patch.object(sys, 'argv', ['environmentbase', 'init']):
@@ -396,7 +392,6 @@ class EnvironmentBaseTestCase(TestCase):
     #     self.assertIn('Statement', policy['PolicyDocument'])
     #     self.assertEqual(len(policy['PolicyDocument']['Statement']), 2)
     #     self.assertEqual(policy['PolicyDocument']['Statement'][1]['Action'], ['DummyAction'])
-
 
     # Cloudformation doesn't currently support a dry run, so this test would create a live stack
     # def test_deploy(self):

@@ -513,7 +513,7 @@ class Template(t.Template):
         provides a consistant way to get the correct image map name from the custom label.
         @returns string
         """
-        return Template.IMAGE_MAP_PREFIX + image_label.title()
+        return Template.IMAGE_MAP_PREFIX + utility.first_letter_capitalize(image_label)
 
     def get_instancetype_param(self, instance_type, image_name, layer_name):
         """
@@ -526,7 +526,7 @@ class Template(t.Template):
         if not isinstance(instance_type, basestring):
             raise Exception('Template.get_instancetype_param::instance_type should be string')
 
-        param_name = layer_name.title() + 'InstanceTypeFor' + image_name.title()
+        param_name = 'InstanceTypeFor' + utility.first_letter_capitalize(layer_name)
 
         # Return parameter if it already exists
         if param_name in self.parameters:

@@ -38,30 +38,5 @@
         "region_name": "us-west-2",
         "aws_access_key_id": null,
         "aws_secret_access_key": null
-    },
-    "network": {
-        "network_cidr_base": "10.0.0.0",
-        "network_cidr_size": "16",
-        "az_count": 3,
-        "subnet_types": [
-            "public",
-            "private"
-        ],
-        "subnet_config": [
-            {
-                "type": "public",
-                "size": "18",
-                "name": "public"
-            },
-            {
-                "type": "private",
-                "size": "22",
-                "name": "private"
-            },
-        ],
-    },
-    "nat": {
-        "instance_type": "t2.micro",
-        "enable_ntp": false
     }
 }

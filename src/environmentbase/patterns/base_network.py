@@ -12,6 +12,60 @@ from environmentbase.utility import tropo_to_string
 
 
 class BaseNetwork(Template):
+    DEFAULT_CONFIG = {
+        "network": {
+            "network_cidr_base": "10.0.0.0",
+            "network_cidr_size": "16",
+            "az_count": 3,
+            "subnet_types": [
+                "public",
+                "private"
+            ],
+            "subnet_config": [
+                {
+                    "type": "public",
+                    "size": "18",
+                    "name": "public"
+                },
+                {
+                    "type": "private",
+                    "size": "22",
+                    "name": "private"
+                },
+            ],
+        },
+        "nat": {
+            "instance_type": "t2.micro",
+            "enable_ntp": False
+        }
+    }
+
+    CONFIG_SCHEMA = {
+        "network": {
+            "az_count": "int",
+            "subnet_types": "list",
+            "subnet_config": "list",
+            "network_cidr_base": "basestring",
+            "network_cidr_size": "basestring"
+        },
+        "nat": {
+            "instance_type": "basestring",
+            "enable_ntp": "bool"
+        }
+    }
+
+    # When no config.json file exists a new one is created using the 'factory default' file.  This function
+    # augments the factory default before it is written to file with the config values required
+    @staticmethod
+    def get_factory_defaults():
+        return BaseNetwork.DEFAULT_CONFIG
+
+    # When the user request to 'create' a new BaseNetwork template the config.json file is read in. This file is checked to
+    # ensure all required values are present. Because BaseNetwork has additional requirements beyond that of
+    # EnvironmentBase this function is used to add additional validation checks.
+    @staticmethod
+    def get_config_schema():
+        return BaseNetwork.CONFIG_SCHEMA
 
     def __init__(self, template_name, network_config, region_name, nat_config):
         super(BaseNetwork, self).__init__(template_name)

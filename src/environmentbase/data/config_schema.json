@@ -34,17 +34,6 @@
         # Name of the bucket to use for storing log files
         "s3_bucket": "basestring"
     },
-    "network": {
-        "az_count": "int",
-        "subnet_types": "list",
-        "subnet_config": "list",
-        "network_cidr_base": "basestring",
-        "network_cidr_size": "basestring"
-    },
-    "nat": {
-        "instance_type": "basestring",
-        "enable_ntp": "bool"
-    },
     "boto": {
         "region_name": "basestring"
     }

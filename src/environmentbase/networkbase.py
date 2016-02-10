@@ -10,6 +10,9 @@ class NetworkBase(EnvironmentBase):
     for a common deployment within AWS. This is intended to be the 'base' stack for deploying child stacks
     """
 
+    def add_config_hook(self):
+        self._add_config_handler(BaseNetwork)
+
     def create_hook(self):
         super(NetworkBase, self).create_hook()
 

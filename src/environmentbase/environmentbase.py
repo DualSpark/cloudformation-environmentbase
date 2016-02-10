@@ -73,6 +73,7 @@ class EnvironmentBase(object):
         # self.env_config = env_config
         for config_handler in env_config.config_handlers:
             self._add_config_handler(config_handler)
+        self.add_config_hook()
 
         # Load the user interface
         self.view = view if view else cli.CLI()
@@ -88,6 +89,14 @@ class EnvironmentBase(object):
         """
         Override in your subclass for custom resource creation.  Called after config is loaded and template is
         initialized.  After the hook completes the templates are serialized and written to file and uploaded to S3.
+        """
+        pass
+
+    def add_config_hook(self):
+        """
+        Override in your subclass for adding custom config handlers.  
+        Called after the other config handlers have been added.  
+        After the hook completes the view is loaded and started.
         """
         pass
 

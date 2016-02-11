@@ -11,6 +11,7 @@ class NetworkBase(EnvironmentBase):
     """
 
     def add_config_hook(self):
+        super(NetworkBase, self).add_config_hook()
         self._add_config_handler(BaseNetwork)
 
     def create_hook(self):

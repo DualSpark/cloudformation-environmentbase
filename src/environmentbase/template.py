@@ -1110,12 +1110,12 @@ class Template(t.Template):
 
         self.manual_parameter_bindings['utilityBucket'] = self.utility_bucket
 
-    def add_child_template(self, child_template, merge=False, depends_on=[]):
+    def add_child_template(self, child_template, merge=False, depends_on=[], output_autowire=True, propagate_outputs=True):
         """
         Appends the template to a list of child templates nested under this one
         These will be processed all together at the end of the create process in process_child_templates()
         """
-        child_template_entry = (child_template, merge, depends_on)
+        child_template_entry = (child_template, merge, depends_on, output_autowire, propagate_outputs)
         self._child_templates.append(child_template_entry)
         return child_template
 
@@ -1137,15 +1137,10 @@ class Template(t.Template):
         """
         Iterate through and process the generated child template list
         """
-        for (child_template, merge, depends_on) in self._child_templates:
-            self.process_child_template(child_template, merge, depends_on)
+        for (child_template, merge, depends_on, output_autowire, propagate_outputs) in self._child_templates:
+            self.process_child_template(child_template, merge, depends_on, output_autowire, propagate_outputs)
 
-        # # TODO: output autowiring feature, disambiguation of output sources
-        # stack_outputs = {}
-        # for output in child_template.outputs:
-        #     stack_outputs[output.name] = child_template
-
-    def process_child_template(self, child_template, merge, depends_on):
+    def process_child_template(self, child_template, merge, depends_on, output_autowire=True, propagate_outputs=True):
         """
         Add the common parameters from this template to the child template
         Execute the child template's build hook function
@@ -1161,6 +1156,8 @@ class Template(t.Template):
         # Add parameters from parent stack before executing build_hook
         child_template.add_common_parameters_from_parent(self)
         child_template.build_hook()
+        if output_autowire:
+            self.add_child_outputs_to_parameter_binding(child_template, propagate_up=propagate_outputs)
 
         # Match the stack parameters with parent stack parameter values and manual parameter bindings
         stack_params = self.match_stack_parameters(child_template)

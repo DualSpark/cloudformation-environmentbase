@@ -25,8 +25,6 @@ class NetworkBase(EnvironmentBase):
         base_network_template = BaseNetwork('BaseNetwork', network_config, region_name, nat_config)
         self.add_child_template(base_network_template)
 
-        self.template.add_child_outputs_to_parameter_binding(base_network_template, propagate_up=True)
-
         self.template._subnets = base_network_template._subnets.copy()
         self.template._vpc_id = GetAtt(base_network_template.name, 'Outputs.vpcId')
 

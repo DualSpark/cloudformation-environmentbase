@@ -175,7 +175,7 @@ class EnvironmentBase(object):
         raw_json = template.to_template_json()
 
         # Recursively iterate through each child template to serialize it and process its children
-        for child, _, _ in template._child_templates:
+        for child, _, _, _, _ in template._child_templates:
             EnvironmentBase.serialize_templates_helper(
                 template=child,
                 s3_client=s3_client,

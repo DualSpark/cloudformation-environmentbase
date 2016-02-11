@@ -35,6 +35,9 @@ class HaCluster(Template):
                  elb_health_check_protocol='TCP',
                  elb_health_check_path='',
                  elb_idle_timeout=None,
+                 update_policy_PauseTime='PT1M',
+                 update_policy_MinInstancesInService=0,
+                 update_policy_MaxBatchSize=1,
                  cname='',
                  custom_tags={},
                  scaling_policies=None,
@@ -88,9 +91,9 @@ class HaCluster(Template):
         # Add update policy
         self.update_policy = UpdatePolicy(
             AutoScalingRollingUpdate=AutoScalingRollingUpdate(
-                PauseTime='PT1M',
-                MinInstancesInService="1",
-                MaxBatchSize='1',
+                PauseTime=update_policy_PauseTime,
+                MinInstancesInService=update_policy_MinInstancesInService,
+                MaxBatchSize=update_policy_MaxBatchSize,
                 # WaitOnResourceSignals=True
             )
         )

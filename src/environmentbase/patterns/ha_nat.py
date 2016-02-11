@@ -1,6 +1,6 @@
 from environmentbase.template import Template
 from environmentbase import resources
-from troposphere import Ref, Join, Base64, FindInMap
+from troposphere import Ref, Join, Base64, FindInMap, Output
 from troposphere.ec2 import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from troposphere.autoscaling import AutoScalingGroup, LaunchConfiguration, Tag
 from troposphere.iam import Policy, Role, InstanceProfile
@@ -48,6 +48,7 @@ class HaNat(Template):
             VpcId=self.vpc_id,
             GroupDescription="Security group for NAT host."
         ))
+        self.add_output(Output(self.sg.name, Value=Ref(self.sg)))
         self.add_nat_sg_rules()
 
     def add_nat_sg_rules(self):

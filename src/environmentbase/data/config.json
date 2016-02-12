@@ -4,7 +4,19 @@
         "environment_name": "environmentbase",
         "monitor_stack": false,
         "write_stack_outputs": false,
-        "stack_outputs_directory": "stack_outputs"            
+        "stack_outputs_directory": "stack_outputs",
+        "valid_regions": [
+            "ap-northeast-1",
+            "ap-northeast-2",
+            "ap-southeast-1",
+            "ap-southeast-2",
+            "eu-central-1",
+            "eu-west-1",
+            "sa-east-1",
+            "us-east-1",
+            "us-west-1",
+            "us-west-2"
+        ]
     },
     "template": {
         "ami_map_file": "ami_cache.json",
@@ -15,7 +27,7 @@
         "include_timestamp": true,
         "timeout_in_minutes": "60",
         "ec2_key_default": "dualspark_rsa",
-        "s3_upload": true    
+        "s3_upload": true
     },
     "logging": {
         "s3_bucket": "dualspark",
@@ -26,30 +38,5 @@
         "region_name": "us-west-2",
         "aws_access_key_id": null,
         "aws_secret_access_key": null
-    },
-    "network": {
-        "network_cidr_base": "10.0.0.0",
-        "network_cidr_size": "16",
-        "az_count": 3,
-        "subnet_types": [
-            "public",
-            "private"
-        ],
-        "subnet_config": [
-            {
-                "type": "public", 
-                "size": "18",
-                "name": "public"
-            },
-            {
-                "type": "private", 
-                "size": "22",
-                "name": "private"
-            },
-        ],
-    },
-    "nat": {
-        "instance_type": "t2.micro",
-        "enable_ntp": false
     }
 }

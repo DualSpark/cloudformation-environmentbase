@@ -51,5 +51,6 @@
     "t2.large": { "Arch": "HVM64" },
     "t2.medium": { "Arch": "HVM64" },
     "t2.micro": { "Arch": "HVM64" },
+    "t2.nano": { "Arch": "HVM64" },
     "t2.small": { "Arch": "HVM64" }
 }

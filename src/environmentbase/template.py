@@ -1,4 +1,4 @@
-from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select
+from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select, GetAZs
 from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs, cloudwatch
 from awacs import logs as awacs_logs, aws
 from awacs.helpers.trust import make_simple_assume_statement
@@ -51,7 +51,6 @@ class Template(t.Template):
         self._child_template_references = []
         self.manual_parameter_bindings = {}
 
-        self._azs = []
         self._subnets = {}
 
     def _ref_maybe(self, item):
@@ -111,10 +110,6 @@ class Template(t.Template):
         return self._ref_maybe(self._vpc_gateway_attachment)
 
     @property
-    def azs(self):
-        return self._ref_maybe(self._azs)
-
-    @property
     def subnets(self):
         return self._ref_maybe(self._subnets)
 
@@ -160,7 +155,6 @@ class Template(t.Template):
         self._igw                    = other_template._igw
         self._vpc_gateway_attachment = other_template._vpc_gateway_attachment
 
-        self._azs        = list(other_template.azs)
         self._subnets    = other_template.subnets.copy()
 
         self.parameters = other_template.parameters.copy()
@@ -218,7 +212,7 @@ class Template(t.Template):
 
     def to_template_json(self):
         """
-        Process all child templates recursively and render this template as json with a timestamp identifying 
+        Process all child templates recursively and render this template as json with a timestamp identifying
         when it was generated along with a SHA256 hash representing the template for validation purposes
         """
         self.process_child_templates()
@@ -276,7 +270,7 @@ class Template(t.Template):
 
     def add_instance_profile(self, layer_name, iam_policies, path_prefix):
         """
-        Helper function to add role and instance profile resources to this template 
+        Helper function to add role and instance profile resources to this template
         using the provided iam_policies. The instance_profile will be created at:
         '/<path_prefix>/<layer_name>/'
         """
@@ -301,18 +295,18 @@ class Template(t.Template):
     def add_common_parameters_from_parent(self, parent):
         ec2_key = parent._ec2_key.Default
         parent_subnets = parent._subnets if not self._subnets else {}
-        az_count = len(parent._azs)
-        if self.mappings.get('RegionMap'):
+
+        if 'RegionMap' in self.mappings:
             region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
         else:
             region_map = parent.mappings['RegionMap']
-        self.add_common_parameters(ec2_key, region_map, parent_subnets, az_count)
+        self.add_common_parameters(ec2_key, region_map, parent_subnets)
 
     def _merge_region_map(self, map1, map2):
         for key in set(map1.keys() + map2.keys()):
             yield (key, merge(map1[key], map2[key]))
 
-    def add_common_parameters(self, ec2_key, region_map, parent_subnets, az_count=2):
+    def add_common_parameters(self, ec2_key, region_map, parent_subnets):
         """
         Adds the common set of parameters that are available to every child template
         The values are automatically matched from the root template
@@ -320,8 +314,7 @@ class Template(t.Template):
             vpcId,
             commonSecurityGroup,
             utilityBucket,
-            each subnet: [public|private]Subnet[0-9],
-            each AZ name: availabilityZone[0-9]
+            each subnet: [public|private]Subnet[0-9]
         """
         self._vpc_cidr = self.add_parameter(Parameter(
             'vpcCidr',
@@ -372,7 +365,7 @@ class Template(t.Template):
             if subnet_type not in self._subnets:
                 self._subnets[subnet_type] = {}
 
-            for subnet_layer in parent_subnets[subnet_type]: 
+            for subnet_layer in parent_subnets[subnet_type]:
                 if subnet_layer not in self._subnets[subnet_type]:
                     self._subnets[subnet_type][subnet_layer] = []
 
@@ -385,16 +378,6 @@ class Template(t.Template):
                         subnet_name,
                         Description=subnet_name,
                         Type='String')))
-
-        self._azs = []
-
-        for x in range(0, az_count):
-            az_param = Parameter(
-                'availabilityZone' + str(x),
-                Description='Availability Zone ' + str(x),
-                Type='String')
-            self.add_parameter(az_param)
-            self._azs.append(az_param)
 
 
     @staticmethod
@@ -409,7 +392,7 @@ class Template(t.Template):
         if not (env_vars or user_data):
             return []
 
-        # If the variable value is not a string, use the Join function 
+        # If the variable value is not a string, use the Join function
         # This handles Refs, Parameters, etc. which are evaluated at runtime
         variable_declarations = []
         for k,v in env_vars.iteritems():
@@ -526,7 +509,7 @@ class Template(t.Template):
 
         return self.add_resource(policy)
 
-    def add_cloudwatch_alarm(self, 
+    def add_cloudwatch_alarm(self,
         layer_name,
         scaling_policy_name,
         asg_name,
@@ -704,7 +687,7 @@ class Template(t.Template):
 
         auto_scaling_obj = autoscaling.AutoScalingGroup(
             layer_name + 'AutoScalingGroup',
-            AvailabilityZones=self.azs,
+            AvailabilityZones=GetAZs(),
             LaunchConfigurationName=Ref(launch_config),
             MaxSize=max_size,
             MinSize=min_size,
@@ -758,9 +741,9 @@ class Template(t.Template):
                     cooldown=scaling_policy.get('cooldown',1))
 
                 self.add_cloudwatch_alarm(scaling_policy.get('metric_name'),
-                    policy_obj.name, 
+                    policy_obj.name,
                     auto_scaling_obj.name,
-                    metric_name=scaling_policy.get('metric_name'),                    
+                    metric_name=scaling_policy.get('metric_name'),
                     threshold=scaling_policy.get('threshold'),
                     comparison_operator=scaling_policy.get('comparison_operator','GreaterThanThreshold'),
                     evaluation_periods=scaling_policy.get('evaluation_periods',1),
@@ -802,13 +785,13 @@ class Template(t.Template):
                                         LoadBalancerPort=elb_port,
                                         InstanceProtocol=instance_protocol,
                                         InstancePort=instance_port)
-            
+
             # SSL Cert must be included if using either SSL or HTTPS for elb_protocol
             ssl_cert_name = listener.get('ssl_cert_name')
             if ssl_cert_name:
                 elb_listener.SSLCertificateId = Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name])
 
-            # Create the default session stickiness policy for HTTP or HTTPS listeners 
+            # Create the default session stickiness policy for HTTP or HTTPS listeners
             # TODO: Parameterize whether or not to include this policy
             if elb_protocol == 'HTTP' or elb_protocol == 'HTTPS':
                 elb_listener.PolicyNames = [stickiness_policy_name]
@@ -818,7 +801,7 @@ class Template(t.Template):
         if subnet_layer:
             subnet_type = self.get_subnet_type(subnet_layer)
         else:
-            # If subnet layer is not passed in, determine based on the scheme 
+            # If subnet layer is not passed in, determine based on the scheme
             # -- Pick a public subnet if it's internet-facing, else pick a private one
             subnet_type = 'public' if scheme == 'internet-facing' else 'private'
             subnet_layer = self._subnets[subnet_type].keys()[0]
@@ -899,7 +882,7 @@ class Template(t.Template):
             label_suffix = ip_protocol.capitalize() + str(from_port)
         else:
             label_suffix = ip_protocol.capitalize() + str(from_port) + 'To' + str(to_port)
-            
+
         # A Ref cannot be created from an object that is already a GetAtt
         # and possibly some other CFN types, so expand this list if you discover another one
         CFN_TYPES = [GetAtt]
@@ -1127,12 +1110,12 @@ class Template(t.Template):
 
         self.manual_parameter_bindings['utilityBucket'] = self.utility_bucket
 
-    def add_child_template(self, child_template, merge=False, depends_on=[]):
+    def add_child_template(self, child_template, merge=False, depends_on=[], output_autowire=True, propagate_outputs=True):
         """
         Appends the template to a list of child templates nested under this one
         These will be processed all together at the end of the create process in process_child_templates()
         """
-        child_template_entry = (child_template, merge, depends_on)
+        child_template_entry = (child_template, merge, depends_on, output_autowire, propagate_outputs)
         self._child_templates.append(child_template_entry)
         return child_template
 
@@ -1140,8 +1123,8 @@ class Template(t.Template):
         """
         Create a child stack from a template that is not defined in this environment
         Useful for B/G deployments
-        NOTE: If the original stack was deployed with any parameters, you must provide stack_params with 
-              this deployment. You can use utility.get_stack_params_from_parent_template() to 
+        NOTE: If the original stack was deployed with any parameters, you must provide stack_params with
+              this deployment. You can use utility.get_stack_params_from_parent_template() to
               retrieve the parameters that it was originally deployed with
         """
         return self.add_stack(
@@ -1154,19 +1137,14 @@ class Template(t.Template):
         """
         Iterate through and process the generated child template list
         """
-        for (child_template, merge, depends_on) in self._child_templates:
-            self.process_child_template(child_template, merge, depends_on)
+        for (child_template, merge, depends_on, output_autowire, propagate_outputs) in self._child_templates:
+            self.process_child_template(child_template, merge, depends_on, output_autowire, propagate_outputs)
 
-        # # TODO: output autowiring feature, disambiguation of output sources
-        # stack_outputs = {}
-        # for output in child_template.outputs:
-        #     stack_outputs[output.name] = child_template
-
-    def process_child_template(self, child_template, merge, depends_on):
+    def process_child_template(self, child_template, merge, depends_on, output_autowire=True, propagate_outputs=True):
         """
         Add the common parameters from this template to the child template
         Execute the child template's build hook function
-        Get the matching stack parameter values from this template and add the 
+        Get the matching stack parameter values from this template and add the
         stack reference to this template with those stack parameters
         """
 
@@ -1178,6 +1156,8 @@ class Template(t.Template):
         # Add parameters from parent stack before executing build_hook
         child_template.add_common_parameters_from_parent(self)
         child_template.build_hook()
+        if output_autowire:
+            self.add_child_outputs_to_parameter_binding(child_template, propagate_up=propagate_outputs)
 
         # Match the stack parameters with parent stack parameter values and manual parameter bindings
         stack_params = self.match_stack_parameters(child_template)
@@ -1219,11 +1199,11 @@ class Template(t.Template):
             self.manual_parameter_bindings[output] = GetAtt(child_template.name, "Outputs." + output)
             if propagate_up:
                 self.add_output(Output(output, Value=GetAtt(child_template.name, "Outputs." + output)))
-            # TODO: should a custom resource be addeded for each output? 
+            # TODO: should a custom resource be addeded for each output?
 
     def match_stack_parameters(self, child_template):
         """
-        For all matching parameters between this template and the child template, attempt to 
+        For all matching parameters between this template and the child template, attempt to
         get the value from this template's parameters, resources, and manual parameter bindings.
         Return the dictionary of stack parameters to deploy the child template with
         """
@@ -1235,12 +1215,6 @@ class Template(t.Template):
             if parameter in self.manual_parameter_bindings:
                 manual_match = self.manual_parameter_bindings[parameter]
                 stack_params[parameter] = manual_match
-
-            # Naming scheme for identifying the AZ of a subnet
-            elif parameter.startswith('availabilityZone'):
-                index = int(parameter[-1:])
-                stack_params[parameter] = Select(index, t.GetAZs(Ref(t.AWS_REGION)))
-                # stack_params[parameter] = GetAtt('privateSubnet' + parameter.replace('availabilityZone', ''), 'AvailabilityZone')
 
             # Match any child stack parameters that have the same name as this stacks **parameters**
             elif parameter in self.parameters.keys():

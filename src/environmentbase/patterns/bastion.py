@@ -33,7 +33,6 @@ class Bastion(Template):
     # - vpcId: resource id of VPC
     # - commonSecurityGroup: sg identifier for common allowed ports (22 in from VPC)
     # - utilityBucket: S3 bucket name used to send logs to
-    # - availabilityZone[0-3]: Indexed names of AZs VPC is deployed to
     # - [public|private]Subnet[0-9]: indexed and classified subnet identifiers
     #
     # and some instance attributes referencing the attached parameters:
@@ -42,7 +41,6 @@ class Bastion(Template):
     # - self.common_security_group
     # - self.utility_bucket
     # - self.subnets: keyed by type and index (e.g. self.subnets['public'][1])
-    # - self.azs: List of parameter references
     # - self.user_data: User data for launch configuration
     def build_hook(self):
         """

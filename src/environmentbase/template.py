@@ -519,7 +519,14 @@ class Template(t.Template):
         """
         return Template.IMAGE_MAP_PREFIX + utility.first_letter_capitalize(image_label)
 
-    def get_instancetype_param(self, default_instance_type, layer_name):
+    @staticmethod
+    def instancetype_param_name(layer_name):
+        """
+        Instance type input parameters need a naming convention to reduce the possibility of name conflicts.
+        """
+        return 'InstanceTypeFor' + utility.first_letter_capitalize(layer_name)
+
+    def get_instancetype_param(self, default_instance_type, layer_name, allowed_instance_types=None):
         """
         @param default_instance_type [string] Default default_instance_type value.
         @param layer_name [string] Functional name for the template, also used in Parameter name
@@ -527,7 +534,7 @@ class Template(t.Template):
         created if it does not already exist.
         """
         # Return parameter if it already exists
-        param_name = 'InstanceTypeFor' + utility.first_letter_capitalize(layer_name)
+        param_name = Template.instancetype_param_name(layer_name)
         if param_name in self.parameters:
             return self.parameters.get(param_name)
 
@@ -538,7 +545,10 @@ class Template(t.Template):
         if not isinstance(default_instance_type, basestring):
             raise TemplateValueError('Template.get_instancetype_param::default_instance_type should be string')
 
-        sorted_instancetypes = sorted(Template.instancetype_to_arch.keys())
+        if not allowed_instance_types:
+            allowed_instance_types = Template.instancetype_to_arch.keys()
+
+        sorted_instancetypes = sorted(allowed_instance_types)
         instance_type_param = Parameter(
             param_name,
             Description='AWS instance type',

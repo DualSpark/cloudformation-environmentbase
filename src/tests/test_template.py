@@ -8,6 +8,7 @@ from tempfile import mkdtemp
 from environmentbase import cli, template, utility
 import troposphere as tropo
 from troposphere import ec2
+from environmentbase.template import Template, TemplateValueError
 import yaml
 
 
@@ -95,6 +96,26 @@ class TemplateTestCase(TestCase):
             ]}}
 
         self.assertEqual(generated_json, expected_json_2)
+
+    def test_get_instancetype_param(self):
+        Template.instancetype_to_arch = {"t2.nano": "HVM64"}
+        t = Template('test')
+
+        # Verify validation of instance types from config
+        with self.assertRaises(TemplateValueError):
+            t.get_instancetype_param('t2.pico', 'TestLayer')
+
+        with self.assertRaises(TemplateValueError):
+            t.get_instancetype_param(1234, 'TestLayer')
+
+        # Verify created parameter is correct
+        allowed_types = {"t2.nano": "HVM64", "test_type.medium": "HVM64"}
+        param = t.get_instancetype_param('t2.nano', 'TestLayer', allowed_instance_types=allowed_types)
+        param_name = Template.instancetype_param_name('TestLayer')
+
+        self.assertIn(param_name, t.parameters)
+        self.assertEqual(param, t.parameters[param_name])
+        self.assertIn("test_type.medium", param.properties['AllowedValues'])
 
 if __name__ == '__main__':
     main()

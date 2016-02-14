@@ -45,7 +45,7 @@ def get_instance_types(tbl):
 
 def build_type_to_arch_map(tbl, arch_type, map):
     for it in get_instance_types(tbl):
-        map[it] = arch_type
+        map[it] = {'Arch': arch_type}
 
 if __name__ == '__main__':
     dom = get_page("http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html")
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     build_type_to_arch_map(pv_tbl, 'PV64', instance_type_to_arch_map)
 
     # Special case for 2x GPU instance with nvidia drivers
-    instance_type_to_arch_map['g2.2xlarge'] = 'HVMG2'
+    instance_type_to_arch_map['g2.2xlarge']['Arch'] = 'HVMG2'
 
     json_str = json.dumps(instance_type_to_arch_map, indent=4, separators=(',', ': '), sort_keys=True)
 

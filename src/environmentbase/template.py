@@ -17,6 +17,10 @@ import utility
 from toolz.dicttoolz import merge
 
 
+class TemplateValueError(Exception):
+    pass
+
+
 class Template(t.Template):
     """
     Custom wrapper for Troposphere Template object which handles S3 uploads and a specific
@@ -524,7 +528,7 @@ class Template(t.Template):
         created if it does not already exist.
         """
         if not isinstance(instance_type, basestring):
-            raise Exception('Template.get_instancetype_param::instance_type should be string')
+            raise TemplateValueError('Template.get_instancetype_param::instance_type should be string')
 
         param_name = 'InstanceTypeFor' + utility.first_letter_capitalize(layer_name)
 
@@ -551,11 +555,11 @@ class Template(t.Template):
         without any modification.
         """
         if not isinstance(instance_type, basestring):
-            raise Exception('Template.get_ami::instance_type should be string')
+            raise TemplateValueError('Template.get_ami::instance_type should be string')
 
         # Static validation of instance type
         if instance_type not in Template.instancetype_to_arch.keys():
-            raise Exception('Unrecognized instance type: "%s"' % instance_type)
+            raise TemplateValueError('Unrecognized instance type: "%s"' % instance_type)
 
         # Add input parameter (\w runtime validation) for instance_type
         instancetype_param = self.get_instancetype_param(instance_type, image_name, layer_name)
@@ -633,7 +637,7 @@ class Template(t.Template):
 
         if type(instance_type) != str:
             instance_type = Ref(instance_type)
-            raise Exception("Tempalte.add_asg::instance_type should be String")
+            raise TemplateValueError("Tempalte.add_asg::instance_type should be String")
 
         sg_list = []
         for sg in security_groups:

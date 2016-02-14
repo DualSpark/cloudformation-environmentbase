@@ -149,8 +149,8 @@ class HaNat(Template):
             " --region ", {"Ref": "AWS::Region"}
         ])
 
-        image_id_expr = self.get_ami(self.instance_type, 'natAmiId', 'HaNat')
-        instancetype_param = self.get_instancetype_param(self.instance_type, 'natAmiId', 'HaNat')
+        image_id_expr = self.get_ami_expr(self.instance_type, 'natAmiId', 'HaNat')
+        instancetype_param = self.get_instancetype_param(self.instance_type, 'HaNat')
 
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),

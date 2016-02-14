@@ -519,37 +519,71 @@ class Template(t.Template):
         """
         return Template.IMAGE_MAP_PREFIX + utility.first_letter_capitalize(image_label)
 
-    def get_instancetype_param(self, instance_type, image_name, layer_name):
+    def get_instancetype_param(self, default_instance_type, layer_name):
         """
-        @param instance_type [string] Default instance_type value.
-        @param image_name [string] Key from config.image_map, used to create Parameter name
+        @param default_instance_type [string] Default default_instance_type value.
         @param layer_name [string] Functional name for the template, also used in Parameter name
         Returns a troposphere.Parameter configured to take instance types.  The parameter is only
         created if it does not already exist.
         """
-        if not isinstance(instance_type, basestring):
-            raise TemplateValueError('Template.get_instancetype_param::instance_type should be string')
-
-        param_name = 'InstanceTypeFor' + utility.first_letter_capitalize(layer_name)
-
         # Return parameter if it already exists
+        param_name = 'InstanceTypeFor' + utility.first_letter_capitalize(layer_name)
         if param_name in self.parameters:
             return self.parameters.get(param_name)
+
+        # Static validation of instance type
+        if default_instance_type not in Template.instancetype_to_arch.keys():
+            raise TemplateValueError('Unrecognized instance type: "%s"' % default_instance_type)
+
+        if not isinstance(default_instance_type, basestring):
+            raise TemplateValueError('Template.get_instancetype_param::default_instance_type should be string')
 
         sorted_instancetypes = sorted(Template.instancetype_to_arch.keys())
         instance_type_param = Parameter(
             param_name,
             Description='AWS instance type',
-            Default=instance_type,
+            Default=default_instance_type,
             Type='String',
             AllowedValues=sorted_instancetypes)
 
         self.add_parameter_idempotent(instance_type_param)
         return instance_type_param
 
-    def get_ami(self, instance_type, image_name, layer_name):
+    def _lazy_get_arch_type_expr(self, instance_type):
         """
-        @param instance_type [string] Default instance_type value.
+        Returns a CloudFormation expression which will resolve to an architecture type (PV64|HVM64) based on the
+        'instancetype_to_arch' Mapping.  If the mapping does not exist in the current template it will be added
+        based on the config section of the same name (This is the 'lazy' part). Note: The dict comprehension adds
+        an additional dict with key 'Arch' for each instance type because CloudFormation's FindInMap function
+        requires a primary and secondary key, for more details see
+        http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-findinmap.html
+        @param instance_type [string|Ref(Parameter)] The primary key of the Fn::FindInMap function.
+        """
+        if Template.ARCH_MAP not in self.mappings:
+            arch_map = {inst_type: {"Arch": arch} for inst_type, arch in Template.instancetype_to_arch.items()}
+            self.mappings[Template.ARCH_MAP] = arch_map
+
+        arch_type_expr = FindInMap(Template.ARCH_MAP, instance_type, 'Arch')
+        return arch_type_expr
+
+    def _lazy_get_ami_id_expr(self, image_label, arch_type_expr):
+        """
+        Returns a CloudFormation expression which will resolve to an AMI id. The expression uses Fn::FindInMap
+        on an AMI map with the AWS region and an architecture type (either PV64 or HVM64) as the keys. The Mapping
+        is added if it does not already exist using image_map_name() to specify the naming convention.
+        @param image_label [string] Used to identify the AMI id map.
+        @param arch_type_expr [string|troposphere.FindInMap] Architecture type of the requested AMI.
+        """
+        image_map_name = Template.image_map_name(image_label)
+        if image_map_name not in self.mappings:
+            self.mappings[image_map_name] = self.image_map[image_label]
+
+        ami_id_expr = FindInMap(image_map_name, Ref('AWS::Region'), arch_type_expr)
+        return ami_id_expr
+
+    def get_ami_expr(self, default_instance_type, image_name, layer_name):
+        """
+        @param default_instance_type [string] Default instance_type value.
         @param image_name [string] Key from config.image_map, used to create Parameter name
         @param layer_name [string] Functional name for the template, also used in Parameter name
         Returns a CloudFormation expression which will evaluate to an AMI id.  This is done by
@@ -557,31 +591,16 @@ class Template(t.Template):
         Note: Resulting templates can deploy with different instance_types into differnet regions
         without any modification.
         """
-        if not isinstance(instance_type, basestring):
-            raise TemplateValueError('Template.get_ami::instance_type should be string')
-
-        # Static validation of instance type
-        if instance_type not in Template.instancetype_to_arch.keys():
-            raise TemplateValueError('Unrecognized instance type: "%s"' % instance_type)
-
-        # Add input parameter (\w runtime validation) for instance_type
-        instancetype_param = self.get_instancetype_param(instance_type, image_name, layer_name)
+        # Add input parameter (\w runtime validation) for default_instance_type
+        instancetype_param = self.get_instancetype_param(default_instance_type, layer_name)
 
         # Lazy-add instancetype_to_arch map
-        if Template.ARCH_MAP not in self.mappings:
-            arch_map = {inst_type: {"Arch": arch} for inst_type, arch in Template.instancetype_to_arch.items()}
-            self.mappings[Template.ARCH_MAP] = arch_map
-
-        arch_type = FindInMap(Template.ARCH_MAP, Ref(instancetype_param), 'Arch')
+        arch_type_expr = self._lazy_get_arch_type_expr(Ref(instancetype_param))
 
         # Lazy-add region_to_ami map for this ami_name
-        image_map_name = Template.image_map_name(image_name)
-        if image_map_name not in self.mappings:
-            self.mappings[image_map_name] = self.image_map[image_name]
+        ami_id_expr = self._lazy_get_ami_id_expr(image_name, arch_type_expr)
 
-        imageId = FindInMap(image_map_name, Ref('AWS::Region'), arch_type)
-
-        return imageId
+        return ami_id_expr
 
     def add_asg(self,
                 layer_name,
@@ -666,8 +685,8 @@ class Template(t.Template):
         if not associate_public_ip:
             associate_public_ip = True if subnet_type == 'public' else False
 
-        image_id_expr = self.get_ami(instance_type, ami_name, layer_name)
-        instancetype_param = self.get_instancetype_param(instance_type, ami_name, layer_name)
+        image_id_expr = self.get_ami_expr(instance_type, ami_name, layer_name)
+        instancetype_param = self.get_instancetype_param(instance_type, layer_name)
 
         launch_config_obj = autoscaling.LaunchConfiguration(
             layer_name + 'LaunchConfiguration',

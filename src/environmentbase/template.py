@@ -537,12 +537,15 @@ class Template(t.Template):
             return self.parameters.get(param_name)
 
         sorted_instancetypes = sorted(Template.instancetype_to_arch.keys())
-        return self.add_parameter(Parameter(
+        instance_type_param = Parameter(
             param_name,
             Description='AWS instance type',
             Default=instance_type,
             Type='String',
-            AllowedValues=sorted_instancetypes))
+            AllowedValues=sorted_instancetypes)
+
+        self.add_parameter_idempotent(instance_type_param)
+        return instance_type_param
 
     def get_ami(self, instance_type, image_name, layer_name):
         """

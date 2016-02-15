@@ -112,6 +112,7 @@ class ResourcesTestCase(TestCase):
 
         # Treat sample cfn template as if it were a config file for testing purposes
         self.r.generate_config(
+            is_silent=True,
             config_file='amzn_linux_ec2.json',
             extract_map={
                 "Description": "description.json",

@@ -159,7 +159,8 @@ class Res(object):
                         output_filename=None,
                         config_handlers=list(),
                         extract_map=_EXTRACTED_CONFIG_SECTIONS,
-                        prompt=False):
+                        prompt=False,
+                        is_silent=False):
         """
         Copies specified yaml/json file from the EGG resource to current directory, default is 'conifg.json'.  Optionally
         split out specific sections into separate files using extract_map.  Additionally us config_handlers to add in
@@ -167,6 +168,7 @@ class Res(object):
         @param config_file [string] Name of file within resource path to load.
         @param output_file [string] Name of generated config file (default is same as 'config_file')
         @param prompt [boolean] block for user input to abort file output if file already exists
+        @param is_silent [boolena] supress console output (primarly for testing)
         @param extract_map [map<string, string>] Specifies top-level sections of config to externalize to separate file.
         Where key=config section name, value=filename.
         @param config_handlers [list(objects)] Config handlers should resemble the following:
@@ -198,7 +200,8 @@ class Res(object):
         # Write config sections to file and replace content with "!include" string.
         for section_key, filename in extract_map.iteritems():
             self._extract_config_section(config_copy, section_key, filename, prompt)
-            print "Generated %s file at %s\n" % (section_key, filename)
+            if not is_silent:
+                print "Generated %s file at %s\n" % (section_key, filename)
 
         # Serialize config to string
         templatized_config_string = json.dumps(config_copy, indent=4, separators=(',', ': '), sort_keys=True)
@@ -219,7 +222,8 @@ class Res(object):
         # Finally write config.json to file
         with open(output_filename, 'w') as f:
             f.write(final_config_string)
-            print "Generated config file at %s\n" % 'config.json'
+            if not is_silent:
+                print "Generated config file at %s\n" % 'config.json'
 
         return final_config_string
 

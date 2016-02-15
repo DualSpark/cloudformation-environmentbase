@@ -141,14 +141,15 @@ class EnvironmentBase(object):
         """
         return True
 
-    def init_action(self):
+    def init_action(self, is_silent=False):
         """
         Default init_action invoked by the CLI
         Generates config and ami_cache files
         Override in your subclass for custom initialization steps
+        @param is_silent [boolean], supress console output (for testing)
         """
         config_handlers = self.env_config.config_handlers
-        res.R.generate_config(prompt=True, output_filename=self.config_filename, config_handlers=config_handlers)
+        res.R.generate_config(prompt=True, is_silent=is_silent, output_filename=self.config_filename, config_handlers=config_handlers)
 
     def s3_prefix(self):
         """

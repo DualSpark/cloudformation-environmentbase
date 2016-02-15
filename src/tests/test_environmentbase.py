@@ -254,7 +254,7 @@ class EnvironmentBaseTestCase(TestCase):
             view=view,
             env_config=env_config
         )
-        controller.init_action()
+        controller.init_action(is_silent=True)
         controller.load_config()
 
         # Make sure the runtime config and the file saved to disk have the new parameter
@@ -279,7 +279,8 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Verify that debug and output are set to the factory default
         base = eb.EnvironmentBase(self.fake_cli(['init']))
-        base.init_action()
+        res.R.generate_config(prompt=True, is_silent=True)
+
         base.load_config()
 
         factory_config = res.R.parse_file(res.Res.CONFIG_FILENAME, from_file=False)
@@ -292,14 +293,14 @@ class EnvironmentBaseTestCase(TestCase):
         # verify that the --template-file flag changes the config value
         dummy_value = 'dummy'
         base = eb.EnvironmentBase(self.fake_cli(['create', '--template-file', dummy_value]))
-        base.init_action()
+        base.init_action(is_silent=True)
         base.load_config()
         self.assertEqual(base.config['global']['environment_name'], dummy_value)
 
     def test_config_file_flag(self):
         dummy_value = 'dummy'
         base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', dummy_value]))
-        base.init_action()
+        base.init_action(is_silent=True)
         self.assertTrue(os.path.isfile(dummy_value))
 
     def test_factory_default(self):
@@ -315,7 +316,7 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Verify that create_missing_files works as intended
         base = eb.EnvironmentBase(self.fake_cli(['init']))
-        base.init_action()
+        base.init_action(is_silent=True)
         self.assertTrue(os.path.isfile(config_file))
         # TODO: After ami_cache is updated change 'create_missing_files' to be singular
         # self.assertTrue(os.path.isfile(ami_cache_file))

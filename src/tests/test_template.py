@@ -99,6 +99,7 @@ class TemplateTestCase(TestCase):
 
     def test_get_instancetype_param(self):
         Template.instancetype_to_arch = {"t2.nano": "HVM64"}
+
         t = Template('test')
 
         # Verify validation of instance types from config
@@ -109,13 +110,57 @@ class TemplateTestCase(TestCase):
             t.get_instancetype_param(1234, 'TestLayer')
 
         # Verify created parameter is correct
-        allowed_types = {"t2.nano": "HVM64", "test_type.medium": "HVM64"}
-        param = t.get_instancetype_param('t2.nano', 'TestLayer', allowed_instance_types=allowed_types)
+        param = t.get_instancetype_param('t2.nano',
+                                         'TestLayer',
+                                         allowed_instance_types=["t2.nano", "test_type.medium"])
+
         param_name = Template.instancetype_param_name('TestLayer')
 
         self.assertIn(param_name, t.parameters)
         self.assertEqual(param, t.parameters[param_name])
         self.assertIn("test_type.medium", param.properties['AllowedValues'])
+
+    def test_get_ami_expr(self):
+        Template.instancetype_to_arch = {"t2.nano": "HVM64"}
+        Template.image_map = {
+            "testImage": {
+                "us-west-2": {"HVM64": "ami-e7527ed7", "PV64": "ami-ff527ecf"}
+            }
+        }
+
+        t = Template('test')
+
+        with self.assertRaises(KeyError):
+            t.get_ami_expr('t2.nano', 'missingImage', 'TestLayer1')
+
+        ami_expr = t.get_ami_expr('t2.nano',
+                                  'testImage',
+                                  'TestLayer2',
+                                  allowed_instance_types=["t2.nano", "test_type.large"])
+
+        # verify instancetype parameter and its allowed_instance_types
+        instancetype_param = t.parameters[Template.instancetype_param_name('TestLayer2')]
+        self.assertIn("test_type.large", instancetype_param.properties['AllowedValues'])
+
+        # verify template containts new Mappings
+        image_map_name = Template.image_map_name('testImage')
+        self.assertIn(image_map_name, t.mappings)
+        self.assertIn(Template.ARCH_MAP, t.mappings)
+
+        # Check the expression
+        self.assertTrue(isinstance(ami_expr, tropo.FindInMap))  # check expr type
+
+        # verify primary key is the region
+        expr_map = ami_expr.data['Fn::FindInMap']
+        self.assertEqual(expr_map[0], image_map_name)
+        self.assertEqual(expr_map[1].data['Ref'], 'AWS::Region')
+
+        # verify secondary key is nested FindInMap on architecture map with primary key
+        # as the value of the instance-type parameter and secondary key as 'Arch'
+        inner_map = expr_map[2].data['Fn::FindInMap']
+        self.assertTrue(inner_map[0], Template.ARCH_MAP)
+        self.assertTrue(inner_map[1].data['Ref'], instancetype_param.title)
+        self.assertTrue(inner_map[2], 'Arch')
 
 if __name__ == '__main__':
     main()

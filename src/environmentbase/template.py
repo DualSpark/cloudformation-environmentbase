@@ -591,7 +591,7 @@ class Template(t.Template):
         ami_id_expr = FindInMap(image_map_name, Ref('AWS::Region'), arch_type_expr)
         return ami_id_expr
 
-    def get_ami_expr(self, default_instance_type, image_name, layer_name):
+    def get_ami_expr(self, default_instance_type, image_name, layer_name, allowed_instance_types=None):
         """
         @param default_instance_type [string] Default instance_type value.
         @param image_name [string] Key from config.image_map, used to create Parameter name
@@ -602,7 +602,7 @@ class Template(t.Template):
         without any modification.
         """
         # Add input parameter (\w runtime validation) for default_instance_type
-        instancetype_param = self.get_instancetype_param(default_instance_type, layer_name)
+        instancetype_param = self.get_instancetype_param(default_instance_type, layer_name, allowed_instance_types)
 
         # Lazy-add instancetype_to_arch map
         arch_type_expr = self._lazy_get_arch_type_expr(Ref(instancetype_param))

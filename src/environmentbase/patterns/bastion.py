@@ -9,7 +9,7 @@ class Bastion(Template):
     Adds a bastion host within a given deployment based on environemntbase.
     """
 
-    def __init__(self, name='bastion', ingress_port='2222', access_cidr='0.0.0.0/0', instance_type='t2.micro', user_data=None):
+    def __init__(self, name='bastion', ingress_port='2222', access_cidr='0.0.0.0/0', default_instance_type='t2.micro', user_data=None):
         """
         Method initializes bastion host in a given environment deployment
         @param name [string] - name of the tier to assign
@@ -21,7 +21,7 @@ class Bastion(Template):
         self.name = name
         self.ingress_port = ingress_port
         self.access_cidr = access_cidr
-        self.instance_type = instance_type
+        self.default_instance_type = default_instance_type
         self.user_data = user_data
 
         super(Bastion, self).__init__(template_name=name)
@@ -63,7 +63,7 @@ class Bastion(Template):
             security_groups=[security_groups['bastion'], self.common_security_group],
             load_balancer=bastion_elb,
             user_data=self.user_data,
-            instance_type=self.instance_type
+            instance_type=self.default_instance_type
         )
 
         self.add_output(Output(

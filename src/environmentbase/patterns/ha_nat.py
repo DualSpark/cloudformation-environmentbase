@@ -14,14 +14,15 @@ class HaNat(Template):
     a route directing egress traffic from the private subnet through this NAT
     '''
 
-    def __init__(self, subnet_index, instance_type='t2.micro', enable_ntp=False, name='HaNat', extra_user_data=None):
+    def __init__(self, subnet_index, default_instance_type='t2.micro', enable_ntp=False, suggested_instance_types=None, name='HaNat', extra_user_data=None):
         '''
         Method initializes HA NAT in a given environment deployment
         @param subnet_index [int] ID of the subnet that the NAT instance will be deployed to
-        @param instance_type [string] - Type of NAT instance in the autoscaling group
+        @param default_instance_type [string] - Type of NAT instance in the autoscaling group
         '''
         self.subnet_index = subnet_index
-        self.instance_type = instance_type
+        self.default_instance_type = default_instance_type
+        self.suggested_instance_types = suggested_instance_types
         self.enable_ntp = enable_ntp
         self.extra_user_data = extra_user_data
 
@@ -149,8 +150,8 @@ class HaNat(Template):
             " --region ", {"Ref": "AWS::Region"}
         ])
 
-        image_id_expr = self.get_ami_expr(self.instance_type, 'natAmiId', 'HaNat')
-        instancetype_param = self.get_instancetype_param(self.instance_type, 'HaNat')
+        image_id_expr = self.get_ami_expr(self.default_instance_type, 'natAmiId', 'HaNat', self.suggested_instance_types)
+        instancetype_param = self.get_instancetype_param(self.default_instance_type, 'HaNat')
 
         nat_launch_config = self.add_resource(LaunchConfiguration(
             "Nat%sLaunchConfig" % str(self.subnet_index),

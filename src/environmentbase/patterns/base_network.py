@@ -35,8 +35,12 @@ class BaseNetwork(Template):
             ],
         },
         "nat": {
-            "instance_type": "t2.micro",
-            "enable_ntp": False
+            "default_instance_type": "t2.micro",
+            "suggested_instance_types": [
+                "m1.small", "t2.micro", "t2.small", "t2.medium",
+                "m3.medium",
+                "c3.large", "c3.2xlarge"
+            ]
         }
     }
 
@@ -49,7 +53,8 @@ class BaseNetwork(Template):
             "network_cidr_size": "basestring"
         },
         "nat": {
-            "instance_type": "basestring",
+            "default_instance_type": "basestring",
+            "suggested_instance_types": "list",
             "enable_ntp": "bool"
         }
     }
@@ -241,12 +246,14 @@ class BaseNetwork(Template):
             if self.az_nat_mapping.get(subnet_az):
                 return
 
-            nat_instance_type = nat_config['instance_type']
+            nat_default_instance_type = nat_config['default_instance_type']
+            nat_suggested_instance_types = nat_config['suggested_instance_types']
             nat_enable_ntp = nat_config['enable_ntp']
             extra_user_data = nat_config.get('extra_user_data')
             ha_nat = self.create_nat(
                 subnet_az,
-                nat_instance_type,
+                nat_default_instance_type,
+                nat_suggested_instance_types,
                 nat_enable_ntp,
                 name='HaNat' + str(subnet_az),
                 extra_user_data=extra_user_data)
@@ -263,15 +270,16 @@ class BaseNetwork(Template):
         """
         pass
 
-    def create_nat(self, index, nat_instance_type, enable_ntp, name, extra_user_data=None):
+    def create_nat(self, index, default_instance_type, suggested_instance_types, enable_ntp, name, extra_user_data=None):
         """
         Override to customize your NAT instance. The returned object must be a
         subclass of ha_nat.HaNat.
         """
         return ha_nat.HaNat(
             index,
-            nat_instance_type,
+            default_instance_type,
             enable_ntp,
+            suggested_instance_types=suggested_instance_types,
             name=name,
             extra_user_data=extra_user_data)
 

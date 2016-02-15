@@ -62,7 +62,13 @@
     },
     "nat": {
         "instance_type": "t2.micro",
-        "enable_ntp": false
+        "enable_ntp": false,
+        "default_instance_type": "t2.micro",
+        "suggested_instance_types": [
+            "m1.small", "t2.micro", "t2.small", "t2.medium",
+            "m3.medium",
+            "c3.large", "c3.2xlarge"
+        ]
     },
     "instancetype_to_arch": !include instancetype_to_arch.json,
     "image_map": !include ami_cache.json

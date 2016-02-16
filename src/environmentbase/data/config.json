@@ -61,7 +61,6 @@
         ],
     },
     "nat": {
-        "instance_type": "t2.micro",
         "enable_ntp": false,
         "default_instance_type": "t2.micro",
         "suggested_instance_types": [

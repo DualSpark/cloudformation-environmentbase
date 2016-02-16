@@ -20,7 +20,8 @@ class MyEnvClass(NetworkBase):
         self.add_child_template(HaCluster(
             name="MyCluster",
             min_size=2, max_size=3,
-            instance_type='t2.micro'))
+            default_instance_type='t2.micro',
+            suggested_instance_types=['t2.micro']))
 
 if __name__ == '__main__':
     MyEnvClass()

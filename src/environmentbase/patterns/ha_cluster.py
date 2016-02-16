@@ -20,7 +20,8 @@ class HaCluster(Template):
                  user_data='',
                  env_vars={},
                  min_size=1, max_size=1,
-                 instance_type='t2.micro',
+                 default_instance_type='t2.micro',
+                 suggested_instance_types=None,
                  subnet_layer=None,
                  elb_scheme=SCHEME_INTERNET_FACING,
                  elb_listeners=[
@@ -59,7 +60,10 @@ class HaCluster(Template):
         self.max_size = max_size
 
         # The type of instance for the autoscaling group
-        self.default_instance_type = instance_type
+        self.default_instance_type = default_instance_type
+
+        # The drop-down options offered when selecting an instance type from CloudFormation
+        self.suggested_instance_types = suggested_instance_types
 
         # This is the subnet layer that the ASG is in (public, private, ...)
         self.subnet_layer = subnet_layer
@@ -286,7 +290,8 @@ class HaCluster(Template):
             load_balancer=self.cluster_elb,
             ami_name=self.ami_name,
             user_data=self.user_data_payload,
-            instance_type=self.default_instance_type,
+            default_instance_type=self.default_instance_type,
+            suggested_instance_types=self.suggested_instance_types,
             min_size=self.min_size,
             max_size=self.max_size,
             subnet_layer=self.subnet_layer,

@@ -627,7 +627,8 @@ class Template(t.Template):
     def add_asg(self,
                 layer_name,
                 instance_profile=None,
-                instance_type='t2.micro',
+                default_instance_type='t2.micro',
+                suggested_instance_types=None,
                 ami_name='amazonLinuxAmiId',
                 ec2_key=None,
                 user_data=None,
@@ -655,7 +656,8 @@ class Template(t.Template):
         Wrapper method used to create an EC2 Launch Configuration and Auto Scaling group
         @param layer_name [string] friendly name of the set of instances being created - will be set as the name for instances deployed
         @param instance_profile [Troposphere.iam.InstanceProfile] IAM Instance Profile object to be applied to instances launched within this Auto Scaling group
-        @param instance_type [string] Reference to the AWS EC2 Instance Type to deploy.
+        @param default_instance_type [string] Reference to the AWS EC2 Instance Type to deploy.
+        @param suggested_instance_types [list<string>] Instance types populating drop-down box when running template on Cloudformation.
         @param ami_name [string] Name of the AMI to deploy as defined within the RegionMap lookup for the deployed region
         @param ec2_key [Troposphere.Parameter | Troposphere.Ref(Troposphere.Parameter)] Input parameter used to gather the name of the EC2 key to use to secure access to instances launched within this Auto Scaling group
         @param user_data [string[]] Array of strings (lines of bash script) to be set as the user data as a bootstrap script for instances launched within this Auto Scaling group
@@ -679,8 +681,8 @@ class Template(t.Template):
         elif ec2_key is None:
             ec2_key = Ref(self.parameters['ec2Key'])
 
-        if type(instance_type) != str:
-            instance_type = Ref(instance_type)
+        if type(default_instance_type) != str:
+            default_instance_type = Ref(default_instance_type)
             raise TemplateValueError("Tempalte.add_asg::instance_type should be String")
 
         sg_list = []
@@ -707,8 +709,8 @@ class Template(t.Template):
         if not associate_public_ip:
             associate_public_ip = True if subnet_type == 'public' else False
 
-        image_id_expr = self.get_ami_expr(instance_type, ami_name, layer_name)
-        instancetype_param = self.get_instancetype_param(instance_type, layer_name)
+        image_id_expr = self.get_ami_expr(default_instance_type, ami_name, layer_name, allowed_instance_types=suggested_instance_types)
+        instancetype_param = self.get_instancetype_param(default_instance_type, layer_name)
 
         launch_config_obj = autoscaling.LaunchConfiguration(
             layer_name + 'LaunchConfiguration',

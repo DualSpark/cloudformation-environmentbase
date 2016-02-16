@@ -9,11 +9,24 @@ class Bastion(Template):
     Adds a bastion host within a given deployment based on environemntbase.
     """
 
-    def __init__(self, name='bastion', ingress_port='2222', access_cidr='0.0.0.0/0', default_instance_type='t2.micro', user_data=None):
+    SUGGESTED_INSTANCE_TYPES = [
+        "m1.small", "t2.micro", "t2.small", "t2.medium",
+        "m3.medium",
+        "c3.large", "c3.2xlarge"
+    ]
+
+    def __init__(self,
+                 name='bastion',
+                 ingress_port='2222',
+                 access_cidr='0.0.0.0/0',
+                 default_instance_type='t2.micro',
+                 suggested_instance_types=SUGGESTED_INSTANCE_TYPES,
+                 user_data=None):
         """
         Method initializes bastion host in a given environment deployment
         @param name [string] - name of the tier to assign
-        @param ingress_port [number] - port to allow ingress on. Must be a valid ELB ingress port. More info here: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-listener.html
+        @param ingress_port [number] - port to allow ingress on. Must be a valid ELB ingress port.
+        More info here: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-listener.html
         @param access_cidr [string] - CIDR notation for external access to this tier.
         @param user_data [string] - User data to to initialize the bastion hosts.
         """
@@ -22,6 +35,7 @@ class Bastion(Template):
         self.ingress_port = ingress_port
         self.access_cidr = access_cidr
         self.default_instance_type = default_instance_type
+        self.suggested_instance_types = suggested_instance_types
         self.user_data = user_data
 
         super(Bastion, self).__init__(template_name=name)
@@ -63,7 +77,8 @@ class Bastion(Template):
             security_groups=[security_groups['bastion'], self.common_security_group],
             load_balancer=bastion_elb,
             user_data=self.user_data,
-            instance_type=self.default_instance_type
+            default_instance_type=self.default_instance_type,
+            suggested_instance_types=self.suggested_instance_types
         )
 
         self.add_output(Output(

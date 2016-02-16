@@ -1,7 +1,5 @@
 from environmentbase.template import Template
-from environmentbase import resources
-from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53, autoscaling
-import troposphere.constants as tpc
+from troposphere import Ref, Parameter, Output, GetAtt, ec2, route53, autoscaling
 from troposphere.policies import CreationPolicy, ResourceSignal
 from troposphere.policies import UpdatePolicy, AutoScalingRollingUpdate
 
@@ -43,7 +41,7 @@ class HaCluster(Template):
                  scaling_policies=None,
                  creation_policy_timeout=None,
                  allow_default_ingress=True):
-        
+
         # This will be the name used in resource names and descriptions
         self.name = name
 
@@ -61,8 +59,8 @@ class HaCluster(Template):
         self.max_size = max_size
 
         # The type of instance for the autoscaling group
-        self.instance_type = instance_type
-        
+        self.default_instance_type = instance_type
+
         # This is the subnet layer that the ASG is in (public, private, ...)
         self.subnet_layer = subnet_layer
 
@@ -112,12 +110,11 @@ class HaCluster(Template):
         # A list of dictionaries describing scaling policies to be passed to add_asg
         self.scaling_policies = scaling_policies
 
-        # Indicates whether ingress rules should be added to the ELB for type-appropriate CIDR ranges 
+        # Indicates whether ingress rules should be added to the ELB for type-appropriate CIDR ranges
         # Internet facing ELBs would allow ingress from PUBLIC_ACCESS_CIDR and private ELBs will allow ingress from the VPC CIDR
         self.allow_default_ingress = allow_default_ingress
 
         super(HaCluster, self).__init__(template_name=self.name)
-
 
     def build_hook(self):
         """
@@ -148,12 +145,11 @@ class HaCluster(Template):
         # Add the outputs for the stack
         self.add_outputs()
 
-
     def set_subnet_layer(self):
         """
         If the subnet layer is not passed in, use a private subnet if there are any, otherwise use a public subnet.
-        This needs to happen in the build hook, since subnets is not yet initialized in the constructor. You 
-        probably won't need to override this. This logic is also duplicated in template.add_asg(), but we need to 
+        This needs to happen in the build hook, since subnets is not yet initialized in the constructor. You
+        probably won't need to override this. This logic is also duplicated in template.add_asg(), but we need to
         set it out here so we can pass the same subnet to template.add_elb()
         """
         if not self.subnet_layer:
@@ -170,12 +166,12 @@ class HaCluster(Template):
         """
 
         elb_sg_ingress_rules = []
-        
+
         if self.allow_default_ingress:
             # Determine ingress rules for ELB security -- open to internet for internet-facing ELB, open to VPC for internal ELB
             access_cidr = PUBLIC_ACCESS_CIDR if self.elb_scheme == SCHEME_INTERNET_FACING else self.vpc_cidr
 
-            # Add the ingress rules to the ELB security group        
+            # Add the ingress rules to the ELB security group
             for elb_port in [listener.get('elb_port') for listener in self.elb_listeners]:
                 elb_sg_ingress_rules.append(ec2.SecurityGroupRule(FromPort=elb_port, ToPort=elb_port, IpProtocol='tcp', CidrIp=access_cidr))
 
@@ -189,7 +185,7 @@ class HaCluster(Template):
                 SecurityGroupIngress=elb_sg_ingress_rules)
         )
 
-        # Create the ASG security group 
+        # Create the ASG security group
         ha_cluster_sg_name = '%sSecurityGroup' % self.name
         ha_cluster_sg = self.add_resource(
             ec2.SecurityGroup(
@@ -200,7 +196,10 @@ class HaCluster(Template):
 
         # Create the reciprocal rules between the ELB and the ASG for all instance ports
         # NOTE: The condition in the list comprehension exists because elb_port is used as a default when instance_port is not specified
-        cluster_sg_ingress_ports = {listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in self.elb_listeners}
+        cluster_sg_ingress_ports = {
+            listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port')
+            for listener in self.elb_listeners
+        }
 
         # Also add the health check port to the security group rules
         if self.elb_health_check_port:
@@ -216,14 +215,12 @@ class HaCluster(Template):
 
         return self.security_groups
 
-
     def add_cluster_instance_profile(self):
         """
         Wrapper method to encapsulate process of adding the IAM role for the autoscaling group
         Sets self.instance_profile with the IAM Role resource, used in creation of the Launch Configuration
         """
         self.instance_profile = None
-
 
     def add_cluster_elb(self):
         """
@@ -246,7 +243,6 @@ class HaCluster(Template):
             health_check_protocol=self.elb_health_check_protocol,
             health_check_path=self.elb_health_check_path
         )
-
 
     def add_cname(self):
         """
@@ -272,14 +268,12 @@ class HaCluster(Template):
             TTL='300',
             ResourceRecords=[GetAtt(self.cluster_elb, 'DNSName')]))
 
-
     def add_user_data(self):
         """
         Wrapper method to encapsulate process of constructing userdata for the autoscaling group
-        Sets self.user_data_payload constructed from the passed in user_data and env_vars 
+        Sets self.user_data_payload constructed from the passed in user_data and env_vars
         """
         self.user_data_payload = self.construct_user_data(self.env_vars, self.user_data)
-
 
     def add_cluster_asg(self):
         """
@@ -292,7 +286,7 @@ class HaCluster(Template):
             load_balancer=self.cluster_elb,
             ami_name=self.ami_name,
             user_data=self.user_data_payload,
-            instance_type=self.instance_type,
+            instance_type=self.default_instance_type,
             min_size=self.min_size,
             max_size=self.max_size,
             subnet_layer=self.subnet_layer,

@@ -4,19 +4,7 @@
         "environment_name": "environmentbase",
         "monitor_stack": false,
         "write_stack_outputs": false,
-        "stack_outputs_directory": "stack_outputs",
-        "valid_regions": [
-            "ap-northeast-1",
-            "ap-northeast-2",
-            "ap-southeast-1",
-            "ap-southeast-2",
-            "eu-central-1",
-            "eu-west-1",
-            "sa-east-1",
-            "us-east-1",
-            "us-west-1",
-            "us-west-2"
-        ]
+        "stack_outputs_directory": "stack_outputs"
     },
     "template": {
         "description": "Environment Generator Base deployment",
@@ -38,6 +26,7 @@
         "aws_access_key_id": null,
         "aws_secret_access_key": null
     },
+    "valid_regions": !include region_map.json,
     "instancetype_to_arch": !include instancetype_to_arch.json,
     "image_map": !include ami_cache.json
 }

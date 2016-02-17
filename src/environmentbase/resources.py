@@ -16,6 +16,7 @@ class Res(object):
     CONFIG_FILENAME = "config.json"
     IMAGE_MAP_FILENAME = "ami_cache.json"
     INSTANCETYPE_MAP_FILENAME = "instancetype_to_arch.json"
+    REGION_MAP_FILENAME = "region_map.json"
 
     DEFAULT_DATA_PATH = "data"
 
@@ -26,7 +27,8 @@ class Res(object):
     # Generated config sections to break out to separate files
     _EXTRACTED_CONFIG_SECTIONS = {
         'image_map': IMAGE_MAP_FILENAME,
-        'instancetype_to_arch': INSTANCETYPE_MAP_FILENAME
+        'instancetype_to_arch': INSTANCETYPE_MAP_FILENAME,
+        'valid_regions': REGION_MAP_FILENAME
     }
 
     # Resource cache, prevents multiple loads of the same file

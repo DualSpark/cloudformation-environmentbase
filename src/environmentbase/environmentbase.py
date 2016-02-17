@@ -431,7 +431,7 @@ class EnvironmentBase(object):
         """
         Checks boto.region_name against the list of valid regions raising an exception if not.
         """
-        valid_regions = config['global']['valid_regions']
+        valid_regions = config['valid_regions']
         region_name = config['boto']['region_name']
         if region_name not in valid_regions:
             raise ValidationError('Unrecognized region name: ' + region_name)

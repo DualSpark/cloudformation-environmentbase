@@ -7,8 +7,7 @@
         # Enable monitoring of stack event stream
         "monitor_stack": "bool",
         # Directory for writing stack outputs
-        "stack_outputs_directory": "basestring",
-        "valid_regions": "list"
+        "stack_outputs_directory": "basestring"
     },
     "template": {
         # Canned ACL permissions for the template file upload
@@ -36,5 +35,6 @@
     },
     "instancetype_to_arch": {
         "*": "basestring"
-    }
+    },
+    "valid_regions": "list"
 }

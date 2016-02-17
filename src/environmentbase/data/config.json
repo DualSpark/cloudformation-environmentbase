@@ -19,7 +19,6 @@
         ]
     },
     "template": {
-        "ami_map_file": "ami_cache.json",
         "description": "Environment Generator Base deployment",
         "s3_bucket": "dualspark",
         "s3_prefix": "templates",

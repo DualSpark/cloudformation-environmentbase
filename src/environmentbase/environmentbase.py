@@ -599,6 +599,8 @@ class EnvironmentBase(object):
         Template.stack_timeout = self.template_args.get("timeout_in_minutes")
         Template.upload_acl = self.template_args.get('s3_upload_acl')
         Template.include_timestamp = self.template_args.get('include_timestamp')
+        Template.instancetype_to_arch = self.config['instancetype_to_arch']
+        Template.image_map = self.config['image_map']
 
         # Create the root template object
         self.template = Template(self.globals.get('environment_name', 'default_template'))
@@ -620,12 +622,7 @@ class EnvironmentBase(object):
         bucket_name = self.config.get('logging').get('s3_bucket')
 
         self.template.add_utility_bucket(name=bucket_name)
-        self.template.add_output(Output('utilityBucket',Value=bucket_name))
-
-        ami_filename = self.config['template']['ami_map_file']
-        ami_cache = res.load_yaml_file(ami_filename)
-
-        self.template.add_ami_mapping(ami_cache)
+        self.template.add_output(Output('utilityBucket', Value=bucket_name))
 
     def generate_ami_cache(self):
         """

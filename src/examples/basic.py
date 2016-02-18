@@ -22,6 +22,5 @@ class MyEnvClass(NetworkBase):
             min_size=2, max_size=3,
             instance_type='t2.micro'))
 
-
 if __name__ == '__main__':
     MyEnvClass()

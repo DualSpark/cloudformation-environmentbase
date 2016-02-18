@@ -687,7 +687,6 @@ class Template(t.Template):
 
         auto_scaling_obj = autoscaling.AutoScalingGroup(
             layer_name + 'AutoScalingGroup',
-            AvailabilityZones=GetAZs(),
             LaunchConfigurationName=Ref(launch_config),
             MaxSize=max_size,
             MinSize=min_size,

@@ -50,18 +50,21 @@ class EnvironmentBaseTestCase(TestCase):
 
         config = {}
         for (section, keys) in config_requirements.iteritems():
-            config[section] = {}
-            for (key, key_type) in keys.iteritems():
-                if key_type == basestring.__name__ or key_type == str.__name__:
-                    config[section][key] = dummy_string
-                elif key_type == bool.__name__:
-                    config[section][key] = dummy_bool
-                elif key_type == int.__name__:
-                    config[section][key] = dummy_int
-                elif key_type == list.__name__:
-                    config[section][key] = dummy_list
+            if "list" in keys:
+                config[section] = ['us-west-2']
+            else:
+                config[section] = {}
+                for (key, key_type) in keys.iteritems():
+                    if key_type == basestring.__name__ or key_type == str.__name__:
+                        config[section][key] = dummy_string
+                    elif key_type == bool.__name__:
+                        config[section][key] = dummy_bool
+                    elif key_type == int.__name__:
+                        config[section][key] = dummy_int
+                    elif key_type == list.__name__:
+                        config[section][key] = dummy_list
 
-        config['boto']['region_name'] = config['global']['valid_regions'][0]
+        config['boto']['region_name'] = config['valid_regions'][0]
         return config
 
     def _create_local_file(self, name, content):
@@ -195,8 +198,11 @@ class EnvironmentBaseTestCase(TestCase):
             cntrl._validate_config(invalid_config)
 
         # Check missing key validation
-        (key, value) = keys.items()[0]
-        del valid_config[section][key]
+        if isinstance(keys, list):
+            value = keys.pop()
+        else:
+            (key, value) = keys.items()[0]
+            del valid_config[section][key]
 
         with self.assertRaises(eb.ValidationError):
             cntrl._validate_config(valid_config)

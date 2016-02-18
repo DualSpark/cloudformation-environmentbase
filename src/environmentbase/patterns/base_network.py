@@ -25,12 +25,12 @@ class BaseNetwork(Template):
                 {
                     "type": "public",
                     "size": "18",
-                    "name": "public"
+                    "name": "myPublic"
                 },
                 {
                     "type": "private",
                     "size": "22",
-                    "name": "private"
+                    "name": "myPrivate"
                 },
             ],
         },

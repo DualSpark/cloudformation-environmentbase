@@ -692,7 +692,7 @@ class Template(t.Template):
             MaxSize=max_size,
             MinSize=min_size,
             DesiredCapacity=min(min_size, max_size),
-            VPCZoneIdentifier=self.subnets[subnet_type][subnet_layer.lower()],
+            VPCZoneIdentifier=self.subnets[subnet_type][subnet_layer],
             TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
             DependsOn=depends_on,
             HealthCheckGracePeriod=health_check_grace_period,

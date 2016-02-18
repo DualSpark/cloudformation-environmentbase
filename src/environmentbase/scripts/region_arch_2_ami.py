@@ -123,14 +123,14 @@ if __name__ == '__main__':
             ami_map['HVM64'][region] = hvm_ami["ImageId"]
             print json.dumps(hvm_ami, indent=4, separators=(',', ': '))
         else:
-            print '* No HVM hits for region'
+            print '* No HVM hits for region', region
 
         pv_ami = get_pv_ami(filtered_amis)
         if pv_ami:
             ami_map['PV64'][region] = pv_ami["ImageId"]
             print json.dumps(pv_ami, indent=4, separators=(',', ': '))
         else:
-            print '* No PV hits for region'
+            print '* No PV hits for region', region
 
     json_str = json.dumps(ami_map, indent=4, separators=(',', ': '), sort_keys=True)
 

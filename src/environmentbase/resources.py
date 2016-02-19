@@ -159,7 +159,7 @@ class Res(object):
     def generate_config(self,
                         config_file=CONFIG_FILENAME,
                         output_filename=None,
-                        config_handlers=list(),
+                        template_classes=list(),
                         extract_map=_EXTRACTED_CONFIG_SECTIONS,
                         prompt=False,
                         is_silent=False):
@@ -190,8 +190,9 @@ class Res(object):
         config = self.parse_file(config_file, from_file=False)
 
         # Merge in any defaults provided by registered config handlers
-        for handler in config_handlers:
-            config.update(handler.get_factory_defaults())
+        for template_subclass in template_classes:
+            factory_defaults = getattr(template_subclass, 'get_factory_defaults')()
+            config.update(factory_defaults)
 
         # Make changes to a new copy of the config
         config_copy = copy.deepcopy(config)

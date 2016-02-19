@@ -24,14 +24,6 @@ class ValidationError(Exception):
     pass
 
 
-class EnvConfig(object):
-
-    def __init__(self, config_handlers=None):
-        self.config_handlers = config_handlers if config_handlers else []
-        # self.stack_event_handlers = stack_event_handlers if stack_event_handlers else []
-        # self.deploy_handlers = deploy_handlers if deploy_handlers else {}
-
-
 class EnvironmentBase(object):
     """
     EnvironmentBase encapsulates functionality required to build and deploy a network and common resources for object storage within a specified region
@@ -39,7 +31,6 @@ class EnvironmentBase(object):
 
     def __init__(self,
                  view=None,
-                 env_config=EnvConfig(),
                  config_filename=res.R.CONFIG_FILENAME,
                  config_file_override=None):
         """
@@ -53,7 +44,6 @@ class EnvironmentBase(object):
         """
 
         self.config_filename = config_filename
-        self.env_config = env_config
         self.config_file_override = config_file_override
         self.config = {}
         self.globals = {}
@@ -62,7 +52,6 @@ class EnvironmentBase(object):
         self.deploy_parameter_bindings = []
         self.ignore_outputs = ['templateValidationHash', 'dateGenerated']
         self.stack_outputs = {}
-        self._config_handlers = []
         self.stack_monitor = None
         self._ami_cache = None
         self.cfn_connection = None
@@ -70,10 +59,7 @@ class EnvironmentBase(object):
 
         self.boto_session = None
 
-        # self.env_config = env_config
-        for config_handler in env_config.config_handlers:
-            self._add_config_handler(config_handler)
-        self.add_config_hook()
+        self.template_manifest = EnvironmentBase.get_loaded_template_subclasses()
 
         # Load the user interface
         self.view = view if view else cli.CLI()
@@ -84,6 +70,15 @@ class EnvironmentBase(object):
 
         # Allow the view to execute the user's requested action
         self.view.process_request(self)
+
+    @staticmethod
+    def get_loaded_template_subclasses():
+        # Ensure this class is loaded
+        from template import Template
+
+        template_subclasses = vars()['Template'].__subclasses__()
+
+        return template_subclasses
 
     def create_hook(self):
         """
@@ -148,8 +143,7 @@ class EnvironmentBase(object):
         Override in your subclass for custom initialization steps
         @param is_silent [boolean], supress console output (for testing)
         """
-        config_handlers = self.env_config.config_handlers
-        res.R.generate_config(prompt=True, is_silent=is_silent, output_filename=self.config_filename, config_handlers=config_handlers)
+        res.R.generate_config(prompt=True, is_silent=is_silent, output_filename=self.config_filename, template_classes=self.template_manifest)
 
     def s3_prefix(self):
         """
@@ -461,26 +455,14 @@ class EnvironmentBase(object):
         config_reqs_copy = copy.deepcopy(factory_schema)
 
         # Merge in any requirements provided by config handlers
-        for handler in self._config_handlers:
-            config_reqs_copy.update(handler.get_config_schema())
+        for template_subclass in self.template_manifest:
+            config_schema = getattr(template_subclass, 'get_config_schema')()
+            config_reqs_copy.update(config_schema)
 
         self._validate_config_helper(config_reqs_copy, config, '')
 
         # Validate region
         self._validate_region(config)
-
-    def _add_config_handler(self, handler):
-        """
-        Register classes that will augment the configuration defaults and/or validation logic here
-        """
-
-        if not hasattr(handler, 'get_factory_defaults') or not callable(getattr(handler, 'get_factory_defaults')):
-            raise ValidationError('Class %s cannot be a config handler, missing get_factory_defaults()' % type(handler).__name__ )
-
-        if not hasattr(handler, 'get_config_schema') or not callable(getattr(handler, 'get_config_schema')):
-            raise ValidationError('Class %s cannot be a config handler, missing get_config_schema()' % type(handler).__name__ )
-
-        self._config_handlers.append(handler)
 
     @staticmethod
     def _config_env_override(config, path, print_debug=False):

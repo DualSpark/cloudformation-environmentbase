@@ -1,8 +1,6 @@
-from environmentbase.environmentbase import EnvConfig
 from environmentbase.networkbase import NetworkBase
 from environmentbase.patterns.bastion import Bastion
 from environmentbase.patterns.ha_cluster import HaCluster
-from environmentbase.patterns.base_network import BaseNetwork
 
 
 class MyEnvClass(NetworkBase):
@@ -26,5 +24,4 @@ class MyEnvClass(NetworkBase):
             suggested_instance_types=['t2.micro']))
 
 if __name__ == '__main__':
-    env_config = EnvConfig(config_handlers=[BaseNetwork])
-    MyEnvClass(env_config=env_config)
+    MyEnvClass()

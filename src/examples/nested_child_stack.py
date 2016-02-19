@@ -1,6 +1,5 @@
 from environmentbase.networkbase import NetworkBase
 from environmentbase.template import Template
-from environmentbase.environmentbase import EnvConfig
 from environmentbase.patterns.bastion import Bastion
 from troposphere import ec2
 
@@ -10,6 +9,9 @@ class Controller(NetworkBase):
     Class creates a VPC and common network components for the environment
     """
     def create_hook(self):
+        super(Controller, self).create_hook()
+
+        # print self.template.subnets
         self.add_child_template(ChildTemplate('Child'))
         self.add_child_template(Bastion('Bastion'))
 
@@ -26,10 +28,10 @@ class ChildTemplate(Template):
             InstanceType="m3.medium",
             ImageId="ami-e7527ed7",
             KeyName=self.ec2_key,
-            SubnetId=self.subnets['private'][0],
+            SubnetId=self.subnets['private']['private'][0],
             SecurityGroupIds=[self.common_security_group]
         ))
-        self.add_child_template(GrandchildTemplate('Grandchild'))
+        # self.add_child_template(GrandchildTemplate('Grandchild'))
 
     # When no config.json file exists a new one is created using the 'factory default' file.  This function
     # augments the factory default before it is written to file with the config values required
@@ -52,14 +54,8 @@ class GrandchildTemplate(Template):
             InstanceType="m3.medium",
             ImageId="ami-e7527ed7",
             KeyName=self.ec2_key,
-            SubnetId=self.subnets['private'][0],
+            SubnetId=self.subnets['private']['private'][0],
             SecurityGroupIds=[self.common_security_group]))
 
 if __name__ == '__main__':
-
-    # EnvConfig holds references to handler classes used to extend certain functionality
-    # of EnvironmentBase. The config_handlers list takes any class that implements
-    # get_factory_defaults() and get_config_schema().
-    env_config = EnvConfig(config_handlers=[ChildTemplate])
-
-    Controller(env_config=env_config)
+    Controller()

@@ -1,6 +1,5 @@
 from environmentbase.networkbase import NetworkBase
 from environmentbase.template import Template
-from environmentbase.environmentbase import EnvConfig
 from troposphere import ec2
 
 
@@ -19,7 +18,7 @@ class MyChildTemplate(Template):
 
     # Called from add_child_template() after some common parameters are attached to this instance, see docs for details
     def build_hook(self):
-        self.add_resource(ec2.Instance("ec2instance", InstanceType="m3.medium", ImageId="ami-e7527ed7") )
+        self.add_resource(ec2.Instance("ec2instance", InstanceType="m3.medium", ImageId="ami-e7527ed7"))
 
     # When no config.json file exists a new one is created using the 'factory default' file.  This function
     # augments the factory default before it is written to file with the config values required
@@ -35,10 +34,4 @@ class MyChildTemplate(Template):
         return {'my_child_template': {'favorite_color': 'str'}}
 
 if __name__ == '__main__':
-
-    # EnvConfig holds references to handler classes used to extend certain functionality
-    # of EnvironmentBase. The config_handlers list takes any class that implements
-    # get_factory_defaults() and get_config_schema().
-    env_config = EnvConfig(config_handlers=[MyChildTemplate])
-
-    MyRootTemplate(env_config=env_config)
+    MyRootTemplate()

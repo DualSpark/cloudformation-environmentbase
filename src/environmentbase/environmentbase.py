@@ -32,7 +32,8 @@ class EnvironmentBase(object):
     def __init__(self,
                  view=None,
                  config_filename=res.R.CONFIG_FILENAME,
-                 config_file_override=None):
+                 config_file_override=None,
+                 is_silent=False):
         """
         Init method for environment base creates all common objects for a given environment within the CloudFormation
         template including a network, s3 bucket and requisite policies to allow ELB Access log aggregation and
@@ -59,7 +60,8 @@ class EnvironmentBase(object):
 
         self.boto_session = None
 
-        self.template_manifest = EnvironmentBase.get_loaded_template_subclasses()
+        # Get names of loaded subclasses of Template
+        self.template_manifest = EnvironmentBase.get_loaded_template_subclasses(is_silent)
 
         # Load the user interface
         self.view = view if view else cli.CLI()
@@ -72,26 +74,19 @@ class EnvironmentBase(object):
         self.view.process_request(self)
 
     @staticmethod
-    def get_loaded_template_subclasses():
+    def get_loaded_template_subclasses(is_silent=False):
         # Ensure this class is loaded
-        from template import Template
-
-        template_subclasses = vars()['Template'].__subclasses__()
-
+        module = __import__('environmentbase.template', fromlist=['Template'])
+        klass = getattr(module, 'Template')
+        template_subclasses = klass.__subclasses__()
+        if not is_silent:
+            print "Initializing patterns: %s" % [cls.__name__ for cls in template_subclasses]
         return template_subclasses
 
     def create_hook(self):
         """
         Override in your subclass for custom resource creation.  Called after config is loaded and template is
         initialized.  After the hook completes the templates are serialized and written to file and uploaded to S3.
-        """
-        pass
-
-    def add_config_hook(self):
-        """
-        Override in your subclass for adding custom config handlers.
-        Called after the other config handlers have been added.
-        After the hook completes the view is loaded and started.
         """
         pass
 

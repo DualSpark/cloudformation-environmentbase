@@ -119,6 +119,7 @@ def get_stack_depends_on_from_parent_template(parent_template_contents, stack_na
     # Otherwise return the DependsOn list that the stack was deployed with
     return stack_reference.get('DependsOn')
 
+
 def get_template_s3_resource_path(prefix, template_name, include_timestamp=True):
     """
     Constructs s3 resource path for provided template name
@@ -143,3 +144,34 @@ def get_template_s3_url(bucket_name, resource_path):
     """
     return 'https://%s.s3.amazonaws.com/%s' % (bucket_name, resource_path)
 
+
+def _get_subclasses_of(parent_import_path, parent_classname):
+    # Import environmentbase.template.Template (in case it's not already)
+    _module = __import__(parent_import_path, fromlist=[parent_classname])
+    parent_class = getattr(_module, parent_classname)
+    subclasses = parent_class.__subclasses__()
+    return subclasses
+
+
+def get_pattern_list():
+    """
+    Returns list of all imported subclasses of environmentbase.template.Template
+    """
+    return _get_subclasses_of('environmentbase.template', 'Template')
+
+
+def _update_from_patterns(_dict, fun_name):
+    class_list = get_pattern_list()
+    for template_subclass in class_list:
+        additional_dict = getattr(template_subclass, fun_name)()
+        _dict.update(additional_dict)
+
+    return _dict
+
+
+def update_schema_from_patterns(config_schema, class_list=None):
+    return _update_from_patterns(config_schema, 'get_config_schema')
+
+
+def update_config_from_patterns(config, class_list=None):
+    return _update_from_patterns(config, 'get_factory_defaults')

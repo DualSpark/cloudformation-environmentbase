@@ -8,7 +8,7 @@ import json
 import sys
 import copy
 from tempfile import mkdtemp
-from environmentbase import cli, resources as res, environmentbase as eb
+from environmentbase import cli, resources as res, environmentbase as eb, utility
 from environmentbase import networkbase
 import environmentbase.patterns.ha_nat
 from troposphere import ec2
@@ -36,17 +36,14 @@ class EnvironmentBaseTestCase(TestCase):
 
         return my_cli
 
-    def _create_dummy_config(self, env_base=None):
+    def _create_dummy_config(self):
         dummy_string = 'dummy'
         dummy_bool = False
         dummy_int = 3
         dummy_list = ['A', 'B', 'C']
 
         config_requirements = res.R.parse_file(res.Res.CONFIG_REQUIREMENTS_FILENAME, from_file=False)
-
-        if env_base:
-            for handler in env_base.config_handlers:
-                config_requirements.update(handler.get_config_schema())
+        utility.update_schema_from_patterns(config_requirements)
 
         config = {}
         for (section, keys) in config_requirements.iteritems():
@@ -76,7 +73,7 @@ class EnvironmentBaseTestCase(TestCase):
     def test_constructor(self):
         """Make sure EnvironmentBase passes control to view to process user requests"""
         fake_cli = self.fake_cli(['init'])
-        env_base = eb.EnvironmentBase(fake_cli)
+        env_base = eb.EnvironmentBase(fake_cli, is_silent=True)
 
         # Check that EnvironmentBase started the CLI
         fake_cli.process_request.assert_called_once_with(env_base)
@@ -110,7 +107,7 @@ class EnvironmentBaseTestCase(TestCase):
 
                     actions_called[action] += 1
 
-        eb.EnvironmentBase(MyView())
+        eb.EnvironmentBase(MyView(), is_silent=True)
 
         self.assertEqual(actions_called['init'], 1)
         self.assertEqual(actions_called['create'], 1)
@@ -121,13 +118,14 @@ class EnvironmentBaseTestCase(TestCase):
         """ Verify load_config can load non-default files """
         alt_config_filename = 'config.yaml'
         config = res.R.parse_file(res.Res.CONFIG_FILENAME, from_file=False)
+        utility.update_config_from_patterns(config)
 
         with open(alt_config_filename, 'w') as f:
             f.write(yaml.dump(config, default_flow_style=False))
             f.flush()
 
         fake_cli = self.fake_cli(['create', '--config-file', 'config.yaml'])
-        base = eb.EnvironmentBase(fake_cli, config_filename=alt_config_filename)
+        base = eb.EnvironmentBase(fake_cli, config_filename=alt_config_filename, is_silent=True)
         base.load_config()
 
         self.assertEqual(base.config['global']['environment_name'], 'environmentbase')
@@ -147,7 +145,7 @@ class EnvironmentBaseTestCase(TestCase):
             f.flush()
 
         fake_cli = self.fake_cli(['create'])
-        base = eb.EnvironmentBase(fake_cli)
+        base = eb.EnvironmentBase(fake_cli, is_silent=True)
         base.load_config()
 
         self.assertNotEqual(base.config['global']['environment_name'], original_value)
@@ -157,7 +155,7 @@ class EnvironmentBaseTestCase(TestCase):
 
         # existence check
         with self.assertRaises(Exception):
-            base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]))
+            base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]), is_silent=True)
             base.load_config()
 
         # remove config.json and create the alternate config file
@@ -167,7 +165,7 @@ class EnvironmentBaseTestCase(TestCase):
         with open(config_filename, 'w') as f:
             f.write(yaml.dump(config))
             f.flush()
-            base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]))
+            base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', config_filename]), is_silent=True)
             base.load_config()
 
         self.assertNotEqual(base.config['global']['environment_name'], original_value)
@@ -177,7 +175,7 @@ class EnvironmentBaseTestCase(TestCase):
         environmentbase.TEMPLATE_REQUIREMENTS defines the required sections and keys for a valid input config file
         This test ensures that EnvironmentBase._validate_config() enforces the TEMPLATE_REQUIREMENTS contract
         """
-        cntrl = eb.EnvironmentBase(self.fake_cli(['create']))
+        cntrl = eb.EnvironmentBase(self.fake_cli(['create']), is_silent=True)
 
         valid_config = self._create_dummy_config()
         cntrl._validate_config(valid_config)
@@ -240,9 +238,7 @@ class EnvironmentBaseTestCase(TestCase):
                     }}}})
 
     def test_extending_config(self):
-
-        # Typically this would subclass eb.Template
-        class MyConfigHandler(object):
+        class MyTemplate(eb.Template):
             @staticmethod
             def get_factory_defaults():
                 return {'new_section': {'new_key': 'value'}}
@@ -255,11 +251,11 @@ class EnvironmentBaseTestCase(TestCase):
             pass
 
         view = self.fake_cli(['init'])
-        env_config = eb.EnvConfig(config_handlers=[MyConfigHandler])
         controller = MyEnvBase(
             view=view,
-            env_config=env_config
+            is_silent=True
         )
+
         controller.init_action(is_silent=True)
         controller.load_config()
 
@@ -274,17 +270,18 @@ class EnvironmentBaseTestCase(TestCase):
         # recreate config file without 'new_section' and make sure it fails validation
         os.remove(res.Res.CONFIG_FILENAME)
         dummy_config = self._create_dummy_config()
+        del dummy_config['new_section']
         self._create_local_file(res.Res.CONFIG_FILENAME, json.dumps(dummy_config, indent=4))
 
         with self.assertRaises(eb.ValidationError):
-            base = MyEnvBase(view=view, env_config=env_config)
+            base = MyEnvBase(view=view, is_silent=True)
             base.load_config()
 
     def test_generate_config(self):
         """ Verify cli flags update config object """
 
         # Verify that debug and output are set to the factory default
-        base = eb.EnvironmentBase(self.fake_cli(['init']))
+        base = eb.EnvironmentBase(self.fake_cli(['init']), is_silent=True)
         res.R.generate_config(prompt=True, is_silent=True)
 
         base.load_config()
@@ -298,20 +295,20 @@ class EnvironmentBaseTestCase(TestCase):
     def test_template_file_flag(self):
         # verify that the --template-file flag changes the config value
         dummy_value = 'dummy'
-        base = eb.EnvironmentBase(self.fake_cli(['create', '--template-file', dummy_value]))
+        base = eb.EnvironmentBase(self.fake_cli(['create', '--template-file', dummy_value]), is_silent=True)
         base.init_action(is_silent=True)
         base.load_config()
         self.assertEqual(base.config['global']['environment_name'], dummy_value)
 
     def test_config_file_flag(self):
         dummy_value = 'dummy'
-        base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', dummy_value]))
+        base = eb.EnvironmentBase(self.fake_cli(['create', '--config-file', dummy_value]), is_silent=True)
         base.init_action(is_silent=True)
         self.assertTrue(os.path.isfile(dummy_value))
 
     def test_factory_default(self):
         with self.assertRaises(Exception):
-            base = eb.EnvironmentBase(self.fake_cli(['init']))
+            base = eb.EnvironmentBase(self.fake_cli(['init']), is_silent=True)
             base.load_config()
 
         # Create refs to files that should be created and make sure they don't already exists
@@ -321,14 +318,14 @@ class EnvironmentBaseTestCase(TestCase):
         self.assertFalse(os.path.isfile(ami_cache_file))
 
         # Verify that create_missing_files works as intended
-        base = eb.EnvironmentBase(self.fake_cli(['init']))
+        base = eb.EnvironmentBase(self.fake_cli(['init']), is_silent=True)
         base.init_action(is_silent=True)
         self.assertTrue(os.path.isfile(config_file))
         # TODO: After ami_cache is updated change 'create_missing_files' to be singular
         # self.assertTrue(os.path.isfile(ami_cache_file))
 
         # Verify that the previously created files are loaded up correctly
-        eb.EnvironmentBase(self.fake_cli(['create']))
+        eb.EnvironmentBase(self.fake_cli(['create']), is_silent=True)
 
     # The following two tests use a create_action, which currently doesn't test correctly
 

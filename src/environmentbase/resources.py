@@ -4,6 +4,7 @@ import yaml
 import json
 import os
 import re
+import utility
 
 
 # Declare R to be the singleton Resource instance
@@ -159,28 +160,18 @@ class Res(object):
     def generate_config(self,
                         config_file=CONFIG_FILENAME,
                         output_filename=None,
-                        template_classes=list(),
                         extract_map=_EXTRACTED_CONFIG_SECTIONS,
                         prompt=False,
                         is_silent=False):
         """
         Copies specified yaml/json file from the EGG resource to current directory, default is 'conifg.json'.  Optionally
-        split out specific sections into separate files using extract_map.  Additionally us config_handlers to add in
-        additional conifg content before serializing content to file.
+        split out specific sections into separate files using extract_map.
         @param config_file [string] Name of file within resource path to load.
         @param output_file [string] Name of generated config file (default is same as 'config_file')
         @param prompt [boolean] block for user input to abort file output if file already exists
         @param is_silent [boolena] supress console output (primarly for testing)
         @param extract_map [map<string, string>] Specifies top-level sections of config to externalize to separate file.
         Where key=config section name, value=filename.
-        @param config_handlers [list(objects)] Config handlers should resemble the following:
-            class CustomHandler(object):
-                @staticmethod
-                def get_factory_defaults():
-                    return custom_config_addition
-                @staticmethod
-                def get_config_schema():
-                    return custom_config_validation
         """
         # Output same file name as the input unless specified otherwise
         if not output_filename:
@@ -190,9 +181,7 @@ class Res(object):
         config = self.parse_file(config_file, from_file=False)
 
         # Merge in any defaults provided by registered config handlers
-        for template_subclass in template_classes:
-            factory_defaults = getattr(template_subclass, 'get_factory_defaults')()
-            config.update(factory_defaults)
+        utility.update_config_from_patterns(config)
 
         # Make changes to a new copy of the config
         config_copy = copy.deepcopy(config)

@@ -1,5 +1,6 @@
 from unittest2 import TestCase
 from environmentbase.resources import Res
+from environmentbase.template import Template
 from tempfile import mkdtemp
 import shutil
 import os
@@ -101,7 +102,7 @@ class ResourcesTestCase(TestCase):
             }
         }
 
-        class CustomHandler(object):
+        class CustomHandler(Template):
             @staticmethod
             def get_factory_defaults():
                 return custom_config_addition
@@ -120,8 +121,7 @@ class ResourcesTestCase(TestCase):
                 "Mappings": "mappings.json",
                 "Resources": "resources.json",
                 "Outputs": "output.json"
-            },
-            config_handlers=[CustomHandler()]
+            }
         )
 
         # Make sure all the extracted files exist

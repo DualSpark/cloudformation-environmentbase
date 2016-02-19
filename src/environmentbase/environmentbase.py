@@ -60,8 +60,9 @@ class EnvironmentBase(object):
 
         self.boto_session = None
 
-        # Get names of loaded subclasses of Template
-        self.template_manifest = EnvironmentBase.get_loaded_template_subclasses(is_silent)
+        # Show names of Template subclasses
+        if not is_silent:
+            print "Using patterns: %s" % [cls.__name__ for cls in utility.get_pattern_list()]
 
         # Load the user interface
         self.view = view if view else cli.CLI()
@@ -72,16 +73,6 @@ class EnvironmentBase(object):
 
         # Allow the view to execute the user's requested action
         self.view.process_request(self)
-
-    @staticmethod
-    def get_loaded_template_subclasses(is_silent=False):
-        # Ensure this class is loaded
-        module = __import__('environmentbase.template', fromlist=['Template'])
-        klass = getattr(module, 'Template')
-        template_subclasses = klass.__subclasses__()
-        if not is_silent:
-            print "Initializing patterns: %s" % [cls.__name__ for cls in template_subclasses]
-        return template_subclasses
 
     def create_hook(self):
         """
@@ -138,7 +129,7 @@ class EnvironmentBase(object):
         Override in your subclass for custom initialization steps
         @param is_silent [boolean], supress console output (for testing)
         """
-        res.R.generate_config(prompt=True, is_silent=is_silent, output_filename=self.config_filename, template_classes=self.template_manifest)
+        res.R.generate_config(prompt=True, is_silent=is_silent, output_filename=self.config_filename)
 
     def s3_prefix(self):
         """
@@ -450,9 +441,7 @@ class EnvironmentBase(object):
         config_reqs_copy = copy.deepcopy(factory_schema)
 
         # Merge in any requirements provided by config handlers
-        for template_subclass in self.template_manifest:
-            config_schema = getattr(template_subclass, 'get_config_schema')()
-            config_reqs_copy.update(config_schema)
+        utility.update_schema_from_patterns(config_reqs_copy)
 
         self._validate_config_helper(config_reqs_copy, config, '')
 

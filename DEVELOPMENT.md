@@ -9,9 +9,9 @@ python setup.py develop
 If you do not plan on modifying the code and will simply be using it, instead run:
 ```
 python setup.py install
-```  
+```
 
-If you have the AWS CLI, you can run `aws configure` to generate the credentials files in the appropriate place. If you have already configured the AWS CLI, then no further steps are necessary. 
+If you have the AWS CLI, you can run `aws configure` to generate the credentials files in the appropriate place. If you have already configured the AWS CLI, then no further steps are necessary.
 
 You must ensure that the account you are authenticating with has at least the following permissions:
 
@@ -20,7 +20,7 @@ You must ensure that the account you are authenticating with has at least the fo
 "ec2:DescribeRegions"], "Effect": "Allow", "Resource": "*" }]}
 ```
 
-This is required to perform the VPC lookups. 
+This is required to perform the VPC lookups.
 
 
 Run/Test/Clean
@@ -40,7 +40,7 @@ python setup.py test
 python setup.py clean —-all
 ```
 
-Note: *.pyc files will be regenerated in src whenever you run the test suite but as long as they are git ignored it’s not a big deal. You can still remove them with `rm src/**/*.pyc` 
+Note: *.pyc files will be regenerated in src whenever you run the test suite but as long as they are git ignored it’s not a big deal. You can still remove them with `rm src/**/*.pyc`
 
 
 Getting started
@@ -61,24 +61,23 @@ class MyEnv(NetworkBase):
         self.add_child_template(Bastion())
 
 if __name__ == '__main__':
-    my_config = EnvConfig(config_handlers=[Bastion])
-    MyEnv(env_config=my_config)
+    MyEnv()
 
 ```
 
 To generate the cloudformation template for this python code, save the above snippet in a file called `my_env.py` and run `python my_env.py init`.
 
-This will look at the patterns passed into the EnvConfig object and generate a config.json file with the relevant fields added. Fill this config file out, adding values for at least the following fields:  
+This will generate a config.json using the default config (and any loaded subclasses of Template which extend the default config) file with the relevant fields added. Fill this config file out, adding values for at least the following fields:
 
-`template : ec2_key_default` - SSH key used to log into your EC2 instances  
-`template : s3_bucket` - S3 bucket used to upload the generated cloudformation templates  
+`template : ec2_key_default` - SSH key used to log into your EC2 instances
+`template : s3_bucket` - S3 bucket used to upload the generated cloudformation templates
 
 Next run `python my_env.py create` to generate the cloudformation template using the updated config. Since we overrode environmentbase's `create_hook` function, this will hook into environmentbase's create action and add the bastion stack and any other resources you specified.
 
-NOTE: You can also override config values using environment variables. You can create env variables using the format:  
-`<section label>_<config_key>` in all caps (e.g. `TEMPLATE_EC2_KEY_DEFAULT`)  
+NOTE: You can also override config values using environment variables. You can create env variables using the format:
+`<section label>_<config_key>` in all caps (e.g. `TEMPLATE_EC2_KEY_DEFAULT`)
 
-These are read in after the config file is loaded, so will override any values in your config.json  
+These are read in after the config file is loaded, so will override any values in your config.json
 
 Then run `python my_env.py deploy` to create the stack on [cloudformation](https://console.aws.amazon.com/cloudformation/)
 
@@ -102,12 +101,12 @@ By default, networkbase will create one public and one private subnet for each a
         ],
         "subnet_config": [
             {
-                "type": "public", 
+                "type": "public",
                 "size": "18",
                 "name": "public"
             },
             {
-                "type": "private", 
+                "type": "private",
                 "size": "22",
                 "name": "private"
             },
@@ -136,18 +135,18 @@ Extension point for modifying behavior of delete action. Called after config is 
 Extension point for reacting to the cloudformation stack event stream.  If global.monitor_stack is enabled in config this function is used to react to stack events. Once a stack is created a notification topic will begin emitting events to a queue.  Each event is passed to this call for further processing.  The return value is used to indicate whether processing is complete (true indicates processing is complete, false indicates you are not yet done).
 Details about the event data can be read [here](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-listing-event-history.html)
 
-The event_data hash provided the following mappings from the raw cloudformation event:  
-status = ResourceStatus  
-type = ResourceType  
-name = LogicalResourceId  
-reason = ResourceStatusReason  
-props = ResourceProperties  
+The event_data hash provided the following mappings from the raw cloudformation event:
+status = ResourceStatus
+type = ResourceType
+name = LogicalResourceId
+reason = ResourceStatusReason
+props = ResourceProperties
 
 ## Dealing with versions
 
 1. Basic commands
 
-  Reading tag information 
+  Reading tag information
 
   - List all tags (apply across all branches): `git tag -l`
 
@@ -197,7 +196,7 @@ props = ResourceProperties
   2. Make code changes, test .. etc (merge changes from master into this branch)
      Remember to update: src/environmentbase/version.py to the same value as the branch name.
   3. Merge into master
-  4. Delete the version branch 
+  4. Delete the version branch
   5. Create tag on master with same name as branch you just deleted.
-  
+
   Note that the branch is deleted **before** the tag is created because they share the same name.  Otherwise referring to things by the version name may be ambigious.

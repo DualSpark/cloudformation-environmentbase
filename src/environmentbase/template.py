@@ -47,6 +47,9 @@ class Template(t.Template):
     # Region to deploy to
     region = ''
 
+    # Custom config loaded by EnvironmentBase.load_pattern_configs()
+    runtime_config = {}
+
     ARCH_MAP = "InstanceTypeToArch"
     IMAGE_MAP_PREFIX = "ImageMapFor"
 

@@ -230,6 +230,22 @@ class EnvironmentBase(object):
             bucket_name=self.template_args.get('s3_bucket'),
             resource_path=self._root_template_path())
 
+    def load_runtime_config(self):
+        """
+        For patterns defining custom config sections bind the loaded config values to associated class.
+        For class TestPattern whose get_factory_defaults() returns { "fav_color": "red" } will be able
+        to retreive the loaded value from the build_hook() (e.g. TestPattern.runtime_config['fav_color'])
+        """
+        pattern_classes = utility.get_pattern_list()
+        for cls in pattern_classes:
+            runtime_config = {}
+            default_config = cls.get_factory_defaults()
+            for key in default_config.keys():
+                value = self.config[key]
+                runtime_config[key] = value
+
+            cls.runtime_config = runtime_config
+
     def create_action(self):
         """
         Default create_action invoked by the CLI
@@ -237,6 +253,7 @@ class EnvironmentBase(object):
         Override the create_hook in your environment to inject all of your cloudformation resources
         """
         self.load_config()
+        self.load_runtime_config()
         self.initialize_template()
 
         # Do custom troposphere resource creation in your overridden copy of this method

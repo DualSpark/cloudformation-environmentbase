@@ -12,6 +12,17 @@ from environmentbase import cli, resources as res, environmentbase as eb, utilit
 from environmentbase import networkbase
 import environmentbase.patterns.ha_nat
 from troposphere import ec2
+from environmentbase.template import Template
+
+
+class MyTemplate(Template):
+    @staticmethod
+    def get_factory_defaults():
+        return {'new_section': {'new_key': 'value'}}
+
+    @staticmethod
+    def get_config_schema():
+        return {'new_section': {'new_key': 'basestring'}}
 
 
 class EnvironmentBaseTestCase(TestCase):
@@ -326,6 +337,16 @@ class EnvironmentBaseTestCase(TestCase):
 
         # Verify that the previously created files are loaded up correctly
         eb.EnvironmentBase(self.fake_cli(['create']), is_silent=True)
+
+    def test_load_runtime_config(self):
+        base = eb.EnvironmentBase(self.fake_cli(['create']), is_silent=True)
+        base.init_action(is_silent=True)
+        base.load_config()
+
+        # verify that config section is attached to the class
+        base.config['new_section']['new_key'] = 'different_value'
+        base.load_runtime_config()
+        self.assertTrue(MyTemplate.runtime_config['new_section']['new_key'], 'different_value')
 
     # The following two tests use a create_action, which currently doesn't test correctly
 

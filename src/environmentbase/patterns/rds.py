@@ -1,7 +1,6 @@
 from environmentbase.template import Template
 import environmentbase.resources as res
 from environmentbase.networkbase import NetworkBase
-from environmentbase.environmentbase import EnvConfig
 from troposphere import Ref, Parameter, GetAtt, Output, Join, rds, ec2
 
 
@@ -59,7 +58,7 @@ class RDS(Template):
                  connect_from_cidr=None,
                  connect_from_sg=None,
                  subnet_set='private',
-                 config_map=DEFAULT_CONFIG['db']):
+                 config_map=None):
         """
         Method initializes host in a given environment deployment
         @param tier_name: [string] - name of the tier to assign
@@ -70,7 +69,7 @@ class RDS(Template):
         """
 
         self.tier_name = tier_name
-        self.config_map = config_map
+        self.config_map = config_map or self.runtime_config['db']
         self.subnet_set = subnet_set
 
         if connect_from_cidr and connect_from_sg:
@@ -247,64 +246,62 @@ class Controller(NetworkBase):
     > mysql -h <db endpoint> -P <db port> -u <db username> -p
     """
 
+    # For this example override the loaded config with the config below
+    db_config = {
+        "label1": {
+            "db_instance_type_default": "db.m1.small",
+            "rds_user_name": "defaultusername",
+            # Actual database name, cannot include non-alphanumeric characters (e.g. "-")
+            "master_db_name": "mydb",
+            "volume_size": 100,
+            "backup_retention_period": 30,
+            "rds_engine": "MySQL",
+            # 5.6.19 is no longer supported
+            "rds_engine_version": "5.6.22",
+            "preferred_backup_window": "02:00-02:30",
+            "preferred_maintenance_window": "sun:03:00-sun:04:00",
+            # Name of vm snapshot to use, empty string ("") means don't use an old snapshot
+            # Note: "master_db_name" value will be overridden if snapshot_id is non-empty
+            "snapshot_id": "",
+            "password": "changeme111111111111"
+        },
+        "label2": {
+            "db_instance_type_default": "db.m1.small",
+            "rds_user_name": "defaultusername",
+            # Actual database name, cannot include non-alphanumeric characters (e.g. "-")
+            "master_db_name": "mydb2",
+            "volume_size": 100,
+            "backup_retention_period": 30,
+            "rds_engine": "MySQL",
+            # 5.6.19 is no longer supported
+            "rds_engine_version": "5.6.22",
+            "preferred_backup_window": "02:00-02:30",
+            "preferred_maintenance_window": "sun:03:00-sun:04:00",
+            # Name of vm snapshot to use, empty string ("") means don't use an old snapshot
+            # Note: "master_db_name" value will be overridden if snapshot_id is non-empty
+            "snapshot_id": "",
+            "password": "changeme1111111111111"
+        }
+    }
+
     def create_hook(self):
+        super(Controller, self).create_hook()
+
         # Create the rds instance pattern (includes standard standard parameters)
         my_db = RDS(
             'dbTier',
-            subnet_set=self.template.subnets['private'].keys()[0],
-            config_map=db_config)
+            subnet_set='private',
+            config_map=self.db_config)
 
         # Attach pattern as a child template
         self.add_child_template(my_db)
 
     def deploy_hook(self):
-        for db_label, db_config in self.config['db'].iteritems():
+        for db_label, db_config in self.db_config.iteritems():
             db_resource_name = db_label.lower() + 'dbTier'.title() + 'RdsMasterUserPassword'
             print "adding ", db_resource_name
             self.add_parameter_binding(key=db_resource_name, value=db_config['password'])
 
 
 if __name__ == '__main__':
-
-    db_config = {
-        'label1': {
-            'db_instance_type_default': 'db.m1.small',
-            'rds_user_name': 'defaultusername',
-            # Actual database name, cannot include non-alphanumeric characters (e.g. '-')
-            'master_db_name': 'mydb',
-            'volume_size': 100,
-            'backup_retention_period': 30,
-            'rds_engine': 'MySQL',
-            # 5.6.19 is no longer supported
-            'rds_engine_version': '5.6.22',
-            'preferred_backup_window': '02:00-02:30',
-            'preferred_maintenance_window': 'sun:03:00-sun:04:00',
-            # Name of vm snapshot to use, empty string ('') means don't use an old snapshot
-            # Note: 'master_db_name' value will be overridden if snapshot_id is non-empty
-            'snapshot_id': '',
-            'password': 'changeme111111111111'
-        },
-        'label2': {
-            'db_instance_type_default': 'db.m1.small',
-            'rds_user_name': 'defaultusername',
-            # Actual database name, cannot include non-alphanumeric characters (e.g. '-')
-            'master_db_name': 'mydb2',
-            'volume_size': 100,
-            'backup_retention_period': 30,
-            'rds_engine': 'MySQL',
-            # 5.6.19 is no longer supported
-            'rds_engine_version': '5.6.22',
-            'preferred_backup_window': '02:00-02:30',
-            'preferred_maintenance_window': 'sun:03:00-sun:04:00',
-            # Name of vm snapshot to use, empty string ('') means don't use an old snapshot
-            # Note: 'master_db_name' value will be overridden if snapshot_id is non-empty
-            'snapshot_id': '',
-            'password': 'changeme1111111111111'
-        }
-    }
-
-    my_config = res.FACTORY_DEFAULT_CONFIG
-    my_config['db'] = db_config
-
-    env_config = EnvConfig(config_handlers=[RDS])
-    Controller(env_config=env_config, config_file_override=my_config)
+    Controller()

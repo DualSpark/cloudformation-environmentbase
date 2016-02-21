@@ -9,18 +9,12 @@ class Bastion(Template):
     Adds a bastion host within a given deployment based on environemntbase.
     """
 
-    SUGGESTED_INSTANCE_TYPES = [
-        "m1.small", "t2.micro", "t2.small", "t2.medium",
-        "m3.medium",
-        "c3.large", "c3.2xlarge"
-    ]
-
     def __init__(self,
                  name='bastion',
-                 ingress_port='2222',
-                 access_cidr='0.0.0.0/0',
-                 default_instance_type='t2.micro',
-                 suggested_instance_types=SUGGESTED_INSTANCE_TYPES,
+                 ingress_port=None,
+                 access_cidr=None,
+                 default_instance_type=None,
+                 suggested_instance_types=None,
                  user_data=None):
         """
         Method initializes bastion host in a given environment deployment
@@ -29,14 +23,19 @@ class Bastion(Template):
         More info here: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-listener.html
         @param access_cidr [string] - CIDR notation for external access to this tier.
         @param user_data [string] - User data to to initialize the bastion hosts.
+        @param default_instance_type [string] EC2 instance type name
+        @param suggested_instance_types [list<string>] List of EC2 instance types available for selection in CloudFormation
         """
 
         self.name = name
-        self.ingress_port = ingress_port
-        self.access_cidr = access_cidr
-        self.default_instance_type = default_instance_type
-        self.suggested_instance_types = suggested_instance_types
         self.user_data = user_data
+
+        # Let constructor parameters override runtime config settings
+        cfg = self.runtime_config['bastion']
+        self.ingress_port = ingress_port or cfg['ingress_port']
+        self.access_cidr = access_cidr or cfg['remote_access_cidr']
+        self.default_instance_type = default_instance_type or cfg['default_instance_type']
+        self.suggested_instance_types = suggested_instance_types or cfg['suggested_instance_types']
 
         super(Bastion, self).__init__(template_name=name)
 
@@ -72,7 +71,7 @@ class Bastion(Template):
             utility_bucket=self.utility_bucket
         )
 
-        bastion_asg = self.add_asg(
+        self.add_asg(
             layer_name=self.name,
             security_groups=[security_groups['bastion'], self.common_security_group],
             load_balancer=bastion_elb,
@@ -88,7 +87,7 @@ class Bastion(Template):
 
         self.add_output(Output(
             'BastionELBDNSZoneId',
-             Value=GetAtt(bastion_elb, 'CanonicalHostedZoneNameID')
+            Value=GetAtt(bastion_elb, 'CanonicalHostedZoneNameID')
          ))
 
         self.add_output(Output(
@@ -99,7 +98,12 @@ class Bastion(Template):
     @staticmethod
     def get_factory_defaults():
         return {"bastion": {
-            "instance_type": "t2.micro",
+            "default_instance_type": "t2.micro",
+            "suggested_instance_types": [
+                "m1.small", "t2.micro", "t2.small", "t2.medium",
+                "m3.medium",
+                "c3.large", "c3.2xlarge"
+            ],
             "remote_access_cidr": "0.0.0.0/0",
             "ingress_port": 2222
         }}
@@ -107,7 +111,8 @@ class Bastion(Template):
     @staticmethod
     def get_config_schema():
         return {"bastion": {
-            "instance_type": "str",
+            "default_instance_type": "str",
+            "suggested_instance_types": "list",
             "remote_access_cidr": "str",
             "ingress_port": "int"
         }}

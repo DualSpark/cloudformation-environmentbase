@@ -73,13 +73,12 @@ class BaseNetwork(Template):
     def get_config_schema():
         return BaseNetwork.CONFIG_SCHEMA
 
-    def __init__(self, template_name, network_config, region_name, nat_config):
+    def __init__(self, template_name):
         super(BaseNetwork, self).__init__(template_name)
 
-        self.network_config = network_config
-        self.nat_config = nat_config
-        self.az_count = int(network_config.get('az_count', '2'))
-        self.region_name = region_name
+        self.network_config = self.runtime_config['network']
+        self.nat_config = self.runtime_config['nat']
+        self.az_count = int(self.network_config.get('az_count', '2'))
         self.stack_outputs = {}
 
         # Simple mapping of AZs to NATs, to prevent creating duplicates

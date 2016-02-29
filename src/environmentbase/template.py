@@ -751,8 +751,14 @@ class Template(t.Template):
                     namespace=scaling_policy.get('namespace','AWS/EC2'),
                     )
 
-        auto_scaling_obj.Tags.append(autoscaling.Tag('Name', layer_name, True))
+        auto_scaling_obj.Tags.append(autoscaling.Tag('Name', self._autoscaling_name_tag_value(), True))
         return self.add_resource(auto_scaling_obj)
+
+    def _autoscaling_name_tag_value(self):
+        """
+        Overridable method to assign a 'Name' tag with the returned value.
+        """
+        return self.name
 
     def add_elb(self, resource_name, listeners, utility_bucket=None, instances=[], security_groups=[], depends_on=[], subnet_layer=None, scheme='internet-facing', health_check_protocol='TCP', health_check_port=None, health_check_path='', idle_timeout=None):
         """

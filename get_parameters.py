@@ -3,7 +3,7 @@
 values from prereq_stack(s) that have already been deployed.
 
 Usage:
-    ./get_parameters.py <s3_root_template> <prereq_stacks>... [--output=cli|json]
+    ./get_parameters.py <s3_root_template> [<prereq_stacks>...] [--extra-yaml=FILE...] [--output=cli|json]
 
 Options:
     -h --help               Show this screen.
@@ -27,10 +27,14 @@ Examples:
 import urlparse
 import logging
 import json
+import yaml
 
 from docopt import docopt
 import boto3
 
+logging.basicConfig()
+logger = logging.getLogger('get_parameters.py')
+# logger.setLevel(logging.DEBUG)
 
 CLI_FORMAT = 'ParameterKey={key},ParameterValue={value}'
 JSON_FORMAT = {'ParameterKey': None, 'ParameterValue': None}
@@ -42,21 +46,24 @@ def main(arguments):
     s3_root_template = arguments['<s3_root_template>']
     prereq_stacks = arguments['<prereq_stacks>']
     output_format = arguments['--output']
+    extra_yamls = arguments['--extra-yaml']
 
     parameters = get_root_params(s3_root_template)
     additional_outputs = get_additional_outputs(prereq_stacks)
+    additional_parameters = get_additional_parameters(extra_yamls)
+    additional_outputs.update(additional_parameters)
     final_parameters = dict(get_final_parameters(parameters, additional_outputs))
     print format_final_parameters(final_parameters, output_format)
 
 def get_root_params(s3_root_template):
     s3, bucket, key, _, _, _ = urlparse.urlparse(s3_root_template)
     key = key.strip('/')
-    logging.debug( (bucket, key) )
+    logger.debug( (bucket, key) )
     response = client_s3.get_object(Bucket=bucket, Key=key)
     body = response['Body']
     template = json.load(body)
     parameters = template.get('Parameters')
-    logging.debug( parameters )
+    logger.debug( parameters )
     return parameters
 
 
@@ -72,8 +79,16 @@ def get_additional_outputs(prereq_stacks):
         stack_outputs = {d['OutputKey']: d['OutputValue'] for d in stack_outputs}
         additional_outputs.update(stack_outputs)
 
-    logging.debug( additional_outputs )
+    logger.debug( additional_outputs )
     return additional_outputs
+
+
+def get_additional_parameters(extra_yamls):
+    additional_parameters = {}
+    for param_file in extra_yamls:
+        with open(param_file) as f:
+            additional_parameters.update(yaml.load(f))
+    return additional_parameters
 
 
 def get_final_parameters(parameters, additional_outputs):
@@ -92,7 +107,8 @@ def format_final_parameters(final_parameters, output_format='json'):
         return json.dumps([{'ParameterKey': key, 'ParameterValue': final_parameters[key]} 
             for key in final_parameters])
 
+
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='0.1')
-    logging.debug((arguments) )
+    logger.info((arguments) )
     main(arguments)

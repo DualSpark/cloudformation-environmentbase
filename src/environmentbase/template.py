@@ -28,7 +28,8 @@ class Template(t.Template):
     s3_path_prefix = ''
 
     # S3 bucket name used to store the templates
-    template_bucket = ''
+    template_bucket_default = ''
+    template_bucket_param = ''
 
     # Timeout period after which to fail if a child stack has not reached a COMPLETE state
     stack_timeout = '60'
@@ -357,6 +358,17 @@ class Template(t.Template):
             MinLength=1,
             MaxLength=255,
             ConstraintDescription=res.get_str('ec2_key_message')
+        ))
+
+        self.template_bucket_param = self.add_parameter(Parameter(
+           'TemplateBucket',
+            Type='String',
+            Default=Template.template_bucket_default,
+            Description='S3 Bucket where the templates will be stored.',
+            AllowedPattern=res.get_str('ascii_only'),
+            MinLength=1,
+            MaxLength=255,
+            ConstraintDescription=res.get_str('ascii_only_message')
         ))
 
         self.mappings['RegionMap'] = region_map
@@ -1174,7 +1186,7 @@ class Template(t.Template):
             include_timestamp=Template.include_timestamp)
 
         # Construct the template url using the bucket name and resource path
-        template_s3_url = utility.get_template_s3_url(Template.template_bucket, child_template.resource_path)
+        template_s3_url = utility.get_template_s3_url(Template.template_bucket_default, child_template.resource_path)
 
         # Create the stack resource in this template and return the reference
         return self.add_stack(

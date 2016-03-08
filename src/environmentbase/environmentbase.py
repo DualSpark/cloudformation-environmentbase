@@ -183,7 +183,7 @@ class EnvironmentBase(object):
 
         if s3_upload:
             # Upload the template to the s3 bucket under the template_prefix
-            s3_client.Bucket(Template.template_bucket).put_object(
+            s3_client.Bucket(Template.template_bucket_default).put_object(
                 Key=template.resource_path,
                 Body=raw_json,
                 ACL=Template.upload_acl
@@ -197,7 +197,7 @@ class EnvironmentBase(object):
         print "Generated {} template".format(template.name)
 
         if s3_upload:
-            print "S3:\t{}".format(utility.get_template_s3_url(Template.template_bucket, template.resource_path))
+            print "S3:\t{}".format(utility.get_template_s3_url(Template.template_bucket_default, template.resource_path))
 
         print "Local:\t{}\n".format(template.resource_path)
 
@@ -594,7 +594,7 @@ class EnvironmentBase(object):
         print '\nGenerating templates for {} stack\n'.format(self.globals['environment_name'])
 
         # Configure Template class with S3 settings from config
-        Template.template_bucket = self.template_args.get('s3_bucket')
+        Template.template_bucket_default = self.template_args.get('s3_bucket')
         Template.s3_path_prefix = self.s3_prefix()
         Template.stack_timeout = self.template_args.get("timeout_in_minutes")
         Template.upload_acl = self.template_args.get('s3_upload_acl')

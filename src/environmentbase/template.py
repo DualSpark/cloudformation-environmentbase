@@ -29,7 +29,7 @@ class Template(t.Template):
 
     # S3 bucket name used to store the templates
     template_bucket_default = ''
-    template_bucket_param = ''
+    template_bucket_param = 'TemplateBucket'
 
     # Timeout period after which to fail if a child stack has not reached a COMPLETE state
     stack_timeout = '60'
@@ -361,7 +361,7 @@ class Template(t.Template):
         ))
 
         self.template_bucket_param = self.add_parameter(Parameter(
-           'TemplateBucket',
+            Template.template_bucket_param,
             Type='String',
             Default=Template.template_bucket_default,
             Description='S3 Bucket where the templates will be stored.',
@@ -1186,7 +1186,7 @@ class Template(t.Template):
             include_timestamp=Template.include_timestamp)
 
         # Construct the template url using the bucket name and resource path
-        template_s3_url = utility.get_template_s3_url(Template.template_bucket_default, child_template.resource_path)
+        template_s3_url = self.get_template_s3_url(child_template)
 
         # Create the stack resource in this template and return the reference
         return self.add_stack(
@@ -1194,6 +1194,17 @@ class Template(t.Template):
             template_url=template_s3_url,
             stack_params=stack_params,
             depends_on=depends_on)
+
+    def get_template_s3_url(self, child_template):
+        """
+        Overridable method for getting the s3 url for child templates.
+
+        By default it uses the `TemplateBucket` Parameter and 
+            `child_template.resource_path` to build the URL.
+        Use `utility.get_template_s3_url(Template.template_bucket_default, child_template.resource_path)`
+            if you want a non-parametrized version of this URL.
+        """
+        return Join('', ['https://', Ref(self.template_bucket_param), '.s3.amazonaws.com/', child_template.resource_path])
 
     def add_stack(self, template_name, template_url, stack_params={}, depends_on=[]):
         """

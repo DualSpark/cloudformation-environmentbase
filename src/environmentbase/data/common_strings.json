@@ -20,6 +20,8 @@
   "ip_regex_message": "must be a valid IP address in the form x.x.x.x.",
   "valid_ebs_size_message" : "must be a valid EBS size between 1GB and 1024GB.",
   "url_regex": "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]",
+  "ascii_only": "[\\x20-\\x7E]*",
+  "ascii_only_message": "can only contain ASCII characters.",
   "ec2_key": "[\\x20-\\x7E]*",
   "ec2_key_message": "can only contain ASCII characters."
 }

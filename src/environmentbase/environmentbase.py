@@ -435,6 +435,18 @@ class EnvironmentBase(object):
         if region_name not in valid_regions:
             raise ValidationError('Unrecognized region name: ' + region_name)
 
+        az_count = config['network']['az_count']
+
+        ec2 = utility.get_boto_client(config, 'ec2')
+        resp = ec2.describe_availability_zones()
+        if not resp:
+            raise Exception('Could not talk to AWS: describe_availability_zones')
+
+        actual_az_count = len(resp.get('AvailabilityZones'))
+        if actual_az_count < az_count:
+            error_msg = "Too many availability zones requested: network.az_count=%s but '%s' has only %s." % (az_count, region_name, actual_az_count)
+            raise ValidationError(error_msg)
+
     def _validate_config(self, config, factory_schema=res.CONFIG_REQUIREMENTS):
         """
         Compares provided dict against TEMPLATE_REQUIREMENTS. Checks that required all sections and values are present

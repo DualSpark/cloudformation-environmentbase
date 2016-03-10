@@ -1099,8 +1099,17 @@ class Template(t.Template):
         Method adds a bucket to be used for infrastructure utility purposes such as backups
         @param name [str] friendly name to prepend to the CloudFormation asset name
         """
+
         if name:
-            self._utility_bucket = name
+            self._utility_bucket = self.add_parameter(Parameter(
+                'utilityBucket',
+                Description='Name of the S3 bucket used for infrastructure utility',
+                Default=name,
+                AllowedPattern=res.get_str('ascii_only'),
+                MinLength=1,
+                MaxLength=255,
+                ConstraintDescription=res.get_str('ascii_only_message'),
+                Type='String'))
         else:
             self._utility_bucket = self.add_resource(s3.Bucket(
                 name.lower() + 'UtilityBucket',
@@ -1117,15 +1126,19 @@ class Template(t.Template):
                 Bucket=self.utility_bucket,
                 PolicyDocument=bucket_policy_statements))
 
+        self.add_output(Output('utilityBucket', Value=self.utility_bucket))
+
+        self.manual_parameter_bindings['utilityBucket'] = self.utility_bucket
+
+    def add_log_group(self):
         log_group_name = 'DefaultLogGroup'
         self.add_resource(logs.LogGroup(
             log_group_name,
             RetentionInDays=7
         ))
 
+    def add_vpcflowlogs_role(self):
         self.add_resource(self.create_vpcflowlogs_role())
-
-        self.manual_parameter_bindings['utilityBucket'] = self.utility_bucket
 
     def add_child_template(self, child_template, merge=False, depends_on=[], output_autowire=True, propagate_outputs=True):
         """

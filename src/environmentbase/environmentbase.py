@@ -620,7 +620,9 @@ class EnvironmentBase(object):
         bucket_name = self.config.get('logging').get('s3_bucket')
 
         self.template.add_utility_bucket(name=bucket_name)
-        self.template.add_output(Output('utilityBucket',Value=bucket_name))
+
+        self.template.add_log_group()
+        self.template.add_vpcflowlogs_role()
 
         ami_filename = self.config['template']['ami_map_file']
         ami_cache = res.load_yaml_file(ami_filename)

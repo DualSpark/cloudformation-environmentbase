@@ -34,7 +34,8 @@
         # Name of the bucket to use for storing log files
         "s3_bucket": "basestring"
     },
-    "boto": {
-        "region_name": "basestring"
-    }
+    # The boto section is not required anymore.
+    # "boto": {
+    #     "region_name": "basestring"
+    # }
 }

@@ -15,7 +15,7 @@ def random_string(size=5):
 
 def _get_boto_session(boto_config):
     if not boto_config.get('session'):
-        boto_config['session'] = boto3.session.Session(region_name=boto_config['region_name'])
+        boto_config['session'] = boto3.session.Session(region_name=boto_config.get('region_name'))
     return boto_config['session']
 
 

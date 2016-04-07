@@ -18,11 +18,9 @@ class NetworkBase(EnvironmentBase):
         super(NetworkBase, self).create_hook()
 
         network_config = self.config.get('network', {})
-        boto_config = self.config.get('boto', {})
         nat_config = self.config.get('nat')
-        region_name = boto_config['region_name']
 
-        base_network_template = BaseNetwork('BaseNetwork', network_config, region_name, nat_config)
+        base_network_template = BaseNetwork('BaseNetwork', network_config, nat_config)
         self.add_child_template(base_network_template)
 
         self.template._subnets = base_network_template._subnets.copy()

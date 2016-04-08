@@ -449,8 +449,8 @@ class EnvironmentBase(object):
 
         self._validate_config_helper(config_reqs_copy, config, '')
 
-        # Validate region
-        self._validate_region(config)
+        # # Validate region
+        # self._validate_region(config)
 
     def _add_config_handler(self, handler):
         """

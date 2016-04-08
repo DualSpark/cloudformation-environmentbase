@@ -4,19 +4,7 @@
         "environment_name": "environmentbase",
         "monitor_stack": false,
         "write_stack_outputs": false,
-        "stack_outputs_directory": "stack_outputs",
-        "valid_regions": [
-            "ap-northeast-1",
-            "ap-northeast-2",
-            "ap-southeast-1",
-            "ap-southeast-2",
-            "eu-central-1",
-            "eu-west-1",
-            "sa-east-1",
-            "us-east-1",
-            "us-west-1",
-            "us-west-2"
-        ]
+        "stack_outputs_directory": "stack_outputs"
     },
     "template": {
         "ami_map_file": "ami_cache.json",
@@ -34,6 +22,7 @@
         "cloudtrail_log_prefix": "cloudtrail_logs",
         "elb_log_prefix": "elb_logs"
     },
+    # The boto section is not required.
     "boto": {
         "region_name": "us-west-2",
         "aws_access_key_id": null,

@@ -624,10 +624,10 @@ class EnvironmentBase(object):
         self.template.add_log_group()
         self.template.add_vpcflowlogs_role()
 
-        ami_filename = self.config['template']['ami_map_file']
-        ami_cache = res.load_yaml_file(ami_filename)
-
-        self.template.add_ami_mapping(ami_cache)
+        ami_filename = self.config['template'].get('ami_map_file')
+        if ami_filename:
+            ami_cache = res.load_yaml_file(ami_filename)
+            self.template.add_ami_mapping(ami_cache)
 
     def generate_ami_cache(self):
         """

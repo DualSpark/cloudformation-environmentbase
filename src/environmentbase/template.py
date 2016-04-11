@@ -297,17 +297,23 @@ class Template(t.Template):
         ec2_key = parent._ec2_key.Default
         parent_subnets = parent._subnets if not self._subnets else {}
 
-        if 'RegionMap' in self.mappings:
-            region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
-        else:
-            region_map = parent.mappings['RegionMap']
-        self.add_common_parameters(ec2_key, region_map, parent_subnets)
+        # Merge RegionMap w/ parent's because there's only 1 ami_cache 
+        # TODO: allow different ami_mappings per child template
+        if 'RegionMap' in parent.mappings:
+            if 'RegionMap' in self.mappings:
+                region_map = dict(self._merge_region_map(self.mappings['RegionMap'], parent.mappings['RegionMap']))
+            else:
+                region_map = parent.mappings['RegionMap']
+
+            self.mappings['RegionMap'] = region_map
+
+        self.add_common_parameters(ec2_key, parent_subnets)
 
     def _merge_region_map(self, map1, map2):
         for key in set(map1.keys() + map2.keys()):
             yield (key, merge(map1[key], map2[key]))
 
-    def add_common_parameters(self, ec2_key, region_map, parent_subnets):
+    def add_common_parameters(self, ec2_key, parent_subnets):
         """
         Adds the common set of parameters that are available to every child template
         The values are automatically matched from the root template
@@ -370,8 +376,6 @@ class Template(t.Template):
             MaxLength=255,
             ConstraintDescription=res.get_str('ascii_only_message')
         ))
-
-        self.mappings['RegionMap'] = region_map
 
         for subnet_type in parent_subnets:
             if subnet_type not in self._subnets:

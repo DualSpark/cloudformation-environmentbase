@@ -7,6 +7,7 @@
         "stack_outputs_directory": "stack_outputs"
     },
     "template": {
+        # ami_map_file is not required
         "ami_map_file": "ami_cache.json",
         "description": "Environment Generator Base deployment",
         "s3_bucket": "dualspark",

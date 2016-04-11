@@ -13,7 +13,8 @@
     },
     "template": {
         # Name of json file containing mapping labels to AMI ids
-        "ami_map_file": "basestring",
+        # Not required anymore
+        # "ami_map_file": "basestring",
         # Canned ACL permissions for the template file upload
         # Legal values: private, public-read, public-read-write, authenticated-read, bucket-owner-read, bucket-owner-full-control
         "s3_upload_acl": "basestring",

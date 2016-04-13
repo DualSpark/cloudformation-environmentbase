@@ -9,7 +9,7 @@
         # Directory for writing stack outputs
         "stack_outputs_directory": "basestring",
         # Directory for writing stack outputs
-        "valid_regions": "list"
+        # "valid_regions": "list"
     },
     "template": {
         # Name of json file containing mapping labels to AMI ids

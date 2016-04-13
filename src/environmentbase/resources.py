@@ -69,13 +69,17 @@ COMMON_STRINGS = get_yaml_resource(COMMON_STRINGS_FILENAME)
 def load_file(parent, basename):
     file_path = test_file(parent, basename)
     if not file_path:
-        raise Exception("%s does not exist. Try running the init command to generate it.\n" % (basename + EXTENSIONS[0]))
+        # Whenever possible, don't use bare Exceptions like below (it's an anti-pattern)
+        # Read more about it: https://realpython.com/blog/python/the-most-diabolical-python-antipattern/
+        raise Exception("%s does not exist. Try running the 'init' command to generate it.\n" % (basename + EXTENSIONS[0]))
 
     return load_yaml_file(file_path)
 
 def load_yaml_file(file_path):
 
     if not os.path.isfile(file_path):
+        # Whenever possible, don't use bare Exceptions like below (it's an anti-pattern)
+        # Read more about it: https://realpython.com/blog/python/the-most-diabolical-python-antipattern/
         raise Exception('{} does not exist'.format(file_path))
 
     with open(file_path, 'r') as f:
@@ -91,6 +95,8 @@ def load_yaml_file(file_path):
 def load_json_file(file_path):
 
     if not os.path.isfile(file_path):
+        # Whenever possible, don't use bare Exceptions like below (it's an anti-pattern)
+        # Read more about it: https://realpython.com/blog/python/the-most-diabolical-python-antipattern/
         raise Exception('{} does not exist'.format(file_path))
 
     with open(file_path, 'r') as f:

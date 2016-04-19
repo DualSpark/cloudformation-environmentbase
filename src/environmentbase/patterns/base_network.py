@@ -1,4 +1,5 @@
 from troposphere import Ref, FindInMap, Output, GetAZs, Select
+from troposphere import Parameter
 import troposphere.ec2 as ec2
 import boto.vpc
 import boto
@@ -9,6 +10,8 @@ from toolz import groupby, assoc
 
 from environmentbase.template import Template
 from environmentbase.utility import tropo_to_string
+
+from .. import resources as res
 
 
 class BaseNetwork(Template):
@@ -78,12 +81,46 @@ class BaseNetwork(Template):
         # Simple mapping of AZs to NATs, to prevent creating duplicates
         self.az_nat_mapping = {}
 
+        # self._vpc_cidr = None
+        self._igw = None
+        self._vpc_gateway_attachment = None
+
+        # self._vpc_cidr = self.add_parameter(Parameter(
+        #     'vpcCidr',
+        #     Description='CIDR of the VPC network',
+        #     Type='String',
+        #     AllowedPattern=res.get_str('cidr_regex'),
+        #     ConstraintDescription=res.get_str('cidr_regex_message')))
+
+        # self._igw = self.add_parameter(Parameter(
+        #     'internetGateway',
+        #     Description='Name of the internet gateway used by the vpc',
+        #     Type='String'))
+
+        # self._vpc_gateway_attachment = self.add_parameter(Parameter(
+        #     'igwVpcAttachment',
+        #     Description='VPCGatewayAttachment for the VPC and IGW',
+        #     Type='String'))
+
         self.construct_network()
+
+    # @property
+    # def vpc_cidr(self):
+    #     return self._ref_maybe(self._vpc_cidr)
+
+    @property
+    def igw(self):
+        return self._ref_maybe(self._igw)
+
+    @property
+    def vpc_gateway_attachment(self):
+        return self._ref_maybe(self._vpc_gateway_attachment)
 
     def build_hook(self):
         # Remove the common parameters that this stack creates
-        for param_name in ["commonSecurityGroup", "internetGateway", "igwVpcAttachment", "vpcId", "vpcCidr"]:
-            self.parameters.pop(param_name)
+        for param_name in ["igwVpcAttachment", "vpcCidr", "internetGateway", "commonSecurityGroup", "vpcId"]:
+            if param_name in self.parameters:
+                self.parameters.pop(param_name)
 
     def construct_network(self):
         """
@@ -181,7 +218,7 @@ class BaseNetwork(Template):
         self.gateway_hook()
 
         # make Subnets
-        network_cidr_base = self._vpc_cidr
+        # network_cidr_base = self._vpc_cidr  # Can't be a Parameter or Ref
 
         for index, subnet_config in enumerate(self._subnet_configs):
             subnet_type = subnet_config.get('type', 'private')

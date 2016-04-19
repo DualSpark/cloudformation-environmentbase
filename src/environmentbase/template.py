@@ -43,11 +43,11 @@ class Template(t.Template):
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
 
+        # self._igw = None
         self._vpc_cidr = None
         self._vpc_id = None
         self._common_security_group = None
         self._utility_bucket = None
-        self._igw = None
         self._child_templates = []
         self._child_template_references = []
         self.manual_parameter_bindings = {}
@@ -86,6 +86,14 @@ class Template(t.Template):
     def vpc_cidr(self):
         return self._ref_maybe(self._vpc_cidr)
 
+    # @property
+    # def igw(self):
+    #     return self._ref_maybe(self._igw)
+
+    # @property
+    # def vpc_gateway_attachment(self):
+    #     return self._ref_maybe(self._vpc_gateway_attachment)
+
     @property
     def vpc_id(self):
         return self._ref_maybe(self._vpc_id)
@@ -99,16 +107,8 @@ class Template(t.Template):
         return self._ref_maybe(self._utility_bucket)
 
     @property
-    def igw(self):
-        return self._ref_maybe(self._igw)
-
-    @property
     def ec2_key(self):
         return self._ref_maybe(self._ec2_key)
-
-    @property
-    def vpc_gateway_attachment(self):
-        return self._ref_maybe(self._vpc_gateway_attachment)
 
     @property
     def subnets(self):
@@ -150,11 +150,11 @@ class Template(t.Template):
         from the controller, but that never happens when merging two templates
         """
         self._vpc_cidr               = other_template._vpc_cidr
+        # self._igw                    = other_template._igw
+        # self._vpc_gateway_attachment = other_template._vpc_gateway_attachment
         self._vpc_id                 = other_template._vpc_id
         self._common_security_group  = other_template._common_security_group
         self._utility_bucket         = other_template._utility_bucket
-        self._igw                    = other_template._igw
-        self._vpc_gateway_attachment = other_template._vpc_gateway_attachment
 
         self._subnets    = other_template.subnets.copy()
 
@@ -330,6 +330,16 @@ class Template(t.Template):
             AllowedPattern=res.get_str('cidr_regex'),
             ConstraintDescription=res.get_str('cidr_regex_message')))
 
+        # self._igw = self.add_parameter(Parameter(
+        #     'internetGateway',
+        #     Description='Name of the internet gateway used by the vpc',
+        #     Type='String'))
+
+        # self._vpc_gateway_attachment = self.add_parameter(Parameter(
+        #     'igwVpcAttachment',
+        #     Description='VPCGatewayAttachment for the VPC and IGW',
+        #     Type='String'))
+
         self._vpc_id = self.add_parameter(Parameter(
             'vpcId',
             Description='ID of the VPC network',
@@ -343,16 +353,6 @@ class Template(t.Template):
         self._utility_bucket = self.add_parameter(Parameter(
             'utilityBucket',
             Description='Name of the S3 bucket used for infrastructure utility',
-            Type='String'))
-
-        self._igw = self.add_parameter(Parameter(
-            'internetGateway',
-            Description='Name of the internet gateway used by the vpc',
-            Type='String'))
-
-        self._vpc_gateway_attachment = self.add_parameter(Parameter(
-            'igwVpcAttachment',
-            Description='VPCGatewayAttachment for the VPC and IGW',
             Type='String'))
 
         self._ec2_key = self.add_parameter(Parameter(

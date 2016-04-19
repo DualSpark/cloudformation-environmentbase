@@ -43,7 +43,6 @@ class Template(t.Template):
         self.name = template_name
         self.AWSTemplateFormatVersion = ''
 
-        # self._igw = None
         self._vpc_cidr = None
         self._vpc_id = None
         self._common_security_group = None
@@ -85,14 +84,6 @@ class Template(t.Template):
     @property
     def vpc_cidr(self):
         return self._ref_maybe(self._vpc_cidr)
-
-    # @property
-    # def igw(self):
-    #     return self._ref_maybe(self._igw)
-
-    # @property
-    # def vpc_gateway_attachment(self):
-    #     return self._ref_maybe(self._vpc_gateway_attachment)
 
     @property
     def vpc_id(self):
@@ -150,8 +141,6 @@ class Template(t.Template):
         from the controller, but that never happens when merging two templates
         """
         self._vpc_cidr               = other_template._vpc_cidr
-        # self._igw                    = other_template._igw
-        # self._vpc_gateway_attachment = other_template._vpc_gateway_attachment
         self._vpc_id                 = other_template._vpc_id
         self._common_security_group  = other_template._common_security_group
         self._utility_bucket         = other_template._utility_bucket
@@ -329,16 +318,6 @@ class Template(t.Template):
             Type='String',
             AllowedPattern=res.get_str('cidr_regex'),
             ConstraintDescription=res.get_str('cidr_regex_message')))
-
-        # self._igw = self.add_parameter(Parameter(
-        #     'internetGateway',
-        #     Description='Name of the internet gateway used by the vpc',
-        #     Type='String'))
-
-        # self._vpc_gateway_attachment = self.add_parameter(Parameter(
-        #     'igwVpcAttachment',
-        #     Description='VPCGatewayAttachment for the VPC and IGW',
-        #     Type='String'))
 
         self._vpc_id = self.add_parameter(Parameter(
             'vpcId',

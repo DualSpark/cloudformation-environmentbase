@@ -78,12 +78,24 @@ class BaseNetwork(Template):
         # Simple mapping of AZs to NATs, to prevent creating duplicates
         self.az_nat_mapping = {}
 
+        self._igw = None
+        self._vpc_gateway_attachment = None
+
         self.construct_network()
+
+    @property
+    def igw(self):
+        return self._ref_maybe(self._igw)
+
+    @property
+    def vpc_gateway_attachment(self):
+        return self._ref_maybe(self._vpc_gateway_attachment)
 
     def build_hook(self):
         # Remove the common parameters that this stack creates
-        for param_name in ["commonSecurityGroup", "internetGateway", "igwVpcAttachment", "vpcId", "vpcCidr"]:
-            self.parameters.pop(param_name)
+        for param_name in ["igwVpcAttachment", "vpcCidr", "internetGateway", "commonSecurityGroup", "vpcId"]:
+            if param_name in self.parameters:
+                self.parameters.pop(param_name)
 
     def construct_network(self):
         """
@@ -181,8 +193,6 @@ class BaseNetwork(Template):
         self.gateway_hook()
 
         # make Subnets
-        network_cidr_base = self._vpc_cidr
-
         for index, subnet_config in enumerate(self._subnet_configs):
             subnet_type = subnet_config.get('type', 'private')
             subnet_size = subnet_config.get('size', '22')

@@ -766,7 +766,9 @@ class Template(t.Template):
                 scheme='internet-facing', 
                 health_check_protocol='TCP', 
                 health_check_port=None, 
-                health_check_path='', 
+                health_check_path='',
+                connection_draining_timeout=None,  # AWS default is 300 seconds
+                cookie_expiration_period=None, 
                 idle_timeout=None):
         """
         Helper function creates an ELB and attaches it to your template
@@ -785,30 +787,41 @@ class Template(t.Template):
             subnet_type = 'public' if scheme == 'internet-facing' else 'private'
             subnet_layer = self._subnets[subnet_type].keys()[0]
 
-        # TODO: Allow for a list of policies to be defined from input parameters
-        stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
-        stickiness_policy = self.get_elb_stickiness_policy(stickiness_policy_name)
+        ## Add optional parameters for LoadBalancer to this dictionary
+        optional_elb_kwargs = {}
 
-        connection_draining_policy = self.get_elb_connection_draining_policy()
+        ## ConnectionDrainingPolicy
+        if connection_draining_timeout is not None:
+            connection_draining_policy = self.get_elb_connection_draining_policy(Timeout=connection_draining_timeout)
+            optional_elb_kwargs["ConnectionDrainingPolicy"] = connection_draining_policy
 
-        elb_listeners = self.get_elb_listeners(listeners, stickiness_policy_name)
+        ## LBCookieStickinessPolicy
+        # TODO: Allow for a *list* of policies to be defined from input parameters
+        http_stickiness_policy_names = []
+
+        if cookie_expiration_period is not None:
+            stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
+            stickiness_policy = self.get_elb_stickiness_policy(stickiness_policy_name, CookieExpirationPeriod=cookie_expiration_period)
+            http_stickiness_policy_names = [stickiness_policy_name]
+            optional_elb_kwargs["LBCookieStickinessPolicy"] = [stickiness_policy]
+            
+        elb_listeners = self.get_elb_listeners(listeners, http_stickiness_policy_names=http_stickiness_policy_names)
 
         elb_obj = elb.LoadBalancer(
             '%sElb' % resource_name,
             Subnets=self.subnets[subnet_type][subnet_layer],
             SecurityGroups=[Ref(sg) for sg in security_groups],
             CrossZone=True,
-            LBCookieStickinessPolicy=[stickiness_policy],
-            ConnectionDrainingPolicy=connection_draining_policy,
             Listeners=elb_listeners,
             Instances=instances,
             Scheme=scheme,
-            DependsOn=depends_on
+            DependsOn=depends_on,
+            **optional_elb_kwargs
         )
 
         # If the health_check_port was not specified, use the instance port of any of the listeners (elb_port is used if instance_port isn't set)
         if not health_check_port:
-            health_check_port = [listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in listeners][0]
+            health_check_port = [listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in listeners[:1]]
 
 
         # Construct the ELB Health Check target based on the passed in health_check_protocol and health_check_port parameters
@@ -843,7 +856,7 @@ class Template(t.Template):
 
         return self.add_resource(elb_obj)
 
-    def get_elb_listeners(self, listeners, stickiness_policy_name):
+    def get_elb_listeners(self, listeners, http_stickiness_policy_names):
         # Construct the listener objects based on the passed in listeners dictionary
         elb_listeners = []
         for listener in listeners:
@@ -868,7 +881,7 @@ class Template(t.Template):
             # Create the default session stickiness policy for HTTP or HTTPS listeners
             # TODO: Parameterize whether or not to include this policy
             if elb_protocol == 'HTTP' or elb_protocol == 'HTTPS':
-                elb_listener.PolicyNames = [stickiness_policy_name]
+                elb_listener.PolicyNames = http_stickiness_policy_names
 
             elb_listeners.append(elb_listener)
         return elb_listeners
@@ -883,6 +896,7 @@ class Template(t.Template):
         """
         connection_draining_policy_kwargs = { "Enabled" : Enabled, }
         connection_draining_policy_kwargs.update(kwargs)
+
         connection_draining_policy = elb.ConnectionDrainingPolicy(**connection_draining_policy_kwargs)
         return connection_draining_policy
 
@@ -896,6 +910,7 @@ class Template(t.Template):
         """
         stickiness_policy_kwargs = { "PolicyName" : PolicyName, }
         stickiness_policy_kwargs.update(kwargs)
+
         stickiness_policy = elb.LBCookieStickinessPolicy(**stickiness_policy_kwargs)
         return stickiness_policy
 

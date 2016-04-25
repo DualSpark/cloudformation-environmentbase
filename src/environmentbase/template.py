@@ -766,7 +766,9 @@ class Template(t.Template):
                 scheme='internet-facing', 
                 health_check_protocol='TCP', 
                 health_check_port=None, 
-                health_check_path='', 
+                health_check_path='',
+                connection_draining_timeout=None,  # AWS default is 300 seconds
+                cookie_expiration_period=None, 
                 idle_timeout=None):
         """
         Helper function creates an ELB and attaches it to your template
@@ -777,39 +779,6 @@ class Template(t.Template):
             instance_protocol (optional) - The protocol of the incoming connection to the instances (i.e., 'HTTP', 'HTTPS', 'TCP', 'SSL')
             ssl_cert_name (optional) - The name of the SSL cert in IAM (Only required if the elb_protocol is 'HTTPS' or 'SSL')
         """
-        # Create default session stickiness policy
-        # TODO: Parameterize the policy configuration (per listener?)
-        stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
-        stickiness_policy = elb.LBCookieStickinessPolicy(CookieExpirationPeriod='1800', PolicyName=stickiness_policy_name)
-
-        # Construct the listener objects based on the passed in listeners dictionary
-        elb_listeners = []
-        for listener in listeners:
-
-            elb_port = listener.get('elb_port')
-            elb_protocol = listener.get('elb_protocol').upper() if listener.get('elb_protocol') else 'TCP'
-
-            # If back end parameters are not specified, use the values for the front end
-            instance_port = listener.get('instance_port') if listener.get('instance_port') else elb_port
-            instance_protocol = listener.get('instance_protocol').upper() if listener.get('instance_protocol') else elb_protocol
-
-            elb_listener = elb.Listener(Protocol=elb_protocol,
-                                        LoadBalancerPort=elb_port,
-                                        InstanceProtocol=instance_protocol,
-                                        InstancePort=instance_port)
-
-            # SSL Cert must be included if using either SSL or HTTPS for elb_protocol
-            ssl_cert_name = listener.get('ssl_cert_name')
-            if ssl_cert_name:
-                elb_listener.SSLCertificateId = Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name])
-
-            # Create the default session stickiness policy for HTTP or HTTPS listeners
-            # TODO: Parameterize whether or not to include this policy
-            if elb_protocol == 'HTTP' or elb_protocol == 'HTTPS':
-                elb_listener.PolicyNames = [stickiness_policy_name]
-
-            elb_listeners.append(elb_listener)
-
         if subnet_layer:
             subnet_type = self.get_subnet_type(subnet_layer)
         else:
@@ -818,16 +787,36 @@ class Template(t.Template):
             subnet_type = 'public' if scheme == 'internet-facing' else 'private'
             subnet_layer = self._subnets[subnet_type].keys()[0]
 
+        ## Add optional parameters for LoadBalancer to this dictionary
+        optional_elb_kwargs = {}
+
+        ## ConnectionDrainingPolicy
+        if connection_draining_timeout is not None:
+            connection_draining_policy = self.get_elb_connection_draining_policy(Timeout=connection_draining_timeout)
+            optional_elb_kwargs["ConnectionDrainingPolicy"] = connection_draining_policy
+
+        ## LBCookieStickinessPolicy
+        # TODO: Allow for a *list* of policies to be defined from input parameters
+        http_stickiness_policy_names = []
+
+        if cookie_expiration_period is not None:
+            stickiness_policy_name = '%sElbStickinessPolicy' % resource_name
+            stickiness_policy = self.get_elb_stickiness_policy(stickiness_policy_name, CookieExpirationPeriod=cookie_expiration_period)
+            http_stickiness_policy_names = [stickiness_policy_name]
+            optional_elb_kwargs["LBCookieStickinessPolicy"] = [stickiness_policy]
+            
+        elb_listeners = self.get_elb_listeners(listeners, http_stickiness_policy_names=http_stickiness_policy_names)
+
         elb_obj = elb.LoadBalancer(
             '%sElb' % resource_name,
             Subnets=self.subnets[subnet_type][subnet_layer],
             SecurityGroups=[Ref(sg) for sg in security_groups],
             CrossZone=True,
-            LBCookieStickinessPolicy=[stickiness_policy],
             Listeners=elb_listeners,
             Instances=instances,
             Scheme=scheme,
-            DependsOn=depends_on
+            DependsOn=depends_on,
+            **optional_elb_kwargs
         )
 
         # If the health_check_port was not specified, use the instance port of any of the listeners (elb_port is used if instance_port isn't set)
@@ -866,6 +855,64 @@ class Template(t.Template):
             elb_obj.ConnectionSettings = elb.ConnectionSettings(IdleTimeout=idle_timeout)
 
         return self.add_resource(elb_obj)
+
+    def get_elb_listeners(self, listeners, http_stickiness_policy_names):
+        # Construct the listener objects based on the passed in listeners dictionary
+        elb_listeners = []
+        for listener in listeners:
+
+            elb_port = listener.get('elb_port')
+            elb_protocol = listener.get('elb_protocol').upper() if listener.get('elb_protocol') else 'TCP'
+
+            # If back end parameters are not specified, use the values for the front end
+            instance_port = listener.get('instance_port') if listener.get('instance_port') else elb_port
+            instance_protocol = listener.get('instance_protocol').upper() if listener.get('instance_protocol') else elb_protocol
+
+            elb_listener = elb.Listener(Protocol=elb_protocol,
+                                        LoadBalancerPort=elb_port,
+                                        InstanceProtocol=instance_protocol,
+                                        InstancePort=instance_port)
+
+            # SSL Cert must be included if using either SSL or HTTPS for elb_protocol
+            ssl_cert_name = listener.get('ssl_cert_name')
+            if ssl_cert_name:
+                elb_listener.SSLCertificateId = Join("", ["arn:aws:iam::", {"Ref": "AWS::AccountId"}, ":server-certificate/", ssl_cert_name])
+
+            # Create the default session stickiness policy for HTTP or HTTPS listeners
+            # TODO: Parameterize whether or not to include this policy
+            if elb_protocol == 'HTTP' or elb_protocol == 'HTTPS':
+                elb_listener.PolicyNames = http_stickiness_policy_names
+
+            elb_listeners.append(elb_listener)
+        return elb_listeners
+
+    def get_elb_connection_draining_policy(self, Enabled=True, **kwargs):
+        """Output like:
+        {
+           "Enabled" : Boolean,
+           "Timeout" : Integer
+        }
+        Source: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-connectiondrainingpolicy.html
+        """
+        connection_draining_policy_kwargs = { "Enabled" : Enabled, }
+        connection_draining_policy_kwargs.update(kwargs)
+
+        connection_draining_policy = elb.ConnectionDrainingPolicy(**connection_draining_policy_kwargs)
+        return connection_draining_policy
+
+    def get_elb_stickiness_policy(self, PolicyName, **kwargs):
+        """Output like:
+        {
+           "PolicyName" : String
+           "CookieExpirationPeriod" : String,
+        }
+        Source: http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-elb-connectiondrainingpolicy.html
+        """
+        stickiness_policy_kwargs = { "PolicyName" : PolicyName, }
+        stickiness_policy_kwargs.update(kwargs)
+
+        stickiness_policy = elb.LBCookieStickinessPolicy(**stickiness_policy_kwargs)
+        return stickiness_policy
 
     def create_reciprocal_sg(self,
                              source_group,

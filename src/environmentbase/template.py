@@ -821,7 +821,7 @@ class Template(t.Template):
 
         # If the health_check_port was not specified, use the instance port of any of the listeners (elb_port is used if instance_port isn't set)
         if not health_check_port:
-            health_check_port = [listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in listeners[:1]]
+            health_check_port = [listener.get('instance_port') if listener.get('instance_port') else listener.get('elb_port') for listener in listeners][0]
 
 
         # Construct the ELB Health Check target based on the passed in health_check_protocol and health_check_port parameters

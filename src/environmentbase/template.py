@@ -212,19 +212,19 @@ class Template(t.Template):
             if output_key in self.outputs:
                 self.outputs.pop(output_key)
 
-        # set the date that this template was generated
-        if 'dateGenerated' not in self.outputs:
-            self.add_output(Output(
-                'dateGenerated',
-                Value=str(datetime.utcnow()),
-                Description='UTC datetime representation of when this template was generated'))
-
         # generate the template validation hash
         if 'templateValidationHash' not in self.outputs:
             self.add_output(Output(
                 'templateValidationHash',
                 Value=self.__get_template_hash(),
                 Description='Hash of this template that can be used as a simple means of validating whether a template has been changed since it was generated.'))
+
+        # set the date that this template was generated
+        if 'dateGenerated' not in self.outputs:
+            self.add_output(Output(
+                'dateGenerated',
+                Value=str(datetime.utcnow()),
+                Description='UTC datetime representation of when this template was generated'))
 
         return self.to_json()
 

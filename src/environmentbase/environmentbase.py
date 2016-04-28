@@ -600,6 +600,9 @@ class EnvironmentBase(object):
         Template.upload_acl = self.template_args.get('s3_upload_acl')
         Template.include_timestamp = self.template_args.get('include_timestamp')
 
+        Template.include_templateValidationHash_output = self.template_args.get('include_templateValidationHash_output')
+        Template.include_dateGenerated_output = self.template_args.get('include_dateGenerated_output')
+
         # Create the root template object
         self.template = Template(self.globals.get('environment_name', 'default_template'))
         self.template.description = self.template_args.get('description', 'No Description Specified')

@@ -213,34 +213,20 @@ class Template(t.Template):
                 self.outputs.pop(output_key)
 
         # generate the template validation hash
-        if 'templateValidationHash' not in self.outputs:
+        if self.include_templateValidationHash_output and 'templateValidationHash' not in self.outputs:
             self.add_output(Output(
                 'templateValidationHash',
                 Value=self.__get_template_hash(),
                 Description='Hash of this template that can be used as a simple means of validating whether a template has been changed since it was generated.'))
 
         # set the date that this template was generated
-        if 'dateGenerated' not in self.outputs:
+        if self.include_dateGenerated_output and 'dateGenerated' not in self.outputs:
             self.add_output(Output(
                 'dateGenerated',
                 Value=str(datetime.utcnow()),
                 Description='UTC datetime representation of when this template was generated'))
 
         return self.to_json()
-
-    def validate_template(self):
-        """
-        Centralized method for validating this templates' templateValidationHash value
-        """
-        if 'templateValidationHash' not in self.outputs:
-            raise ValueError('This template does not contain a templateValidationHash output value')
-        else:
-            output_value = self.outputs.pop('templateValidationHash')
-            computed_hash = self.__get_template_hash()
-            if output_value.Value != computed_hash:
-                raise ValueError('Template failed validation check. Template hash is [' + output_value.get('Value') + '] and computed hash is [' + computed_hash + ']')
-            else:
-                return True
 
     def __validation_formatter(self):
         """

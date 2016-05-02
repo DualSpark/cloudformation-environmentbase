@@ -17,6 +17,9 @@ import utility
 from toolz.dicttoolz import merge
 
 
+DEFAULT_TO_MIN_SIZE = object()
+
+
 class Template(t.Template):
     """
     Custom wrapper for Troposphere Template object which handles S3 uploads and a specific
@@ -528,6 +531,7 @@ class Template(t.Template):
                 security_groups=None,
                 min_size=1,
                 max_size=1,
+                desired_capacity=DEFAULT_TO_MIN_SIZE,
                 root_volume_size=None,
                 root_volume_type=None,
                 include_ephemerals=True,
@@ -554,8 +558,9 @@ class Template(t.Template):
         @param ec2_key [Troposphere.Parameter | Troposphere.Ref(Troposphere.Parameter)] Input parameter used to gather the name of the EC2 key to use to secure access to instances launched within this Auto Scaling group
         @param user_data [string[]] Array of strings (lines of bash script) to be set as the user data as a bootstrap script for instances launched within this Auto Scaling group
         @param security_groups [Troposphere.ec2.SecurityGroup[]] array of security groups to be applied to instances within this Auto Scaling group
-        @param min_size [int] value to set as the minimum number of instances for the Auto Scaling group
-        @param max_size [int] value to set as the maximum number of instances for the Auto Scaling group
+        @param min_size [int|Parameter] value to set as the minimum number of instances for the Auto Scaling group
+        @param max_size [int|Parameter] value to set as the maximum number of instances for the Auto Scaling group
+        @param desired_capacity [int|Parameter] value to set as the maximum number of instances for the Auto Scaling group
         @param root_volume_size [int] size (in GiB) to assign to the root volume of the launched instance
         @param include_ephemerals [Boolean] indicates that ephemeral volumes should be included in the block device mapping of the Launch Configuration
         @param number_ephemeral_vols [int] number of ephemeral volumes to attach within the block device mapping Launch Configuration
@@ -671,7 +676,8 @@ class Template(t.Template):
             LaunchConfigurationName=Ref(launch_config),
             MaxSize=max_size,
             MinSize=min_size,
-            DesiredCapacity=min(min_size, max_size),
+            DesiredCapacity=min_size if desired_capacity == DEFAULT_TO_MIN_SIZE else desired_capacity,
+            # DesiredCapacity=min_size if min_size <= max_size else max_size,  # consistent min algorithm
             VPCZoneIdentifier=self.subnets[subnet_type][subnet_layer.lower()],
             TerminationPolicies=['OldestLaunchConfiguration', 'ClosestToNextInstanceHour', 'Default'],
             DependsOn=depends_on,

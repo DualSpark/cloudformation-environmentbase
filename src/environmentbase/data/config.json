@@ -13,7 +13,12 @@
         "s3_bucket": "dualspark",
         "s3_prefix": "templates",
         "s3_upload_acl": "public-read",
+        # integer timestamp included in template file name?
         "include_timestamp": true,
+        # include Output in finalized template with validation hash (doesn't include `dateGenerated` Output)
+        "include_templateValidationHash_output": true,
+        # include Output in finalized template with current timestamp
+        "include_dateGenerated_output": true,
         "timeout_in_minutes": "60",
         "ec2_key_default": "dualspark_rsa",
         "s3_upload": true

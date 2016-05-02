@@ -1,4 +1,4 @@
-from environmentbase.template import Template
+from environmentbase.template import Template, DEFAULT_TO_MIN_SIZE
 from environmentbase import resources
 from troposphere import Ref, Parameter, Base64, Join, Output, GetAtt, ec2, route53, autoscaling
 import troposphere.constants as tpc
@@ -21,7 +21,9 @@ class HaCluster(Template):
                  ami_name='amazonLinuxAmiId',
                  user_data='',
                  env_vars={},
-                 min_size=1, max_size=1,
+                 min_size=1,
+                 max_size=1,
+                 desired_capacity=DEFAULT_TO_MIN_SIZE,
                  instance_type='t2.micro',
                  subnet_layer=None,
                  elb_scheme=SCHEME_INTERNET_FACING,
@@ -59,6 +61,7 @@ class HaCluster(Template):
         # These define the lower and upper boundaries of the autoscaling group
         self.min_size = min_size
         self.max_size = max_size
+        self.desired_capacity = desired_capacity
 
         # The type of instance for the autoscaling group
         self.instance_type = instance_type
@@ -295,6 +298,7 @@ class HaCluster(Template):
             instance_type=self.instance_type,
             min_size=self.min_size,
             max_size=self.max_size,
+            desired_capacity=self.desired_capacity,
             subnet_layer=self.subnet_layer,
             instance_profile=self.instance_profile,
             custom_tags=self.custom_tags,

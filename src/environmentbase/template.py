@@ -275,7 +275,7 @@ class Template(t.Template):
         ec2_key = parent._ec2_key.Default
         parent_subnets = parent._subnets if not self._subnets else {}
 
-        # Merge RegionMap w/ parent's because there's only 1 ami_cache 
+        # Merge RegionMap w/ parent's because there's only 1 ami_cache
         # TODO: allow different ami_mappings per child template
         if 'RegionMap' in parent.mappings:
             if 'RegionMap' in self.mappings:
@@ -710,10 +710,16 @@ class Template(t.Template):
         if update_policy is not None:
             auto_scaling_obj.resource['UpdatePolicy'] = update_policy
 
+
         if custom_tags is not None and len(custom_tags) > 0:
-            if type(custom_tags) != list:
-                custom_tags = [custom_tags]
-            auto_scaling_obj.Tags = custom_tags
+            final_custom_tags = []
+            if type(custom_tags) == dict:
+                for key, value in custom_tags.iteritems():
+                    final_custom_tags.append(autoscaling.Tag(key, value, True))
+            elif type(custom_tags) != list:
+                final_custom_tags = [custom_tags]
+
+            auto_scaling_obj.Tags = final_custom_tags
         else:
             auto_scaling_obj.Tags = []
 
@@ -747,21 +753,21 @@ class Template(t.Template):
         """
         return self.name
 
-    def add_elb(self, 
-                    resource_name, 
-                listeners, 
-                utility_bucket=None, 
-                elb_custom_tags=None, 
-                instances=[], 
-                security_groups=[], 
-                depends_on=[], 
-                subnet_layer=None, 
-                scheme='internet-facing', 
-                health_check_protocol='TCP', 
-                health_check_port=None, 
+    def add_elb(self,
+                    resource_name,
+                listeners,
+                utility_bucket=None,
+                elb_custom_tags=None,
+                instances=[],
+                security_groups=[],
+                depends_on=[],
+                subnet_layer=None,
+                scheme='internet-facing',
+                health_check_protocol='TCP',
+                health_check_port=None,
                 health_check_path='',
                 connection_draining_timeout=None,  # AWS default is 300 seconds
-                cookie_expiration_period=None, 
+                cookie_expiration_period=None,
                 idle_timeout=None):
         """
         Helper function creates an ELB and attaches it to your template
@@ -797,7 +803,7 @@ class Template(t.Template):
             stickiness_policy = self.get_elb_stickiness_policy(stickiness_policy_name, CookieExpirationPeriod=cookie_expiration_period)
             http_stickiness_policy_names = [stickiness_policy_name]
             optional_elb_kwargs["LBCookieStickinessPolicy"] = [stickiness_policy]
-            
+
         elb_listeners = self.get_elb_listeners(listeners, http_stickiness_policy_names=http_stickiness_policy_names)
 
         elb_obj = elb.LoadBalancer(
@@ -1253,7 +1259,7 @@ class Template(t.Template):
         """
         Overridable method for getting the s3 url for child templates.
 
-        By default it uses the `TemplateBucket` Parameter and 
+        By default it uses the `TemplateBucket` Parameter and
             `child_template.resource_path` to build the URL.
         Use `utility.get_template_s3_url(Template.template_bucket_default, child_template.resource_path)`
             if you want a non-parametrized version of this URL.

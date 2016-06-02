@@ -42,6 +42,7 @@ class HaCluster(Template):
                  update_policy_MaxBatchSize=1,
                  cname='',
                  custom_tags={},
+                 elb_custom_tags={},
                  scaling_policies=None,
                  creation_policy_timeout=None,
                  allow_default_ingress=True):
@@ -111,6 +112,9 @@ class HaCluster(Template):
         self.custom_tags = []
         for key, value in custom_tags.iteritems():
             self.custom_tags.append(autoscaling.Tag(key, value, True))
+
+        ## Save ELB tags for add_cluster_elb
+        self.elb_custom_tags = elb_custom_tags
 
         # A list of dictionaries describing scaling policies to be passed to add_asg
         self.scaling_policies = scaling_policies
@@ -241,6 +245,7 @@ class HaCluster(Template):
             resource_name=self.name,
             security_groups=[self.security_groups['elb']],
             listeners=self.elb_listeners,
+            elb_custom_tags=self.elb_custom_tags,
             utility_bucket=self.utility_bucket,
             subnet_layer=elb_subnet_layer,
             scheme=self.elb_scheme,

@@ -1,4 +1,4 @@
-from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select, GetAZs
+from troposphere import Output, Ref, Join, Parameter, Base64, GetAtt, FindInMap, Retain, Select, GetAZs, Tags
 from troposphere import iam, ec2, autoscaling, route53 as r53, s3, logs, cloudwatch
 from awacs import logs as awacs_logs, aws
 from awacs.helpers.trust import make_simple_assume_statement
@@ -751,6 +751,7 @@ class Template(t.Template):
                     resource_name, 
                 listeners, 
                 utility_bucket=None, 
+                elb_custom_tags=None, 
                 instances=[], 
                 security_groups=[], 
                 depends_on=[], 
@@ -845,6 +846,11 @@ class Template(t.Template):
         # If the idle_timeout was passed in, create a ConnectionSettings object with the Idle Timeout
         if idle_timeout:
             elb_obj.ConnectionSettings = elb.ConnectionSettings(IdleTimeout=idle_timeout)
+
+
+        ## Add custom tags
+        if elb_custom_tags:
+            elb_obj.Tags = Tags(**elb_custom_tags)
 
         return self.add_resource(elb_obj)
 
